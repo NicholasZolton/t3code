@@ -1,3 +1,5 @@
+import * as NodeModule from "node:module";
+
 const CACHE_MS = 5 * 60_000;
 
 /** Share one Keychain request across usage history and limits in this server process. */
@@ -24,6 +26,8 @@ export function makeCachedCursorAccessTokenReader(
 
 /** Read the Cursor CLI's default macOS credential without invoking the shared security binary. */
 export const readMacCursorAccessToken = makeCachedCursorAccessTokenReader(async () => {
-  const { AsyncEntry } = await import("@napi-rs/keyring");
+  const { AsyncEntry }: typeof import("@napi-rs/keyring") = NodeModule.createRequire(
+    import.meta.url,
+  )("@napi-rs/keyring");
   return (await new AsyncEntry("cursor-access-token", "cursor-user").getPassword()) ?? null;
 });
