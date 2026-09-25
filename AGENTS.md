@@ -103,6 +103,7 @@ An empty database is a bad test. Seed your worktree's `.t3` with a copy of real 
 
 ## Verifying
 
+- On Nicholas's Mac, after finishing changes in this checkout, run `pnpm run dist:desktop:artifact --platform mac --target dir --arch arm64` from the repo root, after the final commit. `/Applications/T3 Code (Alpha).app` links to `release/T3 Code (Alpha).app`, so the rebuild updates the installed app.
 - Smallest proof that the change works. `vp test run <files>` for the tests you touched, targeted lint and typecheck for the scope you changed.
 - Test meaningful logic or observable behavior. Do not render components to static markup to assert props or attributes, or add tests that merely assert callback wiring or mirror the implementation.
 - **Do not run repo-wide checks.** No `vp check`, no `vp run -r test`, no `vp run -r typecheck` unless I ask. CI owns the full suite.
