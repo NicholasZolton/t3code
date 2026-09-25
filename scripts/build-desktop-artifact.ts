@@ -3868,7 +3868,20 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
   for (const entry of stageEntries) {
     const from = path.join(stageDistDir, entry);
     const stat = yield* fs.stat(from).pipe(Effect.orElseSucceed(() => null));
-    if (!stat || stat.type !== "File") continue;
+    if (!stat) continue;
+
+    if (options.platform === "mac" && options.target === "dir" && stat.type === "Directory") {
+      for (const appName of yield* fs.readDirectory(from)) {
+        if (!appName.endsWith(".app")) continue;
+        const appPath = path.join(from, appName);
+        const to = path.join(options.outputDir, appName);
+        yield* fs.remove(to, { recursive: true, force: true });
+        yield* fs.copy(appPath, to);
+        copiedArtifacts.push(to);
+      }
+      continue;
+    }
+    if (stat.type !== "File") continue;
 
     const to = path.join(options.outputDir, entry);
     yield* fs.copyFile(from, to);
