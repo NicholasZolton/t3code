@@ -667,6 +667,18 @@ export class DesktopBuildNoArtifactsProducedError extends Schema.TaggedError<Des
   }
 }
 
+export class DesktopMacAppExportError extends Schema.TaggedError<DesktopMacAppExportError>()(
+  "DesktopMacAppExportError",
+  {
+    appPath: Schema.String,
+    cause: Schema.optionalKey(Schema.Defect()),
+  },
+) {
+  override get message(): string {
+    return `Failed to export a runnable macOS app at ${this.appPath}.`;
+  }
+}
+
 export class WslRuntimeArchiveMissingError extends Schema.TaggedError<WslRuntimeArchiveMissingError>()(
   "WslRuntimeArchiveMissingError",
   {
@@ -3876,7 +3888,19 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
         const appPath = path.join(from, appName);
         const to = path.join(options.outputDir, appName);
         yield* fs.remove(to, { recursive: true, force: true });
-        yield* fs.copy(appPath, to);
+        // Framework bundles use relative symlinks; FileSystem.copy rewrites them
+        // to absolute paths into the temporary stage, which disappears after the build.
+        yield* Effect.tryPromise({
+          try: () => NodeFSP.cp(appPath, to, { recursive: true, verbatimSymlinks: true }),
+          catch: (cause) => new DesktopMacAppExportError({ appPath: to, cause }),
+        });
+        const electronFramework = path.join(
+          to,
+          "Contents/Frameworks/Electron Framework.framework/Electron Framework",
+        );
+        if (!(yield* fs.exists(electronFramework))) {
+          return yield* new DesktopMacAppExportError({ appPath: to });
+        }
         copiedArtifacts.push(to);
       }
       continue;
