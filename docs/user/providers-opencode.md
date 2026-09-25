@@ -7,10 +7,13 @@ OpenCode server.
 
 ## Local or external server
 
-Leave **Server URL** empty to let T3 Code start OpenCode locally. A password in
-provider settings applies to both that server and T3 Code's connection. With no
-password setting, the local server uses `OPENCODE_PASSWORD` (or
-`OPENCODE_SERVER_PASSWORD`) from its environment, or generates a private password.
+Leave **Server URL** empty to use OpenCode's local background service and its
+connected accounts. T3 Code starts the service if needed. A custom provider
+environment or server password uses a separate local process instead; that
+process must have its own provider connection. For a separate process, a password
+in provider settings applies to both it and T3 Code's connection. Without one,
+it uses `OPENCODE_PASSWORD` (or `OPENCODE_SERVER_PASSWORD`) from its environment,
+or generates a private password.
 
 To use an existing OpenCode server, set **Server URL** and its password in provider
 settings. T3 Code uses only that configured password for an external server; it

@@ -6,9 +6,8 @@
  * per-instance `OpenCodeSettings`.
  *
  * Two instances with different `serverUrl`s therefore talk to independent
- * OpenCode servers; when no `serverUrl` is set, the adapter + text-generation
- * shares spin up their own scoped child processes, and those child
- * processes are released when the registry scope closes.
+ * OpenCode servers; when no `serverUrl` is set, the adapter and text generation
+ * share a local connection to OpenCode's background service.
  *
  * @module provider/Drivers/OpenCodeDriver
  */

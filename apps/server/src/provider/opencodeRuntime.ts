@@ -2,6 +2,7 @@ import * as NodeURL from "node:url";
 
 import type { ChatAttachment, ProviderApprovalDecision, RuntimeMode } from "@t3tools/contracts";
 import { OpenCode } from "@opencode/client";
+import * as OpenCodeService from "@opencode/client/service";
 import type {
   AgentInfo,
   CommandInfo,
@@ -195,10 +196,8 @@ export interface ParsedOpenCodeModelSlug {
 
 export interface OpenCodeRuntimeShape {
   /**
-   * Spawns a local OpenCode server process. Its lifetime is bound to the caller's
-   * `Scope.Scope` — the child is killed automatically when that scope closes.
-   * Consumers that want a long-lived server must create and hold a scope explicitly
-   * (see {@link Scope.make}) and close it when done.
+   * Connects to the local V2 service, or spawns an isolated server for custom
+   * environments and options. Only an isolated child is stopped with the scope.
    */
   readonly startOpenCodeServerProcess: (input: {
     readonly binaryPath: string;
@@ -210,9 +209,8 @@ export interface OpenCodeRuntimeShape {
     readonly timeoutMs?: number;
   }) => Effect.Effect<OpenCodeServerProcess, OpenCodeRuntimeError, Scope.Scope>;
   /**
-   * Returns a handle to either an externally-managed OpenCode server (when
-   * `serverUrl` is provided — no lifetime is attached to the caller's scope) or a
-   * freshly spawned local server whose lifetime is bound to the caller's scope.
+   * Returns a handle to a configured external server or the local OpenCode service.
+   * An isolated local child, when needed, is bound to the caller's scope.
    */
   readonly connectToOpenCodeServer: (input: {
     readonly binaryPath: string;
@@ -534,6 +532,47 @@ const makeOpenCodeRuntime = Effect.gen(function* () {
 
   const startOpenCodeServerProcess: OpenCodeRuntimeShape["startOpenCodeServerProcess"] = (input) =>
     Effect.gen(function* () {
+      // V2 provider connections live in the background service. A separate
+      // `serve` process has an empty provider inventory even for connected users.
+      // Explicit environments and server options still need their own process.
+      if (
+        (input.environment === undefined || input.environment === process.env) &&
+        input.serverPassword === undefined &&
+        input.port === undefined &&
+        input.hostname === undefined
+      ) {
+        const command = yield* resolveCommand(input.binaryPath, ["serve", "--service"]);
+        if (!command.shell) {
+          const versionMatches = (version: string): boolean =>
+            parseSemver(version) !== null &&
+            compareSemverVersions(version, MINIMUM_OPENCODE_VERSION) >= 0;
+          const endpoint = yield* runOpenCodeSdk("service.ensure", () =>
+            OpenCodeService.ensure({
+              command: [command.command, ...command.args],
+              version: versionMatches,
+            }),
+          );
+          const version = yield* verifyOpenCodeServerVersion(
+            createOpenCodeSdkClient({
+              baseUrl: endpoint.url,
+              ...(endpoint.auth ? { serverPassword: endpoint.auth.password } : {}),
+            }),
+          );
+          return {
+            url: endpoint.url,
+            ...(endpoint.auth ? { serverPassword: endpoint.auth.password } : {}),
+            version,
+            isRunning: runOpenCodeSdk("service.discover", () =>
+              OpenCodeService.discover({ version: versionMatches }),
+            ).pipe(
+              Effect.map((current) => current?.url === endpoint.url),
+              Effect.orElseSucceed(() => false),
+            ),
+            exitCode: Effect.never,
+          } satisfies OpenCodeServerProcess;
+        }
+      }
+
       // Bind this server's lifetime to the caller's scope. When the caller's
       // scope closes, the spawned child is killed and all associated fibers
       // are interrupted automatically — no `close()` method needed.
