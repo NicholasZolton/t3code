@@ -727,11 +727,13 @@ function ComposerPromptEditorTiptapInner(props: ComposerPromptEditorProps) {
     const toFlat = pmToFlat(map, to);
     const nextValue = map.value;
     const contextIds = vimEnabledRef.current ? collectInlineContextIds(nextValue) : map.contextIds;
-    const nextCursor = clampCollapsedComposerCursor(map.value, flatToCollapsed(map, fromFlat));
     const nextExpandedCursor = Math.max(
       0,
       Math.min(map.value.length, flatToMarkdown(map, fromFlat)),
     );
+    const nextCursor = vimEnabledRef.current
+      ? collapseExpandedComposerCursor(nextValue, nextExpandedCursor)
+      : clampCollapsedComposerCursor(nextValue, flatToCollapsed(map, fromFlat));
     const nextSelectionRange = {
       start: Math.min(nextExpandedCursor, flatToMarkdown(map, toFlat)),
       end: Math.max(nextExpandedCursor, flatToMarkdown(map, toFlat)),
@@ -862,11 +864,9 @@ function ComposerPromptEditorTiptapInner(props: ComposerPromptEditorProps) {
         attributes: editorAttributes,
         handleKeyDown: (view, event) => {
           if (vimEnabledRef.current) {
-            // Let the composer dismiss an open slash/mention menu first.
-            if (event.key === "Escape" && onCommandKeyDownRef.current?.("Escape", event)) {
-              event.preventDefault();
-              return true;
-            }
+            // Escape closes suggestions and leaves insert mode in one keypress.
+            const dismissedMenu =
+              event.key === "Escape" && (onCommandKeyDownRef.current?.("Escape", event) ?? false);
             if (
               vimMenuOpenRef.current &&
               (event.key === "Enter" ||
@@ -880,6 +880,11 @@ function ComposerPromptEditorTiptapInner(props: ComposerPromptEditorProps) {
               return true;
             }
             if (handleComposerVimKeyDown(view, event)) return true;
+            if (dismissedMenu) {
+              event.preventDefault();
+              event.stopPropagation();
+              return true;
+            }
           }
           if (
             !event.isComposing &&
@@ -1094,7 +1099,11 @@ function ComposerPromptEditorTiptapInner(props: ComposerPromptEditorProps) {
           }
           const editorInstance = editorHolder.current;
           if (vimEnabledRef.current) {
-            view.dispatch(view.state.tr.insertText(text));
+            if (text.includes("\n") && editorInstance) {
+              editorInstance.commands.insertContent(buildVimDocJson(text).content ?? []);
+            } else {
+              view.dispatch(view.state.tr.insertText(text));
+            }
             return true;
           }
           if (editorInstance) {
@@ -1147,7 +1156,9 @@ function ComposerPromptEditorTiptapInner(props: ComposerPromptEditorProps) {
     const fromFlat = pmToFlat(map, from);
     const next: typeof snapshot = {
       value: map.value,
-      cursor: clampCollapsedComposerCursor(map.value, flatToCollapsed(map, fromFlat)),
+      cursor: vimEnabled
+        ? collapseExpandedComposerCursor(map.value, flatToMarkdown(map, fromFlat))
+        : clampCollapsedComposerCursor(map.value, flatToCollapsed(map, fromFlat)),
       expandedCursor: Math.max(0, Math.min(map.value.length, flatToMarkdown(map, fromFlat))),
       contextIds: vimEnabled ? collectInlineContextIds(map.value) : map.contextIds,
     };
@@ -1204,7 +1215,7 @@ function ComposerPromptEditorTiptapInner(props: ComposerPromptEditorProps) {
       );
     }
     const map = serializeEditorDoc(editor.state.doc);
-    const flat = collapsedToFlat(map, normalizedCursor);
+    const flat = vimEnabled ? normalizedExpandedCursor : collapsedToFlat(map, normalizedCursor);
     editor.commands.setTextSelection(flatToPm(map, flat));
     if (isFocused) scrollTiptapCaretIntoView(editor);
     if (pendingCitation) {
@@ -1242,7 +1253,9 @@ function ComposerPromptEditorTiptapInner(props: ComposerPromptEditorProps) {
       if (snapshotRef.current.value !== latestValueRef.current) return;
       const boundedCursor = clampCollapsedComposerCursor(snapshotRef.current.value, nextCursor);
       const map = serializeEditorDoc(editor.state.doc);
-      const flat = collapsedToFlat(map, boundedCursor);
+      const flat = vimEnabledRef.current
+        ? expandCollapsedComposerCursor(snapshotRef.current.value, boundedCursor)
+        : collapsedToFlat(map, boundedCursor);
       editor.commands.setTextSelection(flatToPm(map, flat));
       scrollTiptapCaretIntoView(editor);
       if (boundedCursor === snapshotRef.current.cursor) return;
