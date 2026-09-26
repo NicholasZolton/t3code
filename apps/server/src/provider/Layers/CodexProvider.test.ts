@@ -1,6 +1,21 @@
 import { assert, it } from "@effect/vitest";
 
-import { applyPreferredCodexDefaultModel, mapCodexModelCapabilities } from "./CodexProvider.ts";
+import {
+  applyPreferredCodexDefaultModel,
+  codexPlanLabel,
+  mapCodexModelCapabilities,
+} from "./CodexProvider.ts";
+
+it("identifies Business Premium separately from other Business seats", () => {
+  assert.strictEqual(
+    codexPlanLabel("self_serve_business_prolite"),
+    "ChatGPT Business Premium 5x Subscription",
+  );
+  assert.strictEqual(
+    codexPlanLabel("self_serve_business_usage_based"),
+    "ChatGPT Business Subscription",
+  );
+});
 
 it("maps current Codex model capability fields", () => {
   const capabilities = mapCodexModelCapabilities({

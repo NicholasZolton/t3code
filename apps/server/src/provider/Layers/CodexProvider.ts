@@ -118,6 +118,7 @@ export function codexPlanLabel(planType: string | null | undefined): string | un
     case "team":
       return "ChatGPT Team Subscription";
     case "self_serve_business_prolite":
+      return "ChatGPT Business Premium 5x Subscription";
     case "self_serve_business_usage_based":
     case "business":
       return "ChatGPT Business Subscription";

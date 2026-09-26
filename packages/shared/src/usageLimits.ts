@@ -326,7 +326,7 @@ export function limitAccountWeight(account: LimitAccount): number {
   const plan = account.plan?.trim().toLowerCase();
   if (account.driver === "opencode") {
     if (plan === "pro") return 20;
-    if (plan === "prolite") return 5;
+    if (plan === "prolite" || plan === "self_serve_business_prolite") return 5;
   }
   const multiplier = plan?.match(/\b(\d+(?:\.\d+)?)\s*x\b/)?.[1];
   const weight = multiplier ? Number(multiplier) : 1;

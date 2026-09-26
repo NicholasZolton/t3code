@@ -177,6 +177,44 @@ it("weights OpenCode logins by their plan while leaving an expired account out o
   ]);
 });
 
+it("gives an OpenCode Business Premium account the same weekly pool share as Pro 5x", () => {
+  const weekly = {
+    ...window,
+    id: "seven_day",
+    kind: "weekly" as const,
+    label: "Weekly",
+    windowDurationMins: 7 * 24 * 60,
+  };
+  const accounts = openCodeLimitAccounts(
+    [
+      {
+        id: "personal",
+        label: "Personal",
+        active: false,
+        plan: "prolite",
+        limits: {
+          checkedAt: "2026-09-03T11:00:00.000Z",
+          windows: [{ ...weekly, usedPercent: 100 }],
+        },
+      },
+      {
+        id: "business",
+        label: "Work",
+        active: true,
+        plan: "self_serve_business_prolite",
+        limits: { checkedAt: "2026-09-03T11:00:00.000Z", windows: [{ ...weekly, usedPercent: 0 }] },
+      },
+    ],
+    EnvironmentId.make("local"),
+    ProviderInstanceId.make("opencode"),
+    "My Mac",
+  );
+  const [pool] = collectLimitPools(accounts, now);
+  expect(accounts.map(limitAccountWeight)).toEqual([5, 5]);
+  expect(pool?.windows[0]?.remainingPercent).toBe(50);
+  expect(pool?.windows[0]?.resets.map((reset) => reset.restoresPercent)).toEqual([50, 0]);
+});
+
 describe("pools", () => {
   const checkedAt = "2026-09-03T11:00:00.000Z";
   const weekly = {
@@ -691,6 +729,13 @@ describe("pooled account columns", () => {
     expect(pool?.windows[0]?.resets.map((reset) => reset.restoresPercent)).toEqual([20, 32]);
     expect(limitAccountWeight({ ...accounts[0]!, plan: "Unrecognized" })).toBe(1);
     expect(limitAccountWeight({ ...accounts[0]!, plan: "ChatGPT Pro 5x Subscription" })).toBe(5);
+    expect(
+      limitAccountWeight({
+        ...accounts[0]!,
+        driver: ProviderDriverKind.make("codex"),
+        plan: "ChatGPT Business Premium 5x Subscription",
+      }),
+    ).toBe(5);
   });
 
   it("keeps session columns across rows with opposite reset and usage orders", () => {
