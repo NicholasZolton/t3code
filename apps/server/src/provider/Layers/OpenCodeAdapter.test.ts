@@ -4930,13 +4930,116 @@ it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
     }),
   );
 
-  it.effect("does not charge a replayed step to the next native turn", () =>
+  it.effect("completes each OpenCode text part within a turn", () =>
+    Effect.gen(function* () {
+      const adapter = yield* OpenCodeAdapter;
+      const threadId = asThreadId("thread-native-text-parts");
+      const firstText = promiseWithResolvers<unknown>();
+      const sessionID = "http://127.0.0.1:9999/session";
+      runtimeMock.state.subscribedEvents = [
+        {
+          id: "step-started",
+          created: 1,
+          type: "session.step.started",
+          durable: { aggregateID: sessionID, seq: 1, version: 1 },
+          data: {
+            sessionID,
+            assistantMessageID: "msg-first",
+            agent: "build",
+            model: { providerID: "openai", id: "gpt-5" },
+            started: 1,
+          },
+        } satisfies OpenCodeEvent,
+        firstText.promise,
+        {
+          id: "first-ended",
+          created: 3,
+          type: "session.text.ended",
+          durable: { aggregateID: sessionID, seq: 2, version: 1 },
+          data: { sessionID, assistantMessageID: "msg-first", ordinal: 0, text: "I'll check." },
+        } satisfies OpenCodeEvent,
+        {
+          id: "second-text",
+          created: 4,
+          type: "session.text.delta",
+          data: { sessionID, assistantMessageID: "msg-last", ordinal: 0, delta: "Done." },
+        } satisfies OpenCodeEvent,
+        {
+          id: "second-ended",
+          created: 5,
+          type: "session.text.ended",
+          durable: { aggregateID: sessionID, seq: 3, version: 1 },
+          data: { sessionID, assistantMessageID: "msg-last", ordinal: 0, text: "Done." },
+        } satisfies OpenCodeEvent,
+        {
+          id: "second-ended",
+          created: 5,
+          type: "session.text.ended",
+          durable: { aggregateID: sessionID, seq: 3, version: 1 },
+          data: { sessionID, assistantMessageID: "msg-last", ordinal: 0, text: "Done." },
+        } satisfies OpenCodeEvent,
+        {
+          id: "done",
+          created: 6,
+          type: "session.execution.succeeded",
+          durable: { aggregateID: sessionID, seq: 4, version: 1 },
+          data: { sessionID },
+        } satisfies OpenCodeEvent,
+      ];
+      const eventsFiber = yield* adapter.streamEvents.pipe(
+        Stream.filter((event) => event.threadId === threadId),
+        Stream.takeUntil((event) => event.type === "turn.completed"),
+        Stream.runCollect,
+        Effect.forkChild,
+      );
+      yield* adapter.startSession({
+        provider: ProviderDriverKind.make("opencode"),
+        threadId,
+        runtimeMode: "full-access",
+      });
+      yield* adapter.sendTurn({
+        threadId,
+        input: "Check then finish",
+        modelSelection: createModelSelection(ProviderInstanceId.make("opencode"), "openai/gpt-5"),
+      });
+      firstText.resolve({
+        id: "first-text",
+        created: 2,
+        type: "session.text.delta",
+        data: { sessionID, assistantMessageID: "msg-first", ordinal: 0, delta: "I'll check." },
+      } satisfies OpenCodeEvent);
+
+      const events = Array.from(yield* Fiber.join(eventsFiber));
+      NodeAssert.deepEqual(
+        events
+          .filter((event) => event.type === "content.delta" || event.type === "item.completed")
+          .map((event) => [event.type, event.itemId, event.payload]),
+        [
+          ["content.delta", "msg-first:0", { streamKind: "assistant_text", delta: "I'll check." }],
+          [
+            "item.completed",
+            "msg-first:0",
+            { itemType: "assistant_message", status: "completed", detail: "I'll check." },
+          ],
+          ["content.delta", "msg-last:0", { streamKind: "assistant_text", delta: "Done." }],
+          [
+            "item.completed",
+            "msg-last:0",
+            { itemType: "assistant_message", status: "completed", detail: "Done." },
+          ],
+        ],
+      );
+    }),
+  );
+
+  it.effect("does not attach replayed prior-turn events to the next native turn", () =>
     Effect.gen(function* () {
       const adapter = yield* OpenCodeAdapter;
       const threadId = asThreadId("thread-native-replayed-step-usage");
       const firstStarted = promiseWithResolvers<unknown>();
       const firstSucceeded = promiseWithResolvers<unknown>();
       const secondStarted = promiseWithResolvers<unknown>();
+      const replayedFirstText = promiseWithResolvers<unknown>();
       const replayedFirstStep = promiseWithResolvers<unknown>();
       const secondStep = promiseWithResolvers<unknown>();
       const secondSucceeded = promiseWithResolvers<unknown>();
@@ -4947,12 +5050,18 @@ it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
         firstStarted.promise,
         firstSucceeded.promise,
         secondStarted.promise,
+        replayedFirstText.promise,
         replayedFirstStep.promise,
         secondStep.promise,
         secondSucceeded.promise,
       ];
       const completed = yield* adapter.streamEvents.pipe(
-        Stream.filter((event) => event.threadId === threadId && event.type === "turn.completed"),
+        Stream.filter(
+          (event) =>
+            event.threadId === threadId &&
+            (event.type === "turn.completed" ||
+              (event.type === "item.completed" && event.payload.itemType === "assistant_message")),
+        ),
         Stream.tap((event) =>
           event.turnId === firstTurnId
             ? Effect.sync(() => firstCompletionSignal.resolve(undefined))
@@ -4990,7 +5099,7 @@ it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
         id: "first-succeeded",
         created: 3,
         type: "session.execution.succeeded",
-        durable: { aggregateID: sessionID, seq: 3, version: 1 },
+        durable: { aggregateID: sessionID, seq: 4, version: 1 },
         data: { sessionID },
       } satisfies OpenCodeEvent);
       yield* Effect.promise(() => firstCompletionSignal.promise);
@@ -5003,7 +5112,7 @@ it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
         id: "second-started",
         created: 4,
         type: "session.step.started",
-        durable: { aggregateID: sessionID, seq: 4, version: 1 },
+        durable: { aggregateID: sessionID, seq: 5, version: 1 },
         data: {
           sessionID,
           assistantMessageID: "second-message",
@@ -5012,11 +5121,23 @@ it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
           started: 4,
         },
       } satisfies OpenCodeEvent);
+      replayedFirstText.resolve({
+        id: "replayed-first-text",
+        created: 5,
+        type: "session.text.ended",
+        durable: { aggregateID: sessionID, seq: 2, version: 1 },
+        data: {
+          sessionID,
+          assistantMessageID: "first-message",
+          ordinal: 0,
+          text: "Old answer.",
+        },
+      } satisfies OpenCodeEvent);
       replayedFirstStep.resolve({
         id: "replayed-first-step",
         created: 5,
         type: "session.step.ended",
-        durable: { aggregateID: sessionID, seq: 2, version: 1 },
+        durable: { aggregateID: sessionID, seq: 3, version: 1 },
         data: {
           sessionID,
           assistantMessageID: "first-message",
@@ -5029,7 +5150,7 @@ it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
         id: "second-step",
         created: 6,
         type: "session.step.ended",
-        durable: { aggregateID: sessionID, seq: 5, version: 1 },
+        durable: { aggregateID: sessionID, seq: 6, version: 1 },
         data: {
           sessionID,
           assistantMessageID: "second-message",
@@ -5042,7 +5163,7 @@ it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
         id: "second-succeeded",
         created: 7,
         type: "session.execution.succeeded",
-        durable: { aggregateID: sessionID, seq: 6, version: 1 },
+        durable: { aggregateID: sessionID, seq: 7, version: 1 },
         data: { sessionID },
       } satisfies OpenCodeEvent);
 

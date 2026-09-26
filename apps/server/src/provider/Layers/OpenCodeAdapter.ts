@@ -333,6 +333,13 @@ function openCodeEventSequence(
   return { aggregateId: event.durable.aggregateID, sequence: event.durable.seq };
 }
 
+function openCodePartItemId(data: {
+  readonly assistantMessageID: string;
+  readonly ordinal: number;
+}): string {
+  return `${data.assistantMessageID}:${data.ordinal}`;
+}
+
 function openCodeEventSessionTitle(event: OpenCodeSubscribedEvent): string | undefined {
   if (event.type !== "session.renamed") {
     return undefined;
@@ -393,6 +400,7 @@ interface OpenCodeSessionContext {
   readonly taskSettledIds: Set<string>;
   /** Tool ids that already emitted `item.completed` (replays/redeliveries). */
   readonly toolCompletedIds: Set<string>;
+  readonly textCompletedIds: Set<string>;
   readonly taskEarlyTerminalById: Map<string, { status: "completed" | "failed"; summary?: string }>;
   /** Highest durable event sequence observed for the parent session. */
   lastParentEventSequence: number;
@@ -2307,7 +2315,7 @@ export function makeOpenCodeAdapter(
               ...(yield* buildEventBase({
                 threadId: context.session.threadId,
                 turnId,
-                itemId: `${event.data.assistantMessageID}:${event.data.ordinal}`,
+                itemId: openCodePartItemId(event.data),
                 createdAt: isoFromEpochMs(event.created),
                 raw: event,
               })),
@@ -2318,6 +2326,36 @@ export function makeOpenCodeAdapter(
                 delta: event.data.delta,
               },
             });
+          }
+          break;
+        }
+        case "session.text.ended": {
+          // A durable completion replayed after the next prompt belongs to the
+          // previous turn, even though the session has a new active turn ID.
+          const itemId = openCodePartItemId(event.data);
+          if (
+            turnId &&
+            !context.textCompletedIds.has(itemId) &&
+            (eventSequence === undefined ||
+              !context.turnTokenUsage ||
+              eventSequence > context.turnTokenUsage.parentEventSequence)
+          ) {
+            yield* emit({
+              ...(yield* buildEventBase({
+                threadId: context.session.threadId,
+                turnId,
+                itemId,
+                createdAt: isoFromEpochMs(event.created),
+                raw: event,
+              })),
+              type: "item.completed",
+              payload: {
+                itemType: "assistant_message",
+                status: "completed",
+                ...(event.data.text.trim() ? { detail: event.data.text } : {}),
+              },
+            });
+            context.textCompletedIds.add(itemId);
           }
           break;
         }
@@ -2974,6 +3012,7 @@ export function makeOpenCodeAdapter(
           taskStartedIds: new Set(),
           taskSettledIds: new Set(),
           toolCompletedIds: new Set(),
+          textCompletedIds: new Set(),
           taskEarlyTerminalById: new Map(),
           resolvedRequestIds: new Set(),
           autoRepliedRequestIds: new Set(),
