@@ -31,6 +31,14 @@ import { resolvePullRequestState } from "../pullRequest/pullRequestPresentation"
 export type ComposerCommandItem =
   | {
       id: string;
+      type: "saved-prompt";
+      name: string;
+      body: string;
+      label: string;
+      description: string;
+    }
+  | {
+      id: string;
       type: "path";
       path: string;
       pathKind: ProjectEntry["kind"];
@@ -131,9 +139,11 @@ export const ComposerCommandMenu = memo(function ComposerCommandMenu(props: {
                 : (props.emptyStateText ??
                   (props.triggerKind === "skill"
                     ? "No skills found. Try / to browse provider commands."
-                    : props.triggerKind === "path"
-                      ? "No matching files or folders."
-                      : "No matching command."))}
+                    : props.triggerKind === "saved-prompt"
+                      ? "No matching prompts. Add one in Settings → Prompts."
+                      : props.triggerKind === "path"
+                        ? "No matching files or folders."
+                        : "No matching command."))}
             </p>
           </div>
         )}

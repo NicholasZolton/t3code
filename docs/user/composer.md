@@ -12,6 +12,17 @@ becomes an attachment when inserting it would exceed the message limit. On a
 hardware keyboard, use `Cmd+Shift+V` on Apple devices or `Ctrl+Shift+V` elsewhere
 to keep a large paste editable in the composer instead.
 
+## Reusable prompts
+
+Add a short name and prompt in **Settings → Prompts**, then type `>name` in the
+composer and select it to insert the text. Saved prompts belong to the selected
+environment and are available from web, desktop, and mobile.
+
+Use `{{env.NAME}}` to insert an environment variable from that environment's
+host, or `{{clipboard}}` to insert text from the device on which you select the
+prompt. If a variable is missing or the clipboard cannot be read, T3 Code keeps
+your draft unchanged.
+
 ## Attach files
 
 Attach up to 100 files per message. Each image can be up to 10 MiB, with at most

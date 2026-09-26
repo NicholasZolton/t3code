@@ -3,6 +3,15 @@ import { describe, expect, it } from "vite-plus/test";
 import { detectComposerTrigger, serializeComposerFileLink } from "./composerTrigger.ts";
 
 describe("detectComposerTrigger", () => {
+  it("detects a prompt shortcut inside a sentence without swallowing surrounding text", () => {
+    const text = "Please >pr next";
+    expect(detectComposerTrigger(text, "Please >pr".length)).toEqual({
+      kind: "saved-prompt",
+      query: "pr",
+      rangeStart: 7,
+      rangeEnd: 10,
+    });
+  });
   it.each(["$", "€", "£", "¥", "₹", "₩", "₿", "𑿝"])(
     "detects %s skill prefixes and their source range",
     (prefix) => {

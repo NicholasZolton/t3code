@@ -24,6 +24,15 @@ import {
 const FOLDED_SERVER_SETTINGS = { ...DEFAULT_SERVER_SETTINGS, projectSettingsFolded: true };
 
 describe("serverSettings helpers", () => {
+  it("edits and removes one reusable prompt without losing the others", () => {
+    const saved = applyServerSettingsPatch(DEFAULT_SERVER_SETTINGS, {
+      savedPrompts: { pr: "File a PR", review: "Review this" },
+    });
+    expect(
+      applyServerSettingsPatch(saved, { savedPrompts: { pr: null, review: "Review carefully" } })
+        .savedPrompts,
+    ).toEqual({ review: "Review carefully" });
+  });
   it("changes a cleanup rule without replacing the machine's other rules", () => {
     const enabled = applyServerSettingsPatch(DEFAULT_SERVER_SETTINGS, {
       storageCleanup: { worktreeAfterDays: 8, worktreeOnMerge: true, logsAfterDays: 30 },

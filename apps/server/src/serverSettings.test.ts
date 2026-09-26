@@ -30,6 +30,7 @@ import { resolveProviderInstanceTerminalEnvironment } from "./terminal/Manager.t
 
 const decodeSettingsPatch = Schema.decodeUnknownEffect(ServerSettingsPatch);
 const decodeServerSettings = Schema.decodeUnknownEffect(ServerSettings);
+const decodeStoredSettingsJson = Schema.decodeEffect(Schema.fromJsonString(ServerSettings));
 
 const makeServerSettingsLayer = () =>
   ServerSettingsModule.layer.pipe(
@@ -78,6 +79,20 @@ const recordProviderUsage = (provider: string, instanceId: string | null = provi
   });
 
 it.layer(NodeServices.layer)("server settings", (it) => {
+  it.effect("persists reusable prompt edits and removals", () =>
+    Effect.gen(function* () {
+      const service = yield* ServerSettingsModule.ServerSettingsService;
+      const config = yield* ServerConfig.ServerConfig;
+      const fs = yield* FileSystem.FileSystem;
+      yield* service.updateSettings({ savedPrompts: { pr: "File a PR", review: "Review this" } });
+      yield* service.updateSettings({ savedPrompts: { pr: null, review: "Review carefully" } });
+      const stored = yield* fs.readFileString(config.settingsPath);
+      assert.deepEqual((yield* decodeStoredSettingsJson(stored)).savedPrompts, {
+        review: "Review carefully",
+      });
+      assert.deepEqual((yield* service.getSettings).savedPrompts, { review: "Review carefully" });
+    }).pipe(Effect.provide(makeServerSettingsLayer())),
+  );
   it.effect("preserves context when reading a provider environment secret fails", () => {
     const platformCause = PlatformError.systemError({
       _tag: "PermissionDenied",

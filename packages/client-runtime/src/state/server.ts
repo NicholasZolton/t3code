@@ -1126,6 +1126,10 @@ export function createServerEnvironmentAtoms<R, E>(
       scheduler: configScheduler,
       concurrency: configConcurrency,
     }),
+    resolvePromptEnvironment: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:resolve-prompt-environment",
+      tag: WS_METHODS.serverResolvePromptEnvironment,
+    }),
     signalProcess: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:server:signal-process",
       tag: WS_METHODS.serverSignalProcess,

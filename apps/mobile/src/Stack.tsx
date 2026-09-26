@@ -93,6 +93,7 @@ import { SettingsAboutRouteScreen } from "./features/settings/SettingsAboutRoute
 import { SettingsNotificationsRouteScreen } from "./features/settings/SettingsNotificationsRouteScreen";
 import { SettingsRouteScreen } from "./features/settings/SettingsRouteScreen";
 import { SettingsThreadsRouteScreen } from "./features/settings/SettingsThreadsRouteScreen";
+import { SettingsPromptsRouteScreen } from "./features/settings/SettingsPromptsRouteScreen";
 import { SettingsEnvironmentFilterProvider } from "./features/settings/settings-environment-filter";
 import { ShowcaseCaptureCoordinator } from "./features/showcase/ShowcaseCaptureCoordinator";
 import {
@@ -228,6 +229,11 @@ const SettingsContentStack = createNativeStackNavigator({
       screen: SettingsThreadsRouteScreen,
       linking: "thread-preferences",
       options: { title: "Thread behavior" },
+    }),
+    SettingsPrompts: createNativeStackScreen({
+      screen: SettingsPromptsRouteScreen,
+      linking: "prompts",
+      options: { title: "Prompts" },
     }),
     SettingsAbout: createNativeStackScreen({
       screen: SettingsAboutRouteScreen,

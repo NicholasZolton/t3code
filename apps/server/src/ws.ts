@@ -1,3 +1,4 @@
+import { resolveSavedPromptEnvironment } from "./savedPromptEnvironment.ts";
 import {
   sameUsageLimitCommandCoverage,
   withUsageLimitsCommands,
@@ -1797,6 +1798,15 @@ const makeWsRpcLayer = (
             {
               "rpc.aggregate": "server",
             },
+          ),
+        [WS_METHODS.serverResolvePromptEnvironment]: ({ name }) =>
+          observeRpcEffect(
+            WS_METHODS.serverResolvePromptEnvironment,
+            Effect.gen(function* () {
+              const settings = yield* serverSettings.getSettings;
+              return resolveSavedPromptEnvironment(settings, name, process.env);
+            }),
+            { "rpc.aggregate": "server" },
           ),
         [WS_METHODS.serverDiscoverSourceControl]: (_input) =>
           observeRpcEffect(

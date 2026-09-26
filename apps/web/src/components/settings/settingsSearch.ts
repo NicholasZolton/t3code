@@ -16,6 +16,7 @@ export type SettingsPath =
   | "/settings/general"
   | "/settings/appearance"
   | "/settings/keybindings"
+  | "/settings/prompts"
   | "/settings/snap-shot"
   | "/settings/providers"
   | "/settings/integrations"
@@ -87,6 +88,7 @@ export const SETTINGS_SECTION_LABELS: Readonly<Record<SettingsPath, string>> = {
   "/settings/general": "General",
   "/settings/appearance": "Appearance",
   "/settings/keybindings": "Keybindings",
+  "/settings/prompts": "Prompts",
   "/settings/snap-shot": "SnapShots",
   "/settings/providers": "Providers",
   "/settings/integrations": "Integrations",
@@ -129,6 +131,13 @@ const KEYBINDING_SEARCH_ITEMS = STATIC_KEYBINDING_COMMANDS.toSorted((left, right
  * that may not be mounted point at their nearest stable section instead.
  */
 export const SETTINGS_SEARCH_ITEMS = [
+  {
+    id: "saved-prompts",
+    title: "Reusable prompts",
+    to: "/settings/prompts",
+    scope: "environment-defaults",
+    searchTerms: ["shortcuts autocomplete snippets clipboard environment variables"],
+  },
   {
     id: "storage-worktrees",
     title: "Worktree cleanup",
@@ -879,6 +888,7 @@ const SETTINGS_CATEGORY_SCOPES: Readonly<Record<SettingsPath, SettingsSearchScop
   // Keybindings fan out to the selection; Providers shows the representative
   // environment at any selection. Neither needs a particular scope to render.
   "/settings/keybindings": null,
+  "/settings/prompts": "environment-defaults",
   "/settings/providers": null,
   "/settings/integrations": null,
   "/settings/source-control": "environment-defaults",
