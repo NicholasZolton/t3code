@@ -19,6 +19,7 @@ import {
   type ProjectSettingSource,
 } from "@t3tools/shared/projectSettings";
 import * as Equal from "effect/Equal";
+import { worktreeSettingsPatchApplied } from "@t3tools/shared/serverSettings";
 
 import type { ResolvedSettingsScope } from "./settingsScope";
 
@@ -394,7 +395,9 @@ export async function persistScopedSettingsPatch(
   persistServer: (input: {
     environmentId: EnvironmentId;
     input: { patch: ServerSettingsPatch };
-  }) => Promise<{ readonly _tag: "Success" | "Failure" }>,
+  }) => Promise<
+    { readonly _tag: "Success"; readonly value: ServerSettings } | { readonly _tag: "Failure" }
+  >,
   persistClient: (patch: ClientSettingsPatch) => void,
 ) {
   if (plan.hasClientWrite) persistClient(plan.clientPatch);
@@ -407,8 +410,18 @@ export async function persistScopedSettingsPatch(
     const result = results[index];
     return result?.status !== "fulfilled" || result.value._tag === "Failure";
   });
+  const ignoredEnvironments = plan.serverWrites.filter((write, index) => {
+    const result = results[index];
+    return (
+      result?.status === "fulfilled" &&
+      result.value._tag === "Success" &&
+      !worktreeSettingsPatchApplied(write.patch, result.value.value)
+    );
+  });
   return {
     failedEnvironments,
-    savedEnvironmentCount: plan.serverWrites.length - failedEnvironments.length,
+    ignoredEnvironments,
+    savedEnvironmentCount:
+      plan.serverWrites.length - failedEnvironments.length - ignoredEnvironments.length,
   };
 }

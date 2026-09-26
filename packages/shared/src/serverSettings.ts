@@ -26,6 +26,21 @@ import {
 const ServerSettingsJson = fromLenientJson(ServerSettings);
 const decodeServerSettingsJson = Schema.decodeUnknownOption(ServerSettingsJson);
 
+/** Older servers can accept a settings patch while silently dropping fields they do not know. */
+export function worktreeSettingsPatchApplied(
+  patch: ServerSettingsPatch,
+  saved: ServerSettings | undefined,
+): boolean {
+  return (
+    (patch.worktreeDirectory === undefined ||
+      saved?.worktreeDirectory === patch.worktreeDirectory) &&
+    (patch.worktreeProjectFolders === undefined ||
+      saved?.worktreeProjectFolders === patch.worktreeProjectFolders) &&
+    (patch.worktreeBranchPrefix === undefined ||
+      saved?.worktreeBranchPrefix === patch.worktreeBranchPrefix)
+  );
+}
+
 /** @deprecated Read `resolveProjectSettings(...).settings.enableAgentBrowserAccess`. */
 export function resolveProjectAgentBrowserAccess(
   settings: Pick<

@@ -64,15 +64,25 @@ function useRunScopedPlan() {
         return;
       }
       void persistScopedSettingsPatch(plan, persistServer, persistClientSettingsPatch).then(
-        ({ failedEnvironments, savedEnvironmentCount }) => {
-          if (failedEnvironments.length === 0) return;
+        ({ failedEnvironments, ignoredEnvironments, savedEnvironmentCount }) => {
+          if (failedEnvironments.length === 0 && ignoredEnvironments.length === 0) return;
           toastManager.add({
             type: "error",
             title:
               savedEnvironmentCount > 0
                 ? "Setting saved on some environments"
                 : "Setting not saved",
-            description: `Could not update ${failedEnvironments.map((environment) => environment.label).join(", ")}.${savedEnvironmentCount > 0 ? " The other selected environments saved the change." : ""}`,
+            description: [
+              failedEnvironments.length > 0
+                ? `Could not update ${failedEnvironments.map((environment) => environment.label).join(", ")}.`
+                : "",
+              ignoredEnvironments.length > 0
+                ? `${ignoredEnvironments.map((environment) => environment.label).join(", ")} did not apply the setting. Update T3 Code on ${ignoredEnvironments.length === 1 ? "that environment" : "those environments"} and try again.`
+                : "",
+              savedEnvironmentCount > 0 ? "The other selected environments saved the change." : "",
+            ]
+              .filter(Boolean)
+              .join(" "),
           });
         },
       );

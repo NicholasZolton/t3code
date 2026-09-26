@@ -16,6 +16,7 @@ import {
 } from "@t3tools/contracts";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
+import { worktreeSettingsPatchApplied } from "@t3tools/shared/serverSettings";
 import { useRef, useState, type ComponentProps } from "react";
 import { Alert, Platform, Pressable, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -179,11 +180,26 @@ function ServerSettingsDetail(props: { readonly page: SettingsPage }) {
       writes.map((entry) =>
         updateSettings({ environmentId: entry.environmentId, input: { patch: entry.patch } }),
       ),
-    ).finally(() => {
-      writeInFlight.current = false;
-      setPendingTargets(null);
-      setPendingWrites((count) => count - 1);
-    });
+    )
+      .then((results) => {
+        if (
+          results.some((result) =>
+            result.status === "fulfilled" && result.value._tag === "Success"
+              ? !worktreeSettingsPatchApplied(patch, result.value.value)
+              : false,
+          )
+        ) {
+          Alert.alert(
+            "Setting not saved everywhere",
+            "An environment did not apply the setting. Update T3 Code on that environment and try again.",
+          );
+        }
+      })
+      .finally(() => {
+        writeInFlight.current = false;
+        setPendingTargets(null);
+        setPendingWrites((count) => count - 1);
+      });
   };
   const clearProjectOverrides = () => {
     if (writeInFlight.current) return;

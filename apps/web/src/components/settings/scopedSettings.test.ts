@@ -451,6 +451,43 @@ describe("scoped settings writes", () => {
     ]);
     expect(persistServer).toHaveBeenCalledTimes(4);
   });
+
+  it("reports an older environment that acknowledges a worktree setting without saving it", async () => {
+    const patch = {
+      worktreeDirectory: "~/.herdr/worktrees",
+      worktreeBranchPrefix: "NicholasZolton",
+    };
+    const persistServer = vi
+      .fn()
+      .mockResolvedValueOnce({
+        _tag: "Success",
+        value: applyServerSettingsPatch(DEFAULT_SERVER_SETTINGS, patch),
+      })
+      .mockResolvedValueOnce({ _tag: "Success", value: DEFAULT_SERVER_SETTINGS });
+
+    const result = await persistScopedSettingsPatch(
+      planScopedSettingsPatch(all, environments, patch),
+      persistServer,
+      vi.fn(),
+    );
+
+    expect(result.savedEnvironmentCount).toBe(1);
+    expect(result.failedEnvironments).toEqual([]);
+    expect(result.ignoredEnvironments.map(({ label }) => label)).toEqual([server.label]);
+  });
+
+  it("accepts worktree settings acknowledged by every environment", async () => {
+    const patch = { worktreeDirectory: "~/.herdr/worktrees" };
+    const saved = applyServerSettingsPatch(DEFAULT_SERVER_SETTINGS, patch);
+    const result = await persistScopedSettingsPatch(
+      planScopedSettingsPatch(all, environments, patch),
+      vi.fn().mockResolvedValue({ _tag: "Success", value: saved }),
+      vi.fn(),
+    );
+
+    expect(result.savedEnvironmentCount).toBe(2);
+    expect(result.ignoredEnvironments).toEqual([]);
+  });
 });
 
 describe("scoped settings mixed values", () => {
