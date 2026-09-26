@@ -231,7 +231,11 @@ import {
   foldSubagentActivities,
 } from "@t3tools/client-runtime/state/subagentRuntime";
 import { BranchToolbar, type BranchToolbarHandle } from "./BranchToolbar";
-import { resolveShortcutCommand, shortcutLabelForCommand } from "../keybindings";
+import {
+  isComposerDeleteWordShortcut,
+  resolveShortcutCommand,
+  shortcutLabelForCommand,
+} from "../keybindings";
 import { isEditableFocused } from "../lib/editableFocus";
 import ThreadTerminalDrawer from "./ThreadTerminalDrawer";
 import {
@@ -6754,14 +6758,22 @@ export default function ChatView(props: ChatViewProps) {
 
   useEffect(() => {
     const handler = (event: globalThis.KeyboardEvent) => {
-      if (preventRepeatedTerminalCloseShortcut(event, keybindings)) {
+      const deletingComposerWord =
+        isComposerDeleteWordShortcut(event) &&
+        event.target instanceof Element &&
+        event.target.closest('[data-testid="composer-editor"]') !== null;
+      if (!deletingComposerWord && preventRepeatedTerminalCloseShortcut(event, keybindings)) {
         event.stopPropagation();
         return;
       }
       // While a close confirmation is open, terminal focus has moved to the
       // dialog, so a deliberate second close shortcut would otherwise fall
       // through to the native window/tab close accelerator.
-      if (isTerminalCloseConfirmPending() && preventTerminalCloseShortcut(event, keybindings)) {
+      if (
+        !deletingComposerWord &&
+        isTerminalCloseConfirmPending() &&
+        preventTerminalCloseShortcut(event, keybindings)
+      ) {
         event.stopPropagation();
         return;
       }
@@ -6864,6 +6876,7 @@ export default function ChatView(props: ChatViewProps) {
       }
 
       if (command === "rightPanel.close") {
+        if (deletingComposerWord) return;
         // Nothing open: leave the event alone so the shortcut keeps its
         // native meaning (close window on desktop, close tab in a browser).
         if (!activeRightPanelSurface) return;

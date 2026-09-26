@@ -76,6 +76,8 @@ import { formatProviderSkillDisplayName } from "@t3tools/client-runtime/provider
 import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
 import { importPastedComposerText } from "./composerInlineTokenPaste";
 import { didComposerSelectionChangeVisibly } from "./composerSelection";
+import { deletePreviousComposerWord } from "~/composer-delete-word";
+import { isComposerDeleteWordShortcut } from "~/keybindings";
 import type { ComposerDraftContextRecords } from "./composerContextPresentation";
 
 export interface ComposerPromptEditorHandle {
@@ -823,6 +825,13 @@ function ComposerPromptEditorTiptapInner(props: ComposerPromptEditorProps) {
       editorProps: {
         attributes: editorAttributes,
         handleKeyDown: (view, event) => {
+          if (isComposerDeleteWordShortcut(event) && !event.isComposing) {
+            event.preventDefault();
+            event.stopPropagation();
+            const transaction = deletePreviousComposerWord(view.state);
+            if (transaction) view.dispatch(transaction);
+            return true;
+          }
           if (
             isMacPlatform(navigator.platform) &&
             (event.key === "Home" || event.key === "End") &&

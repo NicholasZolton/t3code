@@ -432,6 +432,16 @@ export function isRichTextBoldShortcut(event: ShortcutEventLike): boolean {
   );
 }
 
+export function isComposerDeleteWordShortcut(event: ShortcutEventLike): boolean {
+  return (
+    event.key.toLowerCase() === "w" &&
+    event.ctrlKey &&
+    !event.metaKey &&
+    !event.altKey &&
+    !event.shiftKey
+  );
+}
+
 export function isTerminalClearShortcut(
   event: ShortcutEventLike,
   platform = navigator.platform,

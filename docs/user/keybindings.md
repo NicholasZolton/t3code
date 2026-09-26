@@ -8,6 +8,9 @@ also lists the command IDs and defaults available in your version.
 In **Settings → General → Send shortcut**, choose whether Enter sends, requires
 `mod+Enter` for multiline prompts, or always requires `mod+Enter`. `Shift+Enter`
 inserts a new line. This applies to the web and desktop composer at desktop widths.
+With the composer focused, `Ctrl+W` deletes the previous whitespace-delimited
+word; inline context chips delete as a unit. Windows and Linux browsers reserve
+`Ctrl+W` to close the tab, so use the desktop app for this shortcut there.
 
 **Follow-up behavior** chooses Queue or Steer while the agent runs. Use
 `mod+Enter` to do the opposite for one message. When sending requires `mod+Enter`,
