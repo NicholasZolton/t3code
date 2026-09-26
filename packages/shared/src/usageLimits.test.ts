@@ -199,7 +199,7 @@ describe("pools", () => {
     const native = provider({
       driver: claude,
       instanceId: ProviderInstanceId.make("claude"),
-      auth: { status: "authenticated", email: "Same@example.com" },
+      auth: { status: "authenticated", email: "Same@example.com", label: "Max 20x" },
       usageLimits: { checkedAt, windows: [{ ...window, usedPercent: 40 }] },
     });
     const input = new Map([
@@ -226,7 +226,7 @@ describe("pools", () => {
                     id: "claude-same@example.com.json",
                     driver: claude,
                     email: "same@example.com",
-                    plan: "Claude Subscription",
+                    plan: "Max 5x",
                     usageLimits: { checkedAt, windows: [{ ...window, usedPercent: 10 }] },
                   },
                 ],
@@ -250,13 +250,14 @@ describe("pools", () => {
     });
     // The fresher native snapshot wins; the hub row is pre-filtered by email.
     expect(accounts[0]?.limits.windows[0]?.usedPercent).toBe(55);
+    expect(accounts[0]?.plan).toBe("Max 20x");
   });
 
   it("takes windows from a fresher hub read but credits and redeem from the native instance", () => {
     const native = provider({
       driver: claude,
       instanceId: ProviderInstanceId.make("claude"),
-      auth: { status: "authenticated", email: "same@example.com" },
+      auth: { status: "authenticated", email: "same@example.com", label: "Max 20x" },
       usageLimits: {
         checkedAt,
         windows: [{ ...window, usedPercent: 40 }],
@@ -278,6 +279,7 @@ describe("pools", () => {
                     id: "claude-same@example.com.json",
                     driver: claude,
                     email: "same@example.com",
+                    plan: "Max 5x",
                     usageLimits: {
                       checkedAt: "2026-09-03T11:30:00.000Z",
                       windows: [{ ...window, usedPercent: 55 }],
@@ -292,6 +294,8 @@ describe("pools", () => {
     ]);
     const [account] = collectLimitAccounts(input);
     expect(account?.limits.windows[0]?.usedPercent).toBe(55);
+    expect(account?.plan).toBe("Max 5x");
+    expect(account && limitAccountWeight(account)).toBe(5);
     expect(account?.limits.resetCredits?.availableCount).toBe(2);
     expect(account?.redeem).toEqual({ environmentId: "env-a", input: { instanceId: "claude" } });
     expect(account?.environments).toEqual([{ environmentId: "env-a", label: "Laptop" }]);
