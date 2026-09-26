@@ -34,6 +34,8 @@ export interface ShortcutMatchContext {
   terminalOpen: boolean;
   previewFocus: boolean;
   previewOpen: boolean;
+  /** The chat composer owns the keyboard. */
+  composerFocus?: boolean;
   isWeb: boolean;
   isDesktop: boolean;
   /** A text field, textarea, select or rich-text editor owns the keyboard.
@@ -150,6 +152,7 @@ function resolveContext(options: ShortcutMatchOptions | undefined): ShortcutMatc
     terminalOpen: false,
     previewFocus: false,
     previewOpen: false,
+    composerFocus: false,
     isWeb: !isElectron,
     isDesktop: isElectron,
     editableFocus: false,
@@ -427,16 +430,6 @@ export function isRichTextBoldShortcut(event: ShortcutEventLike): boolean {
   return (
     event.key.toLowerCase() === "b" &&
     (event.metaKey || event.ctrlKey) &&
-    !event.altKey &&
-    !event.shiftKey
-  );
-}
-
-export function isComposerDeleteWordShortcut(event: ShortcutEventLike): boolean {
-  return (
-    event.key.toLowerCase() === "w" &&
-    event.ctrlKey &&
-    !event.metaKey &&
     !event.altKey &&
     !event.shiftKey
   );

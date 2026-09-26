@@ -418,6 +418,55 @@ describe("split/new/close terminal shortcuts", () => {
   });
 });
 
+describe("composer word deletion shortcut", () => {
+  it("takes ctrl+w only in the composer and yields to close shortcuts elsewhere", () => {
+    const shortcut = event({ key: "w", ctrlKey: true });
+    const platform = "Linux";
+    assert.equal(
+      resolveShortcutCommand(shortcut, DEFAULT_RESOLVED_KEYBINDINGS, {
+        platform,
+        context: { composerFocus: true, editableFocus: true },
+      }),
+      "composer.deletePreviousWord",
+    );
+    assert.equal(
+      resolveShortcutCommand(shortcut, DEFAULT_RESOLVED_KEYBINDINGS, { platform }),
+      "rightPanel.close",
+    );
+    assert.equal(
+      resolveShortcutCommand(shortcut, DEFAULT_RESOLVED_KEYBINDINGS, {
+        platform,
+        context: { terminalFocus: true },
+      }),
+      "terminal.close",
+    );
+    assert.equal(
+      resolveShortcutCommand(shortcut, DEFAULT_RESOLVED_KEYBINDINGS, {
+        platform: "MacIntel",
+        context: { composerFocus: true },
+      }),
+      "composer.deletePreviousWord",
+    );
+  });
+
+  it("uses a custom binding instead of the hardcoded ctrl+w chord", () => {
+    const keybindings = mergeWithDefaultKeybindings(
+      compileResolvedKeybindingsConfig([
+        { key: "alt+backspace", command: "composer.deletePreviousWord", when: "composerFocus" },
+      ]),
+    );
+    const options = { platform: "Linux", context: { composerFocus: true } };
+    assert.equal(
+      resolveShortcutCommand(event({ key: "Backspace", altKey: true }), keybindings, options),
+      "composer.deletePreviousWord",
+    );
+    assert.equal(
+      resolveShortcutCommand(event({ key: "w", ctrlKey: true }), keybindings, options),
+      "rightPanel.close",
+    );
+  });
+});
+
 describe("shortcutLabelForCommand", () => {
   it("returns the effective binding label", () => {
     const bindings = compile([

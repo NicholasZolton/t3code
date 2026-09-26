@@ -231,11 +231,7 @@ import {
   foldSubagentActivities,
 } from "@t3tools/client-runtime/state/subagentRuntime";
 import { BranchToolbar, type BranchToolbarHandle } from "./BranchToolbar";
-import {
-  isComposerDeleteWordShortcut,
-  resolveShortcutCommand,
-  shortcutLabelForCommand,
-} from "../keybindings";
+import { resolveShortcutCommand, shortcutLabelForCommand } from "../keybindings";
 import { isEditableFocused } from "../lib/editableFocus";
 import ThreadTerminalDrawer from "./ThreadTerminalDrawer";
 import {
@@ -6749,6 +6745,8 @@ export default function ChatView(props: ChatViewProps) {
       previewFocus: isPreviewFocused(),
       previewOpen: previewPanelOpen,
       editableFocus: isEditableFocused(eventTarget),
+      composerFocus:
+        eventTarget instanceof Element && eventTarget.closest("[data-composer-editor]") !== null,
       modelPickerOpen: composerRef.current?.isModelPickerOpen() ?? false,
       isWeb: !isElectron,
       isDesktop: isElectron,
@@ -6758,11 +6756,13 @@ export default function ChatView(props: ChatViewProps) {
 
   useEffect(() => {
     const handler = (event: globalThis.KeyboardEvent) => {
-      const deletingComposerWord =
-        isComposerDeleteWordShortcut(event) &&
-        event.target instanceof Element &&
-        event.target.closest('[data-testid="composer-editor"]') !== null;
-      if (!deletingComposerWord && preventRepeatedTerminalCloseShortcut(event, keybindings)) {
+      const composerOwnsShortcut =
+        (event.repeat || isTerminalCloseConfirmPending()) &&
+        !event.isComposing &&
+        resolveShortcutCommand(event, keybindings, {
+          context: getShortcutContext(event.target),
+        }) === "composer.deletePreviousWord";
+      if (!composerOwnsShortcut && preventRepeatedTerminalCloseShortcut(event, keybindings)) {
         event.stopPropagation();
         return;
       }
@@ -6770,7 +6770,7 @@ export default function ChatView(props: ChatViewProps) {
       // dialog, so a deliberate second close shortcut would otherwise fall
       // through to the native window/tab close accelerator.
       if (
-        !deletingComposerWord &&
+        !composerOwnsShortcut &&
         isTerminalCloseConfirmPending() &&
         preventTerminalCloseShortcut(event, keybindings)
       ) {
@@ -6876,7 +6876,6 @@ export default function ChatView(props: ChatViewProps) {
       }
 
       if (command === "rightPanel.close") {
-        if (deletingComposerWord) return;
         // Nothing open: leave the event alone so the shortcut keeps its
         // native meaning (close window on desktop, close tab in a browser).
         if (!activeRightPanelSurface) return;

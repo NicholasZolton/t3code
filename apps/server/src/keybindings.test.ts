@@ -283,6 +283,29 @@ it.layer(NodeServices.layer)("keybindings", (it) => {
       }).pipe(Effect.provide(makeKeybindingsLayer())),
   );
 
+  it.effect("adds the composer shortcut after a persisted close-window shortcut", () =>
+    Effect.gen(function* () {
+      const { keybindingsConfigPath } = yield* ServerConfig.ServerConfig;
+      yield* writeKeybindingsConfig(keybindingsConfigPath, [
+        { key: "mod+w", command: "rightPanel.close", when: "!terminalFocus" },
+      ]);
+
+      const keybindings = yield* Keybindings.Keybindings;
+      yield* keybindings.syncDefaultKeybindingsOnStartup;
+
+      const persisted = yield* readKeybindingsConfig(keybindingsConfigPath);
+      const composerIndex = persisted.findIndex(
+        (rule) => rule.command === "composer.deletePreviousWord",
+      );
+      assert.isAbove(composerIndex, 0);
+      assert.deepEqual(persisted[composerIndex], {
+        key: "ctrl+w",
+        command: "composer.deletePreviousWord",
+        when: "composerFocus",
+      });
+    }).pipe(Effect.provide(makeKeybindingsLayer())),
+  );
+
   it.effect("skips conflicting default keybindings on startup and logs a detailed warning", () => {
     const messages: string[] = [];
     const logger = Logger.make(({ message }) => {

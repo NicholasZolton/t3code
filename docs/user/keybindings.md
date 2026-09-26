@@ -9,8 +9,9 @@ In **Settings → General → Send shortcut**, choose whether Enter sends, requi
 `mod+Enter` for multiline prompts, or always requires `mod+Enter`. `Shift+Enter`
 inserts a new line. This applies to the web and desktop composer at desktop widths.
 With the composer focused, `Ctrl+W` deletes the previous whitespace-delimited
-word; inline context chips delete as a unit. Windows and Linux browsers reserve
-`Ctrl+W` to close the tab, so use the desktop app for this shortcut there.
+word; inline context chips delete as a unit. Change the **Composer: Delete Previous
+Word** shortcut in **Settings → Keybindings**. Windows and Linux browsers reserve
+`Ctrl+W` to close the tab, so choose a different shortcut there or use the desktop app.
 
 **Follow-up behavior** chooses Queue or Steer while the agent runs. Use
 `mod+Enter` to do the opposite for one message. When sending requires `mod+Enter`,
@@ -87,10 +88,11 @@ Join modifiers and a key with `+`, such as `mod+shift+d` or `ctrl+l`.
 ## When conditions
 
 Available context keys are `terminalFocus`, `terminalOpen`, `previewFocus`,
-`previewOpen`, `modelPickerOpen`, `editableFocus`, `isWeb`, and `isDesktop`.
-`editableFocus` is true while a text field, the composer, or another editor has
+`previewOpen`, `modelPickerOpen`, `editableFocus`, `composerFocus`, `isWeb`, and
+`isDesktop`. `editableFocus` is true while a text field, the composer, or another editor has
 the keyboard. `isWeb` is true in a browser tab. `isDesktop` is true in the
-desktop app. Unknown keys evaluate to `false`.
+desktop app. `composerFocus` is true while typing in the chat composer.
+Unknown keys evaluate to `false`.
 
 `mod+1` through `mod+9` jump to the first nine threads, and to models while the
 model picker is open. Those defaults use `isDesktop` so they do not steal the

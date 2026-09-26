@@ -20,6 +20,7 @@ describe("KeybindingsSettings.logic", () => {
   it("lists composer, provider, and pull request commands with editable defaults", () => {
     const rows = buildKeybindingRows(DEFAULT_RESOLVED_KEYBINDINGS, "");
     for (const command of [
+      "composer.deletePreviousWord",
       "composer.host",
       "composer.effort",
       "composer.mode",
@@ -36,6 +37,11 @@ describe("KeybindingsSettings.logic", () => {
         conflicts: [],
       });
     }
+    expect(rows.find((row) => row.command === "composer.deletePreviousWord")).toMatchObject({
+      key: "ctrl+w",
+      when: "composerFocus",
+      defaultKey: "ctrl+w",
+    });
   });
   it.each(["pu", "pull request", "copy link", "thread id"])(
     "finds the copy link shortcut with %s",
