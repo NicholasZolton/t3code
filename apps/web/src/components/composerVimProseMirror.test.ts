@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { Editor } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
-import { afterEach, describe, expect, it } from "vite-plus/test";
+import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import {
   ComposerVimExtension,
@@ -48,6 +48,35 @@ function setup(value: string): {
 }
 
 describe("Replit Vim engine in Tiptap", () => {
+  it("moves gj and gk by wrapped display lines while j follows logical lines", () => {
+    const { editor, key } = setup("abcdefghij\nsecond");
+    const view = editor.view;
+    // Simulate a four-character wrap in the first paragraph's layout.
+    vi.spyOn(view, "coordsAtPos").mockImplementation((pos) => {
+      const offset = pos - 1;
+      const row = offset < 11 ? Math.floor(offset / 4) : 3;
+      const column = offset < 11 ? offset % 4 : offset - 12;
+      return { left: column * 10, right: column * 10, top: row * 20, bottom: row * 20 + 20 };
+    });
+    vi.spyOn(view, "posAtCoords").mockImplementation(({ left, top }) => {
+      const row = Math.max(0, Math.floor(top / 20));
+      const column = Math.max(0, Math.floor(left / 10));
+      const offset = row < 3 ? Math.min(row * 4 + column, 10) : 11 + Math.min(column, 6);
+      return { pos: offset + (row < 3 ? 1 : 2), inside: -1 };
+    });
+    key("g");
+    key("j");
+    expect(editor.state.selection.from).toBe(5);
+    key("g");
+    key("j");
+    expect(editor.state.selection.from).toBe(9);
+    key("g");
+    key("k");
+    expect(editor.state.selection.from).toBe(5);
+    key("j");
+    expect(editor.state.selection.from).toBe(17);
+  });
+
   it("uses real motions, operators, and registers on the Tiptap document", () => {
     const { editor, key, text } = setup("hello world\nsecond line");
     expect(key("w")).toBe(true);

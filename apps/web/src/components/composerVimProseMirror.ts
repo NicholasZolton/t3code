@@ -536,15 +536,27 @@ class VimProseMirror implements CM5EditorInterface {
     };
   }
   findPosV(start: Pos, amount: number, unit: "page" | "line", goalColumn?: number): VimPosition {
-    const delta =
-      unit === "page"
-        ? Math.max(1, Math.floor(this.getScrollInfo().clientHeight / this.defaultTextHeight()))
-        : 1;
-    const line = Math.max(0, Math.min(start.line + amount * delta, this.lastLine()));
-    return {
-      ...this.clipPos(new VimPos(line, goalColumn ?? start.ch)),
-      hitSide: line === start.line && amount !== 0,
-    };
+    const startCoords = this.charCoords(start);
+    const lineHeight = startCoords.bottom - startCoords.top || this.defaultTextHeight();
+    const steps =
+      Math.abs(amount) *
+      (unit === "page"
+        ? Math.max(1, Math.floor(this.getScrollInfo().clientHeight / lineHeight))
+        : 1);
+    const direction = Math.sign(amount);
+    const left = goalColumn ?? startCoords.left;
+    let current = start;
+    for (let step = 0; step < steps; step++) {
+      const currentTop = this.charCoords(current).top;
+      const next = this.clipPos(
+        this.coordsChar({ left, top: currentTop + direction * lineHeight + lineHeight / 2 }),
+      );
+      if (direction * (this.charCoords(next).top - currentTop) < lineHeight / 2) {
+        return { ...current, hitSide: true };
+      }
+      current = next;
+    }
+    return { ...current, hitSide: false };
   }
   charCoords(pos: Pos): { left: number; top: number; bottom: number } {
     const pm = flatToPm(serializeEditorDoc(this.view.state.doc), this.indexFromPos(pos));
