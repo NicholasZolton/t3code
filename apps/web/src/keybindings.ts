@@ -3,6 +3,7 @@ import {
   type KeybindingShortcut,
   type KeybindingWhenNode,
   MODEL_PICKER_JUMP_KEYBINDING_COMMANDS,
+  type ResolvedKeybindingRule,
   type ResolvedKeybindingsConfig,
   THREAD_JUMP_KEYBINDING_COMMANDS,
   type ModelPickerJumpKeybindingCommand,
@@ -191,6 +192,31 @@ function matchesWhenClause(
   return evaluateWhenNode(whenAst, context);
 }
 
+function closeYieldsToComposerWordDeletion(
+  binding: ResolvedKeybindingRule,
+  keybindings: ResolvedKeybindingsConfig,
+  context: ShortcutMatchContext,
+  platform: string,
+  event?: ShortcutEventLike,
+): boolean {
+  if (
+    !context.composerFocus ||
+    (binding.command !== "rightPanel.close" && binding.command !== "terminal.close")
+  ) {
+    return false;
+  }
+
+  return keybindings.some(
+    (candidate) =>
+      candidate.command === "composer.deletePreviousWord" &&
+      matchesWhenClause(candidate.whenAst, context) &&
+      (event
+        ? matchesShortcut(event, candidate.shortcut, platform)
+        : shortcutConflictKey(candidate.shortcut, platform) ===
+          shortcutConflictKey(binding.shortcut, platform)),
+  );
+}
+
 export function shortcutConflictKey(
   shortcut: KeybindingShortcut,
   platform = navigator.platform,
@@ -220,6 +246,7 @@ function findEffectiveShortcutForCommand(
     const binding = keybindings[index];
     if (!binding) continue;
     if (!matchesWhenClause(binding.whenAst, context)) continue;
+    if (closeYieldsToComposerWordDeletion(binding, keybindings, context, platform)) continue;
 
     const conflictKey = shortcutConflictKey(binding.shortcut, platform);
     if (claimedShortcuts.has(conflictKey)) {
@@ -257,6 +284,7 @@ export function resolveShortcutCommand(
     if (!binding) continue;
     if (!matchesWhenClause(binding.whenAst, context)) continue;
     if (!matchesShortcut(event, binding.shortcut, platform)) continue;
+    if (closeYieldsToComposerWordDeletion(binding, keybindings, context, platform, event)) continue;
     return binding.command;
   }
   return null;

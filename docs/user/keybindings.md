@@ -109,7 +109,8 @@ Combine keys with `!` for not, `&&` for and, `||` for or, and parentheses:
 
 The last rule whose key and condition both match wins, even if it belongs to a
 different command. Put a more specific rule after a general one when they share
-a shortcut.
+a shortcut. While the composer is focused, its previous-word shortcut takes
+precedence over a close shortcut using the same keys.
 
 ## Commands with special behavior
 

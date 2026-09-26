@@ -494,6 +494,34 @@ describe("composer word deletion shortcut", () => {
       "rightPanel.close",
     );
   });
+
+  it("deletes in the composer when a saved close binding follows the composer rule", () => {
+    const keybindings = mergeWithDefaultKeybindings(
+      compileResolvedKeybindingsConfig([
+        { key: "ctrl+w", command: "composer.deletePreviousWord", when: "composerFocus" },
+        { key: "mod+w", command: "rightPanel.close", when: "!terminalFocus" },
+      ]),
+    );
+    const shortcut = event({ key: "w", ctrlKey: true });
+    assert.equal(
+      resolveShortcutCommand(shortcut, keybindings, {
+        platform: "Linux",
+        context: { composerFocus: true },
+      }),
+      "composer.deletePreviousWord",
+    );
+    assert.equal(
+      resolveShortcutCommand(shortcut, keybindings, { platform: "Linux" }),
+      "rightPanel.close",
+    );
+    assert.equal(
+      shortcutLabelForCommand(keybindings, "composer.deletePreviousWord", {
+        platform: "Linux",
+        context: { composerFocus: true },
+      }),
+      "Ctrl+W",
+    );
+  });
 });
 
 describe("shortcutLabelForCommand", () => {
