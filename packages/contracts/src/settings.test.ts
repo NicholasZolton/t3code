@@ -2,6 +2,7 @@ import { describe, expect, it } from "vite-plus/test";
 import * as Schema from "effect/Schema";
 
 import { ProviderDriverKind, ProviderInstanceId } from "./providerInstance.ts";
+import { ProjectId } from "./baseSchemas.ts";
 import {
   ClientSettingsSchema,
   ClientSettingsPatch,
@@ -281,6 +282,28 @@ describe("ClientSettings default diff file state", () => {
     expect(decodeClientSettingsPatch({ diffFilesCollapsed }).diffFilesCollapsed).toBe(
       diffFilesCollapsed,
     );
+  });
+});
+
+describe("project diff auto-collapse setting", () => {
+  it("defaults to on and persists a project override", () => {
+    const projectId = ProjectId.make("project");
+    expect(decodeServerSettings({}).autoCollapseTestAndSnapshotFiles).toBe(true);
+    const settings = decodeServerSettings({
+      projectSettingsOverrides: {
+        [projectId]: { autoCollapseTestAndSnapshotFiles: false },
+      },
+    });
+    expect(encodeServerSettings(settings).projectSettingsOverrides).toEqual({
+      [projectId]: { autoCollapseTestAndSnapshotFiles: false },
+    });
+    expect(
+      decodeServerSettingsPatch({
+        projectSettingsOverrides: {
+          [projectId]: { autoCollapseTestAndSnapshotFiles: false },
+        },
+      }).projectSettingsOverrides?.[projectId],
+    ).toEqual({ autoCollapseTestAndSnapshotFiles: false });
   });
 });
 

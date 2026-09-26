@@ -6,7 +6,7 @@ import {
 } from "@t3tools/contracts";
 import { describe, expect, it, vi } from "vite-plus/test";
 import { applyServerSettingsPatch } from "@t3tools/shared/serverSettings";
-import { resolveWorktreeCleanup } from "@t3tools/shared/projectSettings";
+import { resolveProjectSettings, resolveWorktreeCleanup } from "@t3tools/shared/projectSettings";
 
 import type { SidebarProjectSnapshot } from "../../sidebarProjectGrouping";
 import {
@@ -273,6 +273,32 @@ describe("scoped settings writes", () => {
     ).toMatchObject({
       serverWrites: [{ environmentId: server.environmentId }],
     });
+  });
+
+  it("lets a project disable automatic diff folding without changing its environment default", () => {
+    const plan = planScopedSettingsPatch(checkout, [laptop, server], {
+      autoCollapseTestAndSnapshotFiles: false,
+    });
+    expect(plan.clientPatch).toEqual({});
+    expect(plan.serverWrites).toEqual([
+      {
+        environmentId: server.environmentId,
+        label: server.label,
+        patch: {
+          projectSettingsOverrides: {
+            [projectId]: { autoCollapseTestAndSnapshotFiles: false },
+          },
+        },
+      },
+    ]);
+    const updated = applyServerSettingsPatch(
+      server.serverConfig!.settings,
+      plan.serverWrites[0]!.patch,
+    );
+    expect(updated.autoCollapseTestAndSnapshotFiles).toBe(true);
+    expect(
+      resolveProjectSettings(updated, projectId).settings.autoCollapseTestAndSnapshotFiles,
+    ).toBe(false);
   });
 
   it("keeps each project's other cleanup rules when changing one rule across machines", () => {

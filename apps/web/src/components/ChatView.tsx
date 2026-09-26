@@ -692,6 +692,12 @@ function shouldTypeToFocusComposer(event: KeyboardEvent): boolean {
   if (event.isComposing) return false;
   if (event.metaKey || event.ctrlKey || event.altKey) return false;
   if (event.key.length !== 1) return false;
+  if (
+    event.key.toLowerCase() === "v" &&
+    !event.shiftKey &&
+    eventPathContainsSelector(event, "[data-diff-review-shortcuts]")
+  )
+    return false;
   if (!shouldRedirectInputToComposer(event)) return false;
 
   // The right-panel surface launcher claims its shortcut letters while it is

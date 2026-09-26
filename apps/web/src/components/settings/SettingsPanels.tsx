@@ -567,6 +567,10 @@ export function useSettingsRestore(onRestored?: () => void) {
       ...(settings.diffFilesCollapsed !== DEFAULT_UNIFIED_SETTINGS.diffFilesCollapsed
         ? ["Default diff file state"]
         : []),
+      ...(settings.autoCollapseTestAndSnapshotFiles !==
+      DEFAULT_UNIFIED_SETTINGS.autoCollapseTestAndSnapshotFiles
+        ? ["Auto-collapse test and snapshot files"]
+        : []),
       ...(settings.diffIgnoreWhitespace !== DEFAULT_UNIFIED_SETTINGS.diffIgnoreWhitespace
         ? ["Diff whitespace changes"]
         : []),
@@ -654,6 +658,7 @@ export function useSettingsRestore(onRestored?: () => void) {
       settings.defaultThreadEnvMode,
       settings.newWorktreesStartFromOrigin,
       settings.diffFilesCollapsed,
+      settings.autoCollapseTestAndSnapshotFiles,
       settings.diffIgnoreWhitespace,
       settings.diffLayout,
       settings.proactivePanelsEnabled,
@@ -757,6 +762,7 @@ export function useSettingsRestore(onRestored?: () => void) {
       inAppNotificationsEnabled: DEFAULT_UNIFIED_SETTINGS.inAppNotificationsEnabled,
       wordWrap: DEFAULT_UNIFIED_SETTINGS.wordWrap,
       diffFilesCollapsed: DEFAULT_UNIFIED_SETTINGS.diffFilesCollapsed,
+      autoCollapseTestAndSnapshotFiles: DEFAULT_UNIFIED_SETTINGS.autoCollapseTestAndSnapshotFiles,
       diffIgnoreWhitespace: DEFAULT_UNIFIED_SETTINGS.diffIgnoreWhitespace,
       diffLayout: DEFAULT_UNIFIED_SETTINGS.diffLayout,
       proactivePanelsEnabled: DEFAULT_UNIFIED_SETTINGS.proactivePanelsEnabled,
@@ -2498,6 +2504,36 @@ export function GeneralSettingsPanel() {
                 </SelectItem>
               </SelectPopup>
             </Select>
+          }
+        />
+        <SettingsRow
+          {...searchableSetting("auto-collapse-test-and-snapshot-files")}
+          serverScoped
+          settingKeys={["autoCollapseTestAndSnapshotFiles"]}
+          description="Start test and *_snapshot.json diffs collapsed when other files start expanded. Can be overridden per project."
+          resetAction={
+            settings.autoCollapseTestAndSnapshotFiles !==
+            DEFAULT_UNIFIED_SETTINGS.autoCollapseTestAndSnapshotFiles ? (
+              <SettingResetButton
+                label="auto-collapse test and snapshot files"
+                onClick={() =>
+                  updateSettings({
+                    autoCollapseTestAndSnapshotFiles:
+                      DEFAULT_UNIFIED_SETTINGS.autoCollapseTestAndSnapshotFiles,
+                  })
+                }
+              />
+            ) : null
+          }
+          control={
+            <ScopedSwitch
+              settingKeys={["autoCollapseTestAndSnapshotFiles"]}
+              checked={settings.autoCollapseTestAndSnapshotFiles}
+              onCheckedChange={(checked) =>
+                updateSettings({ autoCollapseTestAndSnapshotFiles: Boolean(checked) })
+              }
+              aria-label="Auto-collapse test and snapshot files"
+            />
           }
         />
         <SettingsRow

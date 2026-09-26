@@ -44,7 +44,8 @@ import {
   resolveFileDiffPath,
 } from "../lib/diffRendering";
 import { PREFERRED_HIGHLIGHTER } from "../lib/syntaxHighlighting";
-import { areAllDiffFilesCollapsed, isTestDiffFile } from "../lib/diffCollapse";
+import { areAllDiffFilesCollapsed, isAutoCollapsedDiffFile } from "../lib/diffCollapse";
+import { resolveProjectSettings } from "@t3tools/shared/projectSettings";
 import { useTurnDiffSummaries } from "../hooks/useTurnDiffSummaries";
 import { useWorkspaceMutationRefresh } from "../hooks/useWorkspaceMutationRefresh";
 import { useProject, useThread } from "../state/entities";
@@ -169,6 +170,10 @@ export default function DiffPanel({
   const serverConfig = useAtomValue(
     serverEnvironment.configValueAtom(activeThread?.environmentId ?? null),
   );
+  const autoCollapseTestAndSnapshotFiles = serverConfig
+    ? resolveProjectSettings(serverConfig.settings, activeProjectId, activeProject).settings
+        .autoCollapseTestAndSnapshotFiles
+    : true;
   const onFileContextMenu = useFileContextMenuHandler(activeThread?.environmentId ?? null);
   const openInPreferredEditor = useOpenInPreferredEditor(
     activeThread?.environmentId ?? null,
@@ -462,11 +467,13 @@ export default function DiffPanel({
         renderableFileEntries
           .filter(
             ({ fileDiff }) =>
-              settings.diffFilesCollapsed || isTestDiffFile(resolveFileDiffPath(fileDiff)),
+              settings.diffFilesCollapsed ||
+              (autoCollapseTestAndSnapshotFiles &&
+                isAutoCollapsedDiffFile(resolveFileDiffPath(fileDiff))),
           )
           .map(({ fileKey }) => fileKey),
       ),
-    [renderableFileEntries, settings.diffFilesCollapsed],
+    [renderableFileEntries, settings.diffFilesCollapsed, autoCollapseTestAndSnapshotFiles],
   );
   const collapsedDiffFileKeys = useMemo(() => {
     const keys = new Set(defaultCollapsedDiffFileKeys);
@@ -1042,6 +1049,7 @@ export default function DiffPanel({
               <div className="flex min-h-0 flex-1 overflow-hidden">
                 <div
                   className="min-h-0 min-w-0 flex-1"
+                  data-diff-review-shortcuts
                   tabIndex={0}
                   onKeyDownCapture={(event) => {
                     if (

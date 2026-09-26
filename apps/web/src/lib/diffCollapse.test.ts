@@ -1,12 +1,16 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { areAllDiffFilesCollapsed, isTestDiffFile, toggleAllDiffFiles } from "./diffCollapse";
+import {
+  areAllDiffFilesCollapsed,
+  isAutoCollapsedDiffFile,
+  toggleAllDiffFiles,
+} from "./diffCollapse";
 
 const FILE_KEYS = ["src/app.ts", "src/index.ts"];
 const FIRST_FILE_KEY = FILE_KEYS[0]!;
 
 describe("diff collapse controls", () => {
-  it("recognizes conventional test files without folding unrelated source", () => {
+  it("recognizes test and snapshot files without folding unrelated source", () => {
     for (const path of [
       "src/button.test.tsx",
       "internal/server/server_test.go",
@@ -15,11 +19,18 @@ describe("diff collapse controls", () => {
       "src/test_login.py",
       "src/LoginServiceTest.java",
       "src/login-service-test.js",
+      "src/components/Button_snapshot.json",
+      "src/components/button_SNAPSHOT.JSON",
     ]) {
-      expect(isTestDiffFile(path)).toBe(true);
+      expect(isAutoCollapsedDiffFile(path)).toBe(true);
     }
-    for (const path of ["src/contest.go", "src/testing/helpers.go", "docs/test-plan.md"]) {
-      expect(isTestDiffFile(path)).toBe(false);
+    for (const path of [
+      "src/contest.go",
+      "src/testing/helpers.go",
+      "docs/test-plan.md",
+      "src/components/Button.snapshot.json",
+    ]) {
+      expect(isAutoCollapsedDiffFile(path)).toBe(false);
     }
   });
   it("reports whether every rendered file is collapsed", () => {
