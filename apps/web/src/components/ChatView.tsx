@@ -6745,8 +6745,6 @@ export default function ChatView(props: ChatViewProps) {
       previewFocus: isPreviewFocused(),
       previewOpen: previewPanelOpen,
       editableFocus: isEditableFocused(eventTarget),
-      composerFocus:
-        eventTarget instanceof Element && eventTarget.closest("[data-composer-editor]") !== null,
       modelPickerOpen: composerRef.current?.isModelPickerOpen() ?? false,
       isWeb: !isElectron,
       isDesktop: isElectron,

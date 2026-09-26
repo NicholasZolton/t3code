@@ -1,4 +1,4 @@
-import { assert, describe, it } from "vite-plus/test";
+import { afterEach, assert, describe, it, vi } from "vite-plus/test";
 import {
   compileResolvedKeybindingsConfig,
   DEFAULT_RESOLVED_KEYBINDINGS,
@@ -419,6 +419,35 @@ describe("split/new/close terminal shortcuts", () => {
 });
 
 describe("composer word deletion shortcut", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("resolves composer focus from the keydown target for every shortcut consumer", () => {
+    class EditorTarget extends EventTarget {
+      constructor(private readonly insideComposer: boolean) {
+        super();
+      }
+
+      closest(selector: string): EditorTarget | null {
+        return selector === "[data-composer-editor]" && this.insideComposer ? this : null;
+      }
+    }
+
+    vi.stubGlobal("Element", EditorTarget);
+    const shortcut = event({ key: "w", ctrlKey: true, target: new EditorTarget(true) });
+    assert.equal(
+      resolveShortcutCommand(shortcut, DEFAULT_RESOLVED_KEYBINDINGS, { platform: "Linux" }),
+      "composer.deletePreviousWord",
+    );
+    assert.equal(
+      resolveShortcutCommand(
+        event({ ...shortcut, target: new EditorTarget(false) }),
+        DEFAULT_RESOLVED_KEYBINDINGS,
+        { platform: "Linux" },
+      ),
+      "rightPanel.close",
+    );
+  });
+
   it("takes ctrl+w only in the composer and yields to close shortcuts elsewhere", () => {
     const shortcut = event({ key: "w", ctrlKey: true });
     const platform = "Linux";

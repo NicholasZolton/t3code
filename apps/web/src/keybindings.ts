@@ -13,6 +13,7 @@ import { isMacPlatform } from "./lib/utils";
 
 export interface ShortcutEventLike {
   getModifierState?: (key: "AltGraph") => boolean;
+  target?: EventTarget | null;
   type?: string;
   code?: string;
   key: string;
@@ -146,13 +147,20 @@ function resolvePlatform(options: ShortcutMatchOptions | undefined): string {
   return options?.platform ?? navigator.platform;
 }
 
-function resolveContext(options: ShortcutMatchOptions | undefined): ShortcutMatchContext {
+function resolveContext(
+  options: ShortcutMatchOptions | undefined,
+  event?: ShortcutEventLike,
+): ShortcutMatchContext {
+  const target = event?.target;
   return {
     terminalFocus: false,
     terminalOpen: false,
     previewFocus: false,
     previewOpen: false,
-    composerFocus: false,
+    composerFocus:
+      typeof Element !== "undefined" &&
+      target instanceof Element &&
+      target.closest("[data-composer-editor]") !== null,
     isWeb: !isElectron,
     isDesktop: isElectron,
     editableFocus: false,
@@ -242,7 +250,7 @@ export function resolveShortcutCommand(
   options?: ShortcutMatchOptions,
 ): KeybindingCommand | null {
   const platform = resolvePlatform(options);
-  const context = resolveContext(options);
+  const context = resolveContext(options, event);
 
   for (let index = keybindings.length - 1; index >= 0; index -= 1) {
     const binding = keybindings[index];
