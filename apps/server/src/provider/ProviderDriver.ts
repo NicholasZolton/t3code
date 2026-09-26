@@ -26,6 +26,7 @@ import type {
   ProviderDriverKind,
   ProviderInstanceEnvironment,
   ProviderInstanceId,
+  OpenCodeCodexAccount,
   ServerProvider,
 } from "@t3tools/contracts";
 import type * as Effect from "effect/Effect";
@@ -85,6 +86,13 @@ export interface ProviderInstance {
     ProviderConsumeResetCreditOutcome,
     ProviderDriverError
   >;
+  readonly readOpenCodeAccounts?: () => Effect.Effect<
+    readonly OpenCodeCodexAccount[],
+    ProviderDriverError
+  >;
+  readonly activateOpenCodeAccount?: (
+    credentialId: string,
+  ) => Effect.Effect<void, ProviderDriverError>;
   readonly adapter: ProviderAdapterShape<ProviderAdapterError>;
   readonly textGeneration: TextGeneration.TextGeneration["Service"];
   readonly auth?: ProviderAuthController;

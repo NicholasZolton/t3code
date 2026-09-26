@@ -3,6 +3,7 @@ import { useNavigation, type StaticScreenProps } from "@react-navigation/native"
 import { EnvironmentId } from "@t3tools/contracts";
 import {
   collectLimitAccounts,
+  collectOpenCodeAccountTargets,
   collectLimitNotices,
   collectLimitPools,
   cursorUsageWindowDetails,
@@ -24,6 +25,7 @@ import { ProviderIcon } from "../../components/ProviderIcon";
 import { SettingsScreen } from "../settings/components/SettingsScreen";
 import { environmentPresentations } from "../../state/presentation";
 import { ResetCredits } from "./UsageLimitsSection";
+import { OpenCodeAccounts } from "./OpenCodeAccounts";
 import { useProviderColors } from "./usageProviders";
 
 const DRIVER_LABEL: Partial<Record<string, string>> = { codex: "Codex", claudeAgent: "Claude" };
@@ -225,7 +227,11 @@ export function UsageLimitsSection({
     ) + 1;
   return (
     <View className="gap-6">
-      {pools.length === 0 && notices.length === 0 && failedLabels.length === 0 && !cursorPrompt ? (
+      {pools.length === 0 &&
+      notices.length === 0 &&
+      failedLabels.length === 0 &&
+      !cursorPrompt &&
+      collectOpenCodeAccountTargets(selected).length === 0 ? (
         <Text className="py-12 text-center text-base text-foreground-muted">
           {selected.size === 0
             ? "Select an environment to see limits."
@@ -266,6 +272,7 @@ export function UsageLimitsSection({
         );
       })}
       {cursorPromptAt === pools.length ? cursorPrompt : null}
+      <OpenCodeAccounts presentations={selected} now={now} />
       {notices.length > 0 || failedLabels.length > 0 ? (
         <View
           accessible

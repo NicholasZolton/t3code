@@ -1,5 +1,6 @@
 import {
   collectLimitAccounts,
+  collectOpenCodeAccountTargets,
   collectLimitNotices,
   collectLimitPools,
   cursorUsageWindowDetails,
@@ -580,7 +581,10 @@ export function UsageLimitsPooled({
     ) + 1;
   return (
     <div className="flex flex-col gap-8">
-      {pools.length === 0 && notices.length === 0 && !cursorPrompt ? (
+      {pools.length === 0 &&
+      notices.length === 0 &&
+      !cursorPrompt &&
+      collectOpenCodeAccountTargets(presentations).length === 0 ? (
         <p className="text-sm text-muted-foreground">
           No provider on the selected environments reports subscription limits.
         </p>

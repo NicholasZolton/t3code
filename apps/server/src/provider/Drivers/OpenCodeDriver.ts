@@ -12,6 +12,7 @@
  * @module provider/Drivers/OpenCodeDriver
  */
 import { OpenCodeSettings, ProviderDriverKind } from "@t3tools/contracts";
+import * as NodeOS from "node:os";
 import * as Crypto from "effect/Crypto";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -27,6 +28,10 @@ import { ServerSettingsService } from "../../serverSettings.ts";
 import { ProviderDriverError } from "../Errors.ts";
 import { makeOpenCodeAdapter } from "../Layers/OpenCodeAdapter.ts";
 import { readOpenCodeGoUsageLimits } from "../Layers/openCodeUsageLimits.ts";
+import {
+  activateOpenCodeCredential,
+  readOpenCodeCodexAccounts,
+} from "../Layers/openCodeCodexAccounts.ts";
 import {
   checkOpenCodeProviderStatus,
   makePendingOpenCodeProvider,
@@ -144,6 +149,51 @@ export const OpenCodeDriver: ProviderDriver<OpenCodeSettings, OpenCodeDriverEnv>
           : {}),
         environment: processEnv,
       });
+      const dataHome =
+        processEnv.XDG_DATA_HOME ||
+        pathService.join(
+          processEnv.HOME || processEnv.USERPROFILE || NodeOS.homedir(),
+          ".local",
+          "share",
+        );
+      const accountError = (detail: string, cause?: unknown) =>
+        new ProviderDriverError({
+          driver: DRIVER_KIND,
+          instanceId,
+          detail,
+          ...(cause === undefined ? {} : { cause }),
+        });
+      const readOpenCodeAccounts: NonNullable<ProviderInstance["readOpenCodeAccounts"]> = () =>
+        !enabled || effectiveConfig.serverUrl.trim()
+          ? Effect.succeed([])
+          : Effect.tryPromise({
+              try: () => readOpenCodeCodexAccounts(dataHome),
+              catch: (cause) => accountError("Could not read local OpenCode accounts.", cause),
+            });
+      const activateOpenCodeAccount: NonNullable<ProviderInstance["activateOpenCodeAccount"]> = (
+        credentialId,
+      ) =>
+        Effect.gen(function* () {
+          if (!enabled || effectiveConfig.serverUrl.trim()) {
+            return yield* accountError(
+              "Account switching requires a local, enabled OpenCode instance.",
+            );
+          }
+          yield* serverOwner
+            .withServer((server) => {
+              return activateOpenCodeCredential({
+                dataHome,
+                credentialId,
+                client: openCodeRuntime.createOpenCodeSdkClient({
+                  baseUrl: server.url,
+                  ...(server.serverPassword !== undefined
+                    ? { serverPassword: server.serverPassword }
+                    : {}),
+                }),
+              }).pipe(Effect.timeout("10 seconds"));
+            })
+            .pipe(Effect.mapError(() => accountError("Could not activate this OpenCode account.")));
+        });
       const textGeneration = yield* makeOpenCodeTextGeneration(effectiveConfig).pipe(
         Effect.provideService(OpenCodeServerOwner.OpenCodeServerOwner, serverOwner),
       );
@@ -258,6 +308,8 @@ export const OpenCodeDriver: ProviderDriver<OpenCodeSettings, OpenCodeDriverEnv>
         accentColor,
         enabled,
         snapshot,
+        readOpenCodeAccounts,
+        activateOpenCodeAccount,
         snapshotForCwd: (cwd) =>
           !effectiveConfig.enabled
             ? snapshot.getSnapshot

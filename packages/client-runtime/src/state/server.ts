@@ -1071,6 +1071,22 @@ export function createServerEnvironmentAtoms<R, E>(
         key: ({ environmentId, input }) => JSON.stringify([environmentId, input]),
       },
     }),
+    openCodeAccounts: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:opencode-accounts",
+      tag: WS_METHODS.providerOpenCodeAccounts,
+      concurrency: {
+        mode: "singleFlight",
+        key: ({ environmentId, input }) => JSON.stringify([environmentId, input.instanceId]),
+      },
+    }),
+    activateOpenCodeAccount: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:activate-opencode-account",
+      tag: WS_METHODS.providerActivateOpenCodeAccount,
+      concurrency: {
+        mode: "singleFlight",
+        key: ({ environmentId, input }) => JSON.stringify([environmentId, input.instanceId]),
+      },
+    }),
     refreshProviders: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:server:refresh-providers",
       tag: WS_METHODS.serverRefreshProviders,

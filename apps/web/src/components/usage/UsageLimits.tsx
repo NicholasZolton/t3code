@@ -36,6 +36,7 @@ import {
 import { Button } from "../ui/button";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { UsageLimitsPooled } from "./UsageLimitsPooled";
+import { OpenCodeAccounts } from "./OpenCodeAccounts";
 import { PROVIDER_PRESENTATION } from "./usageProviders";
 
 const PACE: Record<LimitPace, { readonly label: string; readonly icon: typeof GaugeIcon }> = {
@@ -333,5 +334,10 @@ export function UsageLimitsSection({
     selectedEnvironmentIds === null
       ? presentations
       : new Map([...presentations].filter(([id]) => selectedEnvironmentIds.has(id)));
-  return <UsageLimitsPooled presentations={selected} now={now} cursorPrompt={cursorPrompt} />;
+  return (
+    <div className="flex flex-col gap-8">
+      <UsageLimitsPooled presentations={selected} now={now} cursorPrompt={cursorPrompt} />
+      <OpenCodeAccounts presentations={selected} now={now} />
+    </div>
+  );
 }

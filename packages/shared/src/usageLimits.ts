@@ -79,6 +79,25 @@ export type LimitPresentations = ReadonlyMap<
   }
 >;
 
+/** OpenCode Codex logins live with each configured instance, not in its provider snapshot. */
+export function collectOpenCodeAccountTargets(presentations: LimitPresentations): readonly {
+  readonly environmentId: EnvironmentId;
+  readonly instanceId: ProviderInstanceId;
+  readonly label: string;
+}[] {
+  return [...presentations].flatMap(([environmentId, presentation]) =>
+    (presentation.serverConfig?.providers ?? [])
+      .filter(
+        (provider) => provider.driver === "opencode" && provider.enabled && provider.installed,
+      )
+      .map((provider) => ({
+        environmentId,
+        instanceId: provider.instanceId,
+        label: presentation.entry.target.label,
+      })),
+  );
+}
+
 function accountKey(driver: ServerProvider["driver"], email: string | undefined): string | null {
   const normalizedEmail = email?.trim().toLowerCase();
   return normalizedEmail ? `${driver}:${normalizedEmail}` : null;

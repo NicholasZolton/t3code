@@ -2488,6 +2488,57 @@ const makeWsRpcLayer = (
             }),
             { "rpc.aggregate": "provider" },
           ),
+        [WS_METHODS.providerOpenCodeAccounts]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.providerOpenCodeAccounts,
+            Effect.gen(function* () {
+              const instance = yield* providerInstances.getInstance(input.instanceId);
+              if (!instance || !instance.enabled || !instance.readOpenCodeAccounts) {
+                return yield* new ProviderSetupError({
+                  instanceId: input.instanceId,
+                  operation: "read-opencode-accounts",
+                  detail: "OpenCode provider instance is unavailable.",
+                });
+              }
+              return yield* instance.readOpenCodeAccounts().pipe(
+                Effect.mapError(
+                  (error) =>
+                    new ProviderSetupError({
+                      instanceId: input.instanceId,
+                      operation: "read-opencode-accounts",
+                      detail: error.detail,
+                    }),
+                ),
+              );
+            }),
+            { "rpc.aggregate": "provider" },
+          ),
+        [WS_METHODS.providerActivateOpenCodeAccount]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.providerActivateOpenCodeAccount,
+            Effect.gen(function* () {
+              const instance = yield* providerInstances.getInstance(input.instanceId);
+              if (!instance || !instance.enabled || !instance.activateOpenCodeAccount) {
+                return yield* new ProviderSetupError({
+                  instanceId: input.instanceId,
+                  operation: "activate-opencode-account",
+                  detail: "OpenCode provider instance is unavailable.",
+                });
+              }
+              yield* instance.activateOpenCodeAccount(input.credentialId).pipe(
+                Effect.mapError(
+                  (error) =>
+                    new ProviderSetupError({
+                      instanceId: input.instanceId,
+                      operation: "activate-opencode-account",
+                      detail: error.detail,
+                    }),
+                ),
+              );
+              return {};
+            }),
+            { "rpc.aggregate": "provider" },
+          ),
         [WS_METHODS.providerAuthStart]: (input) =>
           observeRpcEffect(
             WS_METHODS.providerAuthStart,
