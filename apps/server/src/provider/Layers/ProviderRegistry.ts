@@ -897,6 +897,28 @@ export const ProviderRegistryLive = Layer.effect(
       );
     });
 
+    const invalidateWorkspaceSnapshots = Effect.fn("invalidateWorkspaceSnapshots")(function* (
+      instanceId?: ProviderInstanceId,
+    ) {
+      const [previousProviders, nextProviders] = yield* Ref.modify(providersRef, (providers) => {
+        const next = providers.map((provider) => {
+          if (
+            (instanceId !== undefined && provider.instanceId !== instanceId) ||
+            provider.workspaceSnapshots === undefined
+          ) {
+            return provider;
+          }
+          const { workspaceSnapshots: _workspaceSnapshots, ...machineSnapshot } = provider;
+          return machineSnapshot;
+        });
+        return [[providers, next] as const, next];
+      });
+      if (haveProvidersChanged(previousProviders, nextProviders)) {
+        yield* PubSub.publish(changesPubSub, nextProviders);
+      }
+      return nextProviders;
+    });
+
     return {
       getProviders: Ref.get(providersRef),
       refresh: (provider?: ProviderDriverKind) =>
@@ -905,6 +927,7 @@ export const ProviderRegistryLive = Layer.effect(
         refreshInstance(instanceId).pipe(Effect.catchCause(recoverRefreshFailure)),
       refreshWorkspaceSnapshot: (input) =>
         refreshWorkspaceSnapshot(input).pipe(Effect.catchCause(recoverRefreshFailure)),
+      invalidateWorkspaceSnapshots,
       getProviderMaintenanceCapabilitiesForInstance,
       setProviderMaintenanceActionState,
       get streamChanges() {

@@ -53,6 +53,11 @@ export interface ProviderRegistryShape {
     readonly cwd: string;
   }) => Effect.Effect<ReadonlyArray<ServerProvider>>;
 
+  /** Drop per-workspace catalogs after an explicit model/skill refresh. */
+  readonly invalidateWorkspaceSnapshots: (
+    instanceId?: ProviderInstanceId,
+  ) => Effect.Effect<ReadonlyArray<ServerProvider>>;
+
   /**
    * Resolve the maintenance capabilities owned by one live provider instance.
    * Falls back to manual-only capabilities when the instance is not live.

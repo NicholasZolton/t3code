@@ -1466,6 +1466,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
             slashCommands: [],
           } as const satisfies ServerProvider;
           const snapshotCalls = yield* Ref.make(0);
+          const scopedSkills = yield* Ref.make<ServerProvider["skills"]>(scopedProvider.skills);
           const returnPendingSnapshot = yield* Ref.make(true);
           const probeStarted = yield* Deferred.make<void>();
           const releaseProbe = yield* Deferred.make<void>();
@@ -1504,7 +1505,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
               if (yield* Ref.get(returnPendingSnapshot)) return pendingScopedProvider;
               yield* Deferred.succeed(probeStarted, undefined);
               yield* Deferred.await(releaseProbe);
-              return scopedProvider;
+              return { ...scopedProvider, skills: yield* Ref.get(scopedSkills) };
             }),
           );
           const rebuiltProvider = {
@@ -1580,6 +1581,20 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
             );
             yield* registry.refreshWorkspaceSnapshot({ instanceId, cwd: "/workspace" });
             assert.strictEqual(yield* Ref.get(snapshotCalls), 2);
+
+            const updatedSkills = [
+              ...scopedProvider.skills,
+              { name: "new-skill", path: "/workspace/new-skill/SKILL.md", enabled: true },
+            ];
+            yield* Ref.set(scopedSkills, updatedSkills);
+            yield* registry.invalidateWorkspaceSnapshots(instanceId);
+            assert.strictEqual((yield* registry.getProviders)[0]?.workspaceSnapshots, undefined);
+            yield* registry.refreshWorkspaceSnapshot({ instanceId, cwd: "/workspace" });
+            assert.deepStrictEqual(
+              (yield* registry.getProviders)[0]?.workspaceSnapshots?.[0]?.skills,
+              updatedSkills,
+            );
+            assert.strictEqual(yield* Ref.get(snapshotCalls), 3);
 
             yield* Ref.set(instancesRef, [rebuiltInstance]);
             yield* PubSub.publish(registryChanges, undefined);

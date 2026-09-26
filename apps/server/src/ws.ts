@@ -2424,6 +2424,7 @@ const makeWsRpcLayer = (
                   );
                   providers = yield* providerRegistry.refreshInstance(instance.instanceId);
                 }
+                providers = yield* providerRegistry.invalidateWorkspaceSnapshots(input.instanceId);
               }
               return { providers };
             }),

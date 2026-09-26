@@ -429,16 +429,19 @@ it.layer(testLayer)("checkOpenCodeProviderStatus", (it) => {
         agents: [],
         skills: [
           {
-            name: "openclaw-review",
+            id: "openclaw-review",
+            name: "OpenClaw Review",
             description: "Review OpenClaw workflow changes.",
             path: "/Users/test/.agents/skills/openclaw-review/SKILL.md",
           },
           {
+            id: "openclaw-triage",
             name: "openclaw-triage",
             description: "Triage OpenClaw routing issues.",
             path: "/Users/test/.agents/skills/openclaw-triage/SKILL.md",
           },
           {
+            id: "missing-path",
             name: "missing-path",
             description: "This incomplete SDK row should be skipped.",
             path: "",
@@ -452,6 +455,7 @@ it.layer(testLayer)("checkOpenCodeProviderStatus", (it) => {
       NodeAssert.deepEqual(
         snapshot.skills.map((skill) => ({
           name: skill.name,
+          displayName: skill.displayName,
           path: skill.path,
           enabled: skill.enabled,
           shortDescription: skill.shortDescription,
@@ -459,12 +463,14 @@ it.layer(testLayer)("checkOpenCodeProviderStatus", (it) => {
         [
           {
             name: "openclaw-review",
+            displayName: "OpenClaw Review",
             path: "/Users/test/.agents/skills/openclaw-review/SKILL.md",
             enabled: true,
             shortDescription: "Review OpenClaw workflow changes.",
           },
           {
             name: "openclaw-triage",
+            displayName: "openclaw-triage",
             path: "/Users/test/.agents/skills/openclaw-triage/SKILL.md",
             enabled: true,
             shortDescription: "Triage OpenClaw routing issues.",

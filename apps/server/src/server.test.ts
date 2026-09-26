@@ -6574,6 +6574,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         ]),
       );
       const invalidated: string[] = [];
+      const invalidatedWorkspaces: Array<ProviderInstanceId | undefined> = [];
       const freshMaintenance: string[] = [];
       let manifestRefreshed = false;
       let probed = false;
@@ -6632,7 +6633,15 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
               }),
             },
             providerInstanceRegistry: { listInstances: Effect.succeed(instances) },
-            providerRegistry: { refresh: () => probe, refreshInstance: () => probe },
+            providerRegistry: {
+              refresh: () => probe,
+              refreshInstance: () => probe,
+              invalidateWorkspaceSnapshots: (instanceId) =>
+                Effect.sync(() => {
+                  invalidatedWorkspaces.push(instanceId);
+                  return [];
+                }),
+            },
           },
         });
         const wsUrl = yield* getWsServerUrl("/ws");
@@ -6645,6 +6654,10 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
           ),
         );
         assert.isTrue(probed);
+        assert.deepEqual(
+          invalidatedWorkspaces,
+          mode === "background" ? [] : [mode === "targeted" ? instanceIds[1] : undefined],
+        );
       }).pipe(
         Effect.provideService(ProviderVersionCache, versionCache),
         Effect.provide(NodeHttpServer.layerTest),

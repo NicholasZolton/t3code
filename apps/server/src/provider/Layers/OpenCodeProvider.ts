@@ -295,7 +295,7 @@ export function openCodeSkillsToServerProviderSkills(
 ): ReadonlyArray<ServerProviderSkill> {
   const skills: ServerProviderSkill[] = [];
   for (const skill of input ?? []) {
-    const name = trimOptional(skill.name);
+    const name = trimOptional(skill.id);
     const path = trimOptional(skill.path);
     if (!name || !path) {
       continue;
@@ -306,6 +306,7 @@ export function openCodeSkillsToServerProviderSkills(
       name,
       path,
       enabled: true,
+      ...(trimOptional(skill.name) ? { displayName: skill.name.trim() } : {}),
       ...(description ? { description, shortDescription: description } : {}),
     });
   }
