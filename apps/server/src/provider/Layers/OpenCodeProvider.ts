@@ -34,6 +34,7 @@ const OPENCODE_PRESENTATION = {
   showInteractionModeToggle: false,
 } as const;
 const OPENCODE_VERSION_PROBE_TIMEOUT = "4 seconds";
+const LOCAL_INVENTORY_RETRY_DELAYS = ["1 second", "3 seconds"] as const;
 
 class OpenCodeProbeError extends Data.TaggedError("OpenCodeProbeError")<{
   readonly cause?: unknown;
@@ -496,15 +497,24 @@ export const checkOpenCodeProviderStatus = Effect.fn("checkOpenCodeProviderStatu
     readonly serverPassword?: string;
     readonly version: string;
   }) =>
-    openCodeRuntime
-      .loadOpenCodeInventory(
-        openCodeRuntime.createOpenCodeSdkClient({
-          baseUrl: server.url,
-          ...(server.serverPassword !== undefined ? { serverPassword: server.serverPassword } : {}),
-        }),
-        cwd,
-      )
-      .pipe(Effect.map((inventory) => ({ inventory, version: server.version })));
+    Effect.gen(function* () {
+      const client = openCodeRuntime.createOpenCodeSdkClient({
+        baseUrl: server.url,
+        ...(server.serverPassword !== undefined ? { serverPassword: server.serverPassword } : {}),
+      });
+      let inventory = yield* openCodeRuntime.loadOpenCodeInventory(client, cwd);
+      // The background service can answer its health check before its first
+      // workspace catalog has loaded. Keep the probe pending briefly rather
+      // than publishing a false "Needs attention" status on cold start.
+      if (!isExternalServer) {
+        for (const delay of LOCAL_INVENTORY_RETRY_DELAYS) {
+          if (inventory.providers.length > 0) break;
+          yield* Effect.sleep(delay);
+          inventory = yield* openCodeRuntime.loadOpenCodeInventory(client, cwd);
+        }
+      }
+      return { inventory, version: server.version };
+    });
   const inventoryEffect = isExternalServer
     ? openCodeRuntime
         .connectToOpenCodeServer({

@@ -159,6 +159,8 @@ const runtimeMock = {
     runVersionPending: false,
     versionStdout: DEFAULT_VERSION_STDOUT,
     inventoryError: null as Error | null,
+    inventoryReads: 0,
+    inventoryResults: [] as OpenCodeInventory[],
     connectionError: null as Error | null,
     closeCalls: 0,
     sdkClientInputs: [] as Array<{
@@ -166,7 +168,7 @@ const runtimeMock = {
       serverPassword?: string;
     }>,
     inventory: {
-      providers: [] as unknown[],
+      providers: [{ id: "openai", name: "OpenAI", activation: "enabled" }] as unknown[],
       models: [] as unknown[],
       agents: [] as unknown[],
       skills: [] as unknown[],
@@ -178,11 +180,13 @@ const runtimeMock = {
     this.state.runVersionPending = false;
     this.state.versionStdout = DEFAULT_VERSION_STDOUT;
     this.state.inventoryError = null;
+    this.state.inventoryReads = 0;
+    this.state.inventoryResults = [];
     this.state.connectionError = null;
     this.state.closeCalls = 0;
     this.state.sdkClientInputs.length = 0;
     this.state.inventory = {
-      providers: [] as unknown[],
+      providers: [{ id: "openai", name: "OpenAI", activation: "enabled" }] as unknown[],
       models: [] as unknown[],
       agents: [] as unknown[],
       skills: [] as unknown[],
@@ -263,7 +267,13 @@ const OpenCodeRuntimeTestDouble: OpenCodeRuntimeShape = {
             cause: runtimeMock.state.inventoryError,
           }),
         )
-      : Effect.succeed(runtimeMock.state.inventory as OpenCodeInventory),
+      : Effect.sync(() => {
+          runtimeMock.state.inventoryReads += 1;
+          return (
+            runtimeMock.state.inventoryResults.shift() ??
+            (runtimeMock.state.inventory as OpenCodeInventory)
+          );
+        }),
   loadOpenCodeSkills: () => Effect.succeed([]),
 };
 
@@ -477,6 +487,54 @@ it.layer(testLayer)("checkOpenCodeProviderStatus", (it) => {
           },
         ],
       );
+    }),
+  );
+
+  it.effect("waits for a cold local service to populate its provider catalog", () =>
+    Effect.gen(function* () {
+      runtimeMock.state.inventoryResults = [
+        {
+          providers: [],
+          models: [],
+          agents: [],
+          skills: [
+            {
+              id: "transient",
+              name: "Transient",
+              description: "",
+              path: "/skills/transient",
+              content: "",
+            },
+          ],
+          commands: [],
+        },
+      ];
+      const probe = yield* checkProvider(makeOpenCodeSettings()).pipe(Effect.forkChild);
+      yield* Effect.yieldNow;
+      yield* TestClock.adjust("1 second");
+      const snapshot = yield* Fiber.join(probe);
+
+      NodeAssert.equal(snapshot.status, "ready");
+      NodeAssert.equal(runtimeMock.state.inventoryReads, 2);
+    }),
+  );
+
+  it.effect("keeps the missing-provider warning after bounded cold-start retries", () =>
+    Effect.gen(function* () {
+      runtimeMock.state.inventory = {
+        providers: [],
+        models: [],
+        agents: [],
+        skills: [],
+        commands: [],
+      };
+      const probe = yield* checkProvider(makeOpenCodeSettings()).pipe(Effect.forkChild);
+      yield* Effect.yieldNow;
+      yield* TestClock.adjust("4 seconds");
+      const snapshot = yield* Fiber.join(probe);
+
+      NodeAssert.equal(snapshot.status, "warning");
+      NodeAssert.equal(runtimeMock.state.inventoryReads, 3);
     }),
   );
 
