@@ -418,6 +418,27 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["git submodule init recursive top-level none worktree t3.json"],
   },
   {
+    id: "worktree-directory",
+    title: "Worktree directory",
+    to: "/settings/general",
+    scope: "environment-defaults",
+    searchTerms: ["root location path folder worktrees home"],
+  },
+  {
+    id: "worktree-project-folders",
+    title: "Group worktrees by project",
+    to: "/settings/general",
+    scope: "environment-defaults",
+    searchTerms: ["hierarchy nested folders project configuration opencode"],
+  },
+  {
+    id: "worktree-branch-prefix",
+    title: "Worktree branch prefix",
+    to: "/settings/general",
+    scope: "environment-defaults",
+    searchTerms: ["git branch name namespace temporary worktree"],
+  },
+  {
     id: "start-from-origin",
     title: "Start from origin",
     to: "/settings/general",

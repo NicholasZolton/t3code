@@ -21,7 +21,7 @@ import * as Option from "effect/Option";
 import type * as PlatformError from "effect/PlatformError";
 import * as Stream from "effect/Stream";
 import { makeDrainableWorker } from "@t3tools/shared/DrainableWorker";
-import { isTemporaryWorktreeBranch } from "@t3tools/shared/git";
+import { isTemporaryWorktreeBranch, WORKTREE_BRANCH_PREFIX } from "@t3tools/shared/git";
 
 import { parseTurnDiffFilesFromNumstat } from "../../checkpointing/Diffs.ts";
 import {
@@ -40,6 +40,7 @@ import type { OrchestrationDispatchError } from "../Errors.ts";
 import { VcsStatusBroadcaster } from "../../vcs/VcsStatusBroadcaster.ts";
 import * as WorkspaceEntries from "../../workspace/WorkspaceEntries.ts";
 import * as PullRequestService from "../../pullRequest/PullRequestService.ts";
+import { ServerSettingsService } from "../../serverSettings.ts";
 
 const nowIso = Effect.map(DateTime.now, DateTime.formatIso);
 
@@ -93,6 +94,7 @@ const make = Effect.gen(function* () {
   const path = yield* Path.Path;
   const vcsStatusBroadcaster = yield* VcsStatusBroadcaster;
   const pullRequests = yield* PullRequestService.PullRequestService;
+  const settingsService = yield* ServerSettingsService;
   const queuedEntryRefreshes = new Set<string>();
   const entryRefreshWorker = yield* makeDrainableWorker((cwd: string) =>
     Effect.sync(() => queuedEntryRefreshes.delete(cwd)).pipe(
@@ -583,7 +585,11 @@ const make = Effect.gen(function* () {
     // Detached HEAD has no branch to adopt; a temporary placeholder checkout
     // means the first-turn auto-rename is still in flight — don't race it.
     const checkedOutBranch = input.local.refName;
-    if (checkedOutBranch === null || isTemporaryWorktreeBranch(checkedOutBranch)) {
+    const prefix = yield* settingsService.getSettings.pipe(
+      Effect.map((settings) => settings.worktreeBranchPrefix),
+      Effect.orElseSucceed(() => WORKTREE_BRANCH_PREFIX),
+    );
+    if (checkedOutBranch === null || isTemporaryWorktreeBranch(checkedOutBranch, prefix)) {
       return;
     }
 

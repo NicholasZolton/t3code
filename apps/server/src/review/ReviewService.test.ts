@@ -6,6 +6,7 @@ import * as Layer from "effect/Layer";
 import * as PlatformError from "effect/PlatformError";
 
 import { ServerConfig } from "../config.ts";
+import { ServerSettingsService } from "../serverSettings.ts";
 import * as GitVcsDriver from "../vcs/GitVcsDriver.ts";
 import * as VcsDriverRegistry from "../vcs/VcsDriverRegistry.ts";
 import * as ReviewService from "./ReviewService.ts";
@@ -14,8 +15,12 @@ function makeLayer(input: {
   readonly workspaceRoot: string;
   readonly baseDir: string;
   readonly detectCalls?: Array<{ readonly cwd: string }>;
+  readonly worktreeDirectory?: string;
 }) {
   return ReviewService.layer.pipe(
+    Layer.provide(
+      ServerSettingsService.layerTest({ worktreeDirectory: input.worktreeDirectory ?? "" }),
+    ),
     Layer.provide(
       Layer.mock(VcsDriverRegistry.VcsDriverRegistry)({
         get: () => Effect.die("unexpected VCS registry get"),
@@ -105,6 +110,26 @@ describe("ReviewService", () => {
       assert.strictEqual(result.cwd, workspaceRoot);
       assert.deepStrictEqual(result.sources, []);
       assert.deepStrictEqual(detectCalls, [{ cwd: workspaceRoot }]);
+    }).pipe(Effect.provide(NodeServices.layer)),
+  );
+
+  it.effect("allows diff preview in a configured worktree directory", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const workspaceRoot = yield* fs.makeTempDirectoryScoped({ prefix: "t3-review-workspace-" });
+      const baseDir = yield* fs.makeTempDirectoryScoped({ prefix: "t3-review-base-" });
+      const worktreeDirectory = yield* fs.makeTempDirectoryScoped({ prefix: "t3-review-trees-" });
+      const detectCalls: Array<{ readonly cwd: string }> = [];
+
+      const result = yield* Effect.gen(function* () {
+        const review = yield* ReviewService.ReviewService;
+        return yield* review.getDiffPreview({ cwd: worktreeDirectory });
+      }).pipe(
+        Effect.provide(makeLayer({ workspaceRoot, baseDir, worktreeDirectory, detectCalls })),
+      );
+
+      assert.strictEqual(result.cwd, worktreeDirectory);
+      assert.deepStrictEqual(detectCalls, [{ cwd: worktreeDirectory }]);
     }).pipe(Effect.provide(NodeServices.layer)),
   );
 

@@ -50,7 +50,7 @@ import { normalizeProjectPathForComparison } from "@t3tools/shared/path";
 import * as ServerConfig from "../config.ts";
 import * as ProjectionSnapshotQuery from "../orchestration/Services/ProjectionSnapshotQuery.ts";
 import { resolveCodexHomeLayout } from "../provider/Drivers/CodexHomeLayout.ts";
-import { expandHomePath } from "../pathExpansion.ts";
+import { expandHomePath, resolveWorktreesRoot } from "../pathExpansion.ts";
 import * as ServerSettings from "../serverSettings.ts";
 import {
   createTranscriptJsonReader,
@@ -646,7 +646,7 @@ export const make = Effect.gen(function* () {
     path.join(homeDir, "Documents", "Codex"),
   ];
 
-  const isExcludedProjectPath = (candidatePath: string) =>
+  const isExcludedProjectPath = (candidatePath: string, configuredWorktreesDir: string) =>
     excludedProjectRoots.has(normalizeProjectPathForComparison(candidatePath)) ||
     excludedProjectAncestors.some((ancestor) =>
       normalizeForWorktreeMatch(candidatePath, foldWorktreeCase).startsWith(
@@ -656,7 +656,8 @@ export const make = Effect.gen(function* () {
     normalizeForWorktreeMatch(candidatePath, foldWorktreeCase).startsWith(
       normalizeForWorktreeMatch(baseDir, foldWorktreeCase),
     ) ||
-    isT3ManagedWorktree(candidatePath, worktreesDir, foldWorktreeCase);
+    isT3ManagedWorktree(candidatePath, worktreesDir, foldWorktreeCase) ||
+    isT3ManagedWorktree(candidatePath, configuredWorktreesDir, foldWorktreeCase);
 
   const listDirectory = (directory: string) =>
     fileSystem.readDirectory(directory).pipe(Effect.orElseSucceed((): ReadonlyArray<string> => []));
@@ -1200,6 +1201,14 @@ export const make = Effect.gen(function* () {
 
   const scan: AgentSessionScanner["Service"]["scan"] = Effect.gen(function* () {
     const { candidates: raw, truncated } = yield* collectCandidates();
+    const settings = yield* serverSettings.getSettings.pipe(
+      Effect.mapError((cause) => new AgentSessionScanError({ operation: "read-settings", cause })),
+    );
+    const configuredWorktreesDir = resolveWorktreesRoot(
+      settings.worktreeDirectory,
+      worktreesDir,
+      path,
+    );
     cachedCandidates = raw;
 
     // Filesystem identity merges symlinks and case aliases without collapsing
@@ -1221,7 +1230,7 @@ export const make = Effect.gen(function* () {
       const expanded = expandHomePath(candidate.cwd.trim());
       if (!path.isAbsolute(expanded)) continue;
       const resolved = path.resolve(expanded);
-      if (isExcludedProjectPath(resolved)) continue;
+      if (isExcludedProjectPath(resolved, configuredWorktreesDir)) continue;
       let key = directoryKeys.get(resolved);
       if (key === undefined) {
         const stats = yield* statOption(resolved);
@@ -1235,7 +1244,7 @@ export const make = Effect.gen(function* () {
           .pipe(Effect.orElseSucceed(() => resolved));
         // A symlink can point into the worktrees directory even when its own
         // spelling doesn't; check again with links resolved.
-        if (isExcludedProjectPath(realPath)) {
+        if (isExcludedProjectPath(realPath, configuredWorktreesDir)) {
           key = "";
         } else {
           const gitIdentity = yield* readGitIdentity(resolved);
@@ -1331,7 +1340,19 @@ export const make = Effect.gen(function* () {
   ) {
     const root = path.resolve(expandHomePath(workspaceRoot));
     const realRoot = yield* fileSystem.realPath(root).pipe(Effect.orElseSucceed(() => root));
-    if (isExcludedProjectPath(root) || isExcludedProjectPath(realRoot)) return Stream.empty;
+    const settings = yield* serverSettings.getSettings.pipe(
+      Effect.mapError((cause) => new AgentSessionScanError({ operation: "read-settings", cause })),
+    );
+    const configuredWorktreesDir = resolveWorktreesRoot(
+      settings.worktreeDirectory,
+      worktreesDir,
+      path,
+    );
+    if (
+      isExcludedProjectPath(root, configuredWorktreesDir) ||
+      isExcludedProjectPath(realRoot, configuredWorktreesDir)
+    )
+      return Stream.empty;
     const rootIdentity = yield* directoryIdentity(root);
     const nowMs = DateTime.toEpochMillis(yield* DateTime.now);
     const cutoffMs = nowMs - RECENT_THREAD_WINDOW_MS;

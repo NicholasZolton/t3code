@@ -10,11 +10,13 @@ import * as GitManager from "./GitManager.ts";
 import * as GitWorkflowService from "./GitWorkflowService.ts";
 import * as GitVcsDriver from "../vcs/GitVcsDriver.ts";
 import * as VcsDriverRegistry from "../vcs/VcsDriverRegistry.ts";
+import { ServerSettingsService } from "../serverSettings.ts";
 
 function makeLayer(input: {
   readonly detect: VcsDriverRegistry.VcsDriverRegistry["Service"]["detect"];
 }) {
   return GitWorkflowService.layer.pipe(
+    Layer.provide(ServerSettingsService.layerTest()),
     Layer.provide(
       Layer.mock(VcsDriverRegistry.VcsDriverRegistry)({
         detect: input.detect,
@@ -118,6 +120,7 @@ describe("GitWorkflowService", () => {
     const status = vi.fn();
 
     const testLayer = GitWorkflowService.layer.pipe(
+      Layer.provide(ServerSettingsService.layerTest()),
       Layer.provide(
         Layer.mock(VcsDriverRegistry.VcsDriverRegistry)({
           detect: () => Effect.succeed(null),

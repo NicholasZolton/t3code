@@ -182,6 +182,14 @@ describe("isTemporaryWorktreeBranch", () => {
     expect(isTemporaryWorktreeBranch(`${WORKTREE_BRANCH_PREFIX}/DEADBEEF`)).toBe(true);
   });
 
+  it("uses a configured prefix for temporary worktrees while recognizing older names", () => {
+    const branch = buildTemporaryWorktreeBranchName(() => "DEADBEEF", "nick/task");
+    expect(branch).toBe("nick/task/deadbeef");
+    expect(isTemporaryWorktreeBranch(branch, "nick/task")).toBe(true);
+    expect(isTemporaryWorktreeBranch("t3code/deadbeef", "nick/task")).toBe(true);
+    expect(isTemporaryWorktreeBranch("other/deadbeef", "nick/task")).toBe(false);
+  });
+
   it("normalizes a UUID-shaped random callback to the canonical 8-hex form", () => {
     expect(buildTemporaryWorktreeBranchName(() => "f4ae4e0e-f971-4d48-b4f2-9cf0aa54ab12")).toBe(
       `${WORKTREE_BRANCH_PREFIX}/f4ae4e0e`,

@@ -65,6 +65,8 @@ import {
 import { checkpointRefForThreadTurn } from "../../checkpointing/Utils.ts";
 import { ProviderValidationError } from "../../provider/Errors.ts";
 import { ServerConfig } from "../../config.ts";
+import { ServerSettingsService } from "../../serverSettings.ts";
+import { WORKTREE_BRANCH_PREFIX } from "@t3tools/shared/git";
 import * as WorkspaceEntries from "../../workspace/WorkspaceEntries.ts";
 import * as WorkspacePaths from "../../workspace/WorkspacePaths.ts";
 import { PullRequestService } from "../../pullRequest/PullRequestService.ts";
@@ -302,6 +304,7 @@ describe("CheckpointReactor", () => {
     readonly projectWorkspaceRoot?: string;
     readonly threadWorktreePath?: string | null;
     readonly threadBranch?: string | null;
+    readonly worktreeBranchPrefix?: string;
     readonly secondThreadSharingWorktree?: boolean;
     readonly secondThreadWorktreePath?: (cwd: string) => string;
     readonly localStatusRefName?: string | null;
@@ -370,6 +373,11 @@ describe("CheckpointReactor", () => {
     });
 
     const layer = CheckpointReactorLive.pipe(
+      Layer.provideMerge(
+        ServerSettingsService.layerTest({
+          worktreeBranchPrefix: options?.worktreeBranchPrefix ?? WORKTREE_BRANCH_PREFIX,
+        }),
+      ),
       Layer.provideMerge(orchestrationLayer),
       Layer.provideMerge(projectionSnapshotLayer),
       Layer.provideMerge(RuntimeReceiptBusTest),
@@ -1322,29 +1330,36 @@ describe("CheckpointReactor", () => {
     },
   );
 
-  it("does not adopt a temporary placeholder checkout as the thread branch", async () => {
-    const harness = await createHarness({
-      seedFilesystemCheckpoints: false,
-      threadBranch: "t3code/original-branch",
-      localStatusRefName: "t3code/0a1b2c3d",
-    });
+  it.each([
+    { prefix: "t3code", placeholder: "t3code/0a1b2c3d" },
+    { prefix: "nick/task", placeholder: "nick/task/0a1b2c3d" },
+  ])(
+    "does not adopt a temporary $prefix checkout as the thread branch",
+    async ({ prefix, placeholder }) => {
+      const harness = await createHarness({
+        seedFilesystemCheckpoints: false,
+        threadBranch: "t3code/original-branch",
+        localStatusRefName: placeholder,
+        worktreeBranchPrefix: prefix,
+      });
 
-    harness.provider.emit({
-      type: "turn.completed",
-      eventId: EventId.make("evt-turn-completed-branch-drift-temp"),
-      provider: ProviderDriverKind.make("codex"),
-      createdAt: "2026-01-01T00:00:00.000Z",
-      threadId: ThreadId.make("thread-1"),
-      turnId: asTurnId("turn-branch-drift-temp"),
-      payload: { state: "completed" },
-    });
+      harness.provider.emit({
+        type: "turn.completed",
+        eventId: EventId.make("evt-turn-completed-branch-drift-temp"),
+        provider: ProviderDriverKind.make("codex"),
+        createdAt: "2026-01-01T00:00:00.000Z",
+        threadId: ThreadId.make("thread-1"),
+        turnId: asTurnId("turn-branch-drift-temp"),
+        payload: { state: "completed" },
+      });
 
-    await harness.drain();
+      await harness.drain();
 
-    const snapshot = await harness.readModel();
-    const thread = snapshot.threads.find((entry) => entry.id === ThreadId.make("thread-1"));
-    expect(thread?.branch).toBe("t3code/original-branch");
-  });
+      const snapshot = await harness.readModel();
+      const thread = snapshot.threads.find((entry) => entry.id === ThreadId.make("thread-1"));
+      expect(thread?.branch).toBe("t3code/original-branch");
+    },
+  );
 
   it("ignores auxiliary thread turn completion while primary turn is active", async () => {
     const pullRequestRefreshCalls: string[] = [];

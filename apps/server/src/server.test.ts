@@ -727,6 +727,7 @@ const buildAppUnderTest = (options?: {
       NativeAppIconResolver.layer,
     );
     const gitWorkflowLayer = GitWorkflowService.layer.pipe(
+      Layer.provide(ServerSettings.ServerSettingsService.layerTest()),
       Layer.provideMerge(vcsDriverRegistryLayer),
       Layer.provideMerge(gitVcsDriverLayer),
       Layer.provideMerge(gitManagerLayer),
@@ -739,6 +740,7 @@ const buildAppUnderTest = (options?: {
           ...options.layers.reviewService,
         })
       : ReviewService.layer.pipe(
+          Layer.provide(ServerSettings.ServerSettingsService.layerTest()),
           Layer.provideMerge(gitVcsDriverLayer),
           Layer.provide(vcsDriverRegistryLayer),
         );

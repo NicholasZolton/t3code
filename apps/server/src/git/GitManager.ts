@@ -2575,6 +2575,9 @@ export const make = Effect.gen(function* () {
         });
       }
 
+      const worktreeSettings = yield* projectSettingsFor(input).pipe(
+        Effect.orElseSucceed(() => null),
+      );
       const worktree = yield* gitCore.createWorktree(
         {
           cwd: input.cwd,
@@ -2582,11 +2585,14 @@ export const make = Effect.gen(function* () {
           path: null,
         },
         {
+          ...(worktreeSettings
+            ? {
+                directory: worktreeSettings.worktreeDirectory,
+                projectFolders: worktreeSettings.worktreeProjectFolders,
+              }
+            : {}),
           // Best effort: a settings read failure falls back to the checkout's t3.json.
-          submodules: yield* projectSettingsFor(input).pipe(
-            Effect.map((settings) => settings.worktreeSubmodules),
-            Effect.orElseSucceed(() => null),
-          ),
+          submodules: worktreeSettings?.worktreeSubmodules ?? null,
         },
       );
       yield* ensureExistingWorktreeUpstream(worktree.worktree.path);

@@ -41,6 +41,7 @@ import {
   parseRemoteRefWithRemoteNames,
 } from "../git/remoteRefs.ts";
 import { ServerConfig } from "../config.ts";
+import { resolveWorktreesRoot } from "../pathExpansion.ts";
 
 const DEFAULT_TIMEOUT_MS = 30_000;
 const gitProcesses = Semaphore.makeUnsafe(8);
@@ -3061,14 +3062,39 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
   )(function* (input, options) {
     const targetBranch = input.newRefName ?? input.refName;
     const sanitizedBranch = targetBranch.replace(/\//g, "-");
-    const repoName = path.basename(input.cwd);
-    const worktreePath = input.path ?? path.join(worktreesDir, repoName, sanitizedBranch);
+    const worktreePath = yield* input.path
+      ? Effect.succeed(input.path)
+      : Effect.gen(function* () {
+          const repository = yield* resolveRepositoryPaths(input.cwd);
+          // A linked worktree's common .git directory still points at the
+          // canonical checkout that owns the project folder.
+          const repoName =
+            repository && path.basename(repository.gitCommonDir) === ".git"
+              ? path.basename(path.dirname(repository.gitCommonDir))
+              : path.basename(repository?.worktreeRoot ?? input.cwd);
+          const root = resolveWorktreesRoot(options?.directory ?? "", worktreesDir, path);
+          return options?.projectFolders === false
+            ? path.join(root, `${repoName}-${sanitizedBranch}`)
+            : path.join(root, repoName, sanitizedBranch);
+        });
     const args = input.newRefName
       ? ["worktree", "add", "-b", input.newRefName, worktreePath, input.refName]
       : ["worktree", "add", worktreePath, input.refName];
     const progress = options?.progress;
     const onCheckoutProgress = progress?.onCheckoutProgress;
 
+    yield* fileSystem.makeDirectory(path.dirname(worktreePath), { recursive: true }).pipe(
+      Effect.mapError(
+        (cause) =>
+          new GitCommandError({
+            operation: "GitVcsDriver.createWorktree",
+            command: "git worktree add",
+            cwd: input.cwd,
+            detail: `Could not create the worktree parent directory: ${path.dirname(worktreePath)}`,
+            cause,
+          }),
+      ),
+    );
     const checkoutWorkers = (yield* readConfigValue(input.cwd, "checkout.workers")) ?? "0";
     yield* executeGit(
       "GitVcsDriver.createWorktree",

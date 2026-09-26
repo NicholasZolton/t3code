@@ -998,6 +998,14 @@ export const WorktreeCleanup = Schema.NullOr(
 );
 export type WorktreeCleanup = typeof WorktreeCleanup.Type;
 
+export const WorktreeBranchPrefix = TrimmedNonEmptyString.check(
+  Schema.isPattern(/^[a-zA-Z0-9][a-zA-Z0-9_-]*(?:\/[a-zA-Z0-9][a-zA-Z0-9_-]*)*$/),
+);
+export const DEFAULT_WORKTREE_BRANCH_PREFIX = "t3code";
+export const WorktreeDirectory = TrimmedString.check(
+  Schema.isPattern(/^(?:$|~(?:[\\/]|$)|[\\/]|[a-zA-Z]:[\\/])/),
+);
+
 export const PROJECT_SCOPED_SERVER_SETTING_KEYS = [
   "worktreeCleanup",
   "defaultModelSelection",
@@ -1215,6 +1223,11 @@ export const ServerSettings = Schema.Struct({
   defaultThreadEnvMode: OmittedWhenNull(ThreadEnvMode),
   newWorktreesStartFromOrigin: Schema.Boolean.pipe(
     Schema.withDecodingDefault(Effect.succeed(true)),
+  ),
+  worktreeDirectory: WorktreeDirectory.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
+  worktreeProjectFolders: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+  worktreeBranchPrefix: WorktreeBranchPrefix.pipe(
+    Schema.withDecodingDefault(Effect.succeed(DEFAULT_WORKTREE_BRANCH_PREFIX)),
   ),
   /**
    * Null defers to the repository's t3.json, then to recursive. A value
@@ -1520,6 +1533,9 @@ export const ServerSettingsPatch = Schema.Struct({
   environmentIcon: Schema.optionalKey(Schema.NullOr(EnvironmentMachineKind)),
   defaultThreadEnvMode: Schema.optionalKey(Schema.NullOr(ThreadEnvMode)),
   newWorktreesStartFromOrigin: Schema.optionalKey(Schema.Boolean),
+  worktreeDirectory: Schema.optionalKey(WorktreeDirectory),
+  worktreeProjectFolders: Schema.optionalKey(Schema.Boolean),
+  worktreeBranchPrefix: Schema.optionalKey(WorktreeBranchPrefix),
   worktreeSubmodules: Schema.optionalKey(Schema.NullOr(WorktreeSubmodules)),
   addProjectBaseDirectory: Schema.optionalKey(TrimmedString),
   textGenerationModelSelection: Schema.optionalKey(ModelSelectionPatch),

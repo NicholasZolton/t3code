@@ -62,6 +62,15 @@ itself, or **Skip** to leave them for a setup script. It resolves in the same or
 workspace default: a `"worktreeSubmodules"` value in the `t3.json` of the branch being checked out
 applies when the project and environment are both on **Inherit**.
 
+To change where new worktrees live, open **Settings → General → Projects & threads** with **All
+projects** selected. Set **Worktree directory** to an absolute path such as
+`~/.herdr/worktrees`, and keep **Group worktrees by project** on. New worktrees then live at
+`~/.herdr/worktrees/<checkout name>/<worktree name>`. You can place an `opencode.jsonc` in
+`~/.herdr/worktrees/<checkout name>/` so OpenCode applies it to that project's worktrees
+without adding it to the repository. **Worktree branch prefix** changes the namespace used for
+new temporary and generated branches. On mobile, find these controls under **Settings → Server
+settings → Source control**. Existing worktrees and branches stay where they are.
+
 ## Storage cleanup
 
 Open **Settings → Storage** to enable automatic cleanup on one machine or all connected

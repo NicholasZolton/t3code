@@ -31,6 +31,7 @@ import {
 import * as GitManager from "./GitManager.ts";
 import * as GitVcsDriver from "../vcs/GitVcsDriver.ts";
 import * as VcsDriverRegistry from "../vcs/VcsDriverRegistry.ts";
+import { ServerSettingsService } from "../serverSettings.ts";
 
 export class GitWorkflowService extends Context.Service<
   GitWorkflowService,
@@ -151,6 +152,7 @@ function nonRepositoryListRefs(): VcsListRefsResult {
 
 /** @public Service construction is part of the canonical Effect module API. */
 export const make = Effect.gen(function* () {
+  const settingsService = yield* ServerSettingsService;
   const registry = yield* VcsDriverRegistry.VcsDriverRegistry;
   const git = yield* GitVcsDriver.GitVcsDriver;
   const gitManager = yield* GitManager.GitManager;
@@ -342,7 +344,22 @@ export const make = Effect.gen(function* () {
       ),
     createWorktree: (input, options) =>
       ensureGitCommand("GitWorkflowService.createWorktree", input.cwd).pipe(
-        Effect.andThen(git.createWorktree(input, options)),
+        Effect.andThen(
+          Effect.gen(function* () {
+            const settings = yield* settingsService.getSettings.pipe(
+              Effect.orElseSucceed(() => null),
+            );
+            return yield* git.createWorktree(input, {
+              ...options,
+              ...(settings
+                ? {
+                    directory: settings.worktreeDirectory,
+                    projectFolders: settings.worktreeProjectFolders,
+                  }
+                : {}),
+            });
+          }),
+        ),
       ),
     fetchRemote: (input) =>
       ensureGitCommand("GitWorkflowService.fetchRemote", input.cwd).pipe(

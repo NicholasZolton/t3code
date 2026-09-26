@@ -2606,6 +2606,56 @@ it.layer(TestLayer)("GitVcsDriver core integration", (it) => {
       }),
     );
 
+    it.effect(
+      "creates worktrees under the configured project folder without touching parent config",
+      () =>
+        Effect.gen(function* () {
+          const cwd = yield* makeTmpDir("project-checkout-");
+          const { initialBranch } = yield* initRepoWithCommit(cwd);
+          const root = yield* makeTmpDir("custom-worktrees-");
+          const paths = yield* Path.Path;
+          const files = yield* FileSystem.FileSystem;
+          const projectFolder = paths.join(root, paths.basename(cwd));
+          yield* files.makeDirectory(projectFolder, { recursive: true });
+          yield* files.writeFileString(paths.join(projectFolder, "opencode.jsonc"), "{}\n");
+
+          const driver = yield* GitVcsDriver.GitVcsDriver;
+          const grouped = yield* driver.createWorktree(
+            { cwd, path: null, refName: initialBranch, newRefName: "example/grouped" },
+            { directory: root, projectFolders: true },
+          );
+          assert.equal(grouped.worktree.path, paths.join(projectFolder, "example-grouped"));
+          assert.equal(
+            yield* files.readFileString(paths.join(projectFolder, "opencode.jsonc")),
+            "{}\n",
+          );
+          assert.equal(
+            yield* git(grouped.worktree.path, ["branch", "--show-current"]),
+            "example/grouped",
+          );
+
+          const flat = yield* driver.createWorktree(
+            { cwd, path: null, refName: initialBranch, newRefName: "example/flat" },
+            { directory: root, projectFolders: false },
+          );
+          assert.equal(flat.worktree.path, paths.join(root, `${paths.basename(cwd)}-example-flat`));
+
+          const fromLinkedWorktree = yield* driver.createWorktree(
+            {
+              cwd: grouped.worktree.path,
+              path: null,
+              refName: "example/grouped",
+              newRefName: "example/another",
+            },
+            { directory: root, projectFolders: true },
+          );
+          assert.equal(
+            fromLinkedWorktree.worktree.path,
+            paths.join(projectFolder, "example-another"),
+          );
+        }),
+    );
+
     it.effect("allows worktree removal to run longer than the default command timeout", () =>
       Effect.gen(function* () {
         const delegate = yield* ChildProcessSpawner.ChildProcessSpawner;

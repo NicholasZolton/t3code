@@ -8114,7 +8114,10 @@ export default function ChatView(props: ChatViewProps) {
                       projectCwd: activeProject.workspaceRoot,
                       baseBranch: activeThreadBranch!,
                       requireWorktree: true,
-                      branch: buildTemporaryWorktreeBranchName(randomHex),
+                      branch: buildTemporaryWorktreeBranchName(
+                        randomHex,
+                        activeProjectSettings.settings.worktreeBranchPrefix,
+                      ),
                       ...(startFromOrigin ? { startFromOrigin: true } : {}),
                     },
                     runSetupScript: true,
@@ -8454,7 +8457,10 @@ export default function ChatView(props: ChatViewProps) {
                     prepareWorktree: {
                       projectCwd: activeProject.workspaceRoot,
                       baseBranch: baseBranchForWorktree,
-                      branch: buildTemporaryWorktreeBranchName(randomHex),
+                      branch: buildTemporaryWorktreeBranchName(
+                        randomHex,
+                        activeProjectSettings.settings.worktreeBranchPrefix,
+                      ),
                       ...(startFromOrigin ? { startFromOrigin: true } : {}),
                     },
                     runSetupScript: true,

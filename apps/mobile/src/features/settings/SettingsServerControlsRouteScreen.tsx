@@ -2,7 +2,7 @@ import { useNavigation } from "@react-navigation/native";
 import { SettingsRow } from "./components/SettingsRow";
 import { ScreenScrollView as ScrollView } from "../../components/ScreenScrollView";
 import { SymbolView } from "../../components/AppSymbol";
-import { AppText as Text } from "../../components/AppText";
+import { AppText as Text, AppTextInput } from "../../components/AppText";
 import {
   type ResponseStreamingMode,
   type ServerSettings,
@@ -11,7 +11,11 @@ import {
   type WorktreeSubmodules,
   PROJECT_SCOPED_SERVER_SETTING_KEYS,
   type ProjectScopedServerSettingKey,
+  WorktreeBranchPrefix,
+  WorktreeDirectory,
 } from "@t3tools/contracts";
+import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
 import { useRef, useState, type ComponentProps } from "react";
 import { Alert, Platform, Pressable, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -344,6 +348,32 @@ function ServerSettingsDetail(props: { readonly page: SettingsPage }) {
                       disabled={disabledFor("newWorktreesStartFromOrigin")}
                       onValueChange={(value) => write({ newWorktreesStartFromOrigin: value })}
                     />
+                    <WorktreeSettingField
+                      label="Worktree directory"
+                      hint="Root for new worktrees; leave empty for the T3 home directory."
+                      value={uniform("worktreeDirectory")}
+                      placeholder={isMixed("worktreeDirectory") ? "Mixed" : "~/.herdr/worktrees"}
+                      disabled={disabledFor("worktreeDirectory")}
+                      setting="directory"
+                      onValueChange={(value) => write({ worktreeDirectory: value })}
+                    />
+                    <FanoutSwitchRow
+                      icon="folder"
+                      label="Group by project"
+                      subtitle="Keep each project's worktrees under its own folder."
+                      value={uniform("worktreeProjectFolders")}
+                      disabled={disabledFor("worktreeProjectFolders")}
+                      onValueChange={(value) => write({ worktreeProjectFolders: value })}
+                    />
+                    <WorktreeSettingField
+                      label="Worktree branch prefix"
+                      hint="Namespace for new temporary and generated branches."
+                      value={uniform("worktreeBranchPrefix")}
+                      placeholder={isMixed("worktreeBranchPrefix") ? "Mixed" : "t3code"}
+                      disabled={disabledFor("worktreeBranchPrefix")}
+                      setting="prefix"
+                      onValueChange={(value) => write({ worktreeBranchPrefix: value })}
+                    />
                   </SettingsSection>
                 </>
               ) : null}
@@ -504,6 +534,54 @@ function ChoiceRow(props: {
         />
       ) : null}
     </Pressable>
+  );
+}
+
+function WorktreeSettingField(props: {
+  readonly label: string;
+  readonly hint: string;
+  readonly value: string | null;
+  readonly placeholder: string;
+  readonly disabled: boolean;
+  readonly setting: "directory" | "prefix";
+  readonly onValueChange: (value: string) => void;
+}) {
+  const [draft, setDraft] = useState<string | null>(null);
+  const commit = () => {
+    if (draft === null || props.disabled) return;
+    const value = draft.trim();
+    setDraft(null);
+    const schema = props.setting === "directory" ? WorktreeDirectory : WorktreeBranchPrefix;
+    if (Option.isNone(Schema.decodeUnknownOption(schema)(value))) {
+      Alert.alert(
+        `Invalid ${props.label.toLowerCase()}`,
+        props.setting === "directory"
+          ? 'Use an absolute path or a path beginning with "~/".'
+          : "Use Git-safe branch segments without a trailing slash.",
+      );
+      return;
+    }
+    if (value !== props.value) props.onValueChange(value);
+  };
+
+  return (
+    <View className="gap-2 border-t border-border-subtle p-4">
+      <Text className="text-base text-foreground">{props.label}</Text>
+      <Text className="text-sm text-foreground-muted">{props.hint}</Text>
+      <AppTextInput
+        accessibilityLabel={props.label}
+        className="min-h-11 rounded-xl border-continuous bg-card px-3 text-base text-foreground"
+        value={draft ?? props.value ?? ""}
+        placeholder={props.placeholder}
+        onChangeText={setDraft}
+        onBlur={commit}
+        onSubmitEditing={commit}
+        autoCapitalize="none"
+        autoCorrect={false}
+        returnKeyType="done"
+        editable={!props.disabled}
+      />
+    </View>
   );
 }
 

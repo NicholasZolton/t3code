@@ -21,6 +21,31 @@ const decodeServerSettingsPatch = Schema.decodeUnknownSync(ServerSettingsPatch);
 const encodeServerSettings = Schema.encodeSync(ServerSettings);
 const decodeClaudeSettings = Schema.decodeUnknownSync(ClaudeSettings);
 
+describe("worktree settings", () => {
+  it("retains the existing layout and branch prefix for older settings", () => {
+    const settings = decodeServerSettings({});
+    expect(settings.worktreeDirectory).toBe("");
+    expect(settings.worktreeProjectFolders).toBe(true);
+    expect(settings.worktreeBranchPrefix).toBe("t3code");
+  });
+
+  it("accepts home-based roots and Git-safe prefixes at the patch boundary", () => {
+    expect(
+      decodeServerSettingsPatch({
+        worktreeDirectory: " ~/.herdr/worktrees ",
+        worktreeProjectFolders: true,
+        worktreeBranchPrefix: "nick/tasks",
+      }),
+    ).toEqual({
+      worktreeDirectory: "~/.herdr/worktrees",
+      worktreeProjectFolders: true,
+      worktreeBranchPrefix: "nick/tasks",
+    });
+    expect(() => decodeServerSettingsPatch({ worktreeDirectory: "relative/path" })).toThrow();
+    expect(() => decodeServerSettingsPatch({ worktreeBranchPrefix: "nick/" })).toThrow();
+  });
+});
+
 describe("storage cleanup settings", () => {
   it("keeps cleanup disabled for existing installations", () => {
     expect(decodeServerSettings({}).worktreeCleanup).toBeNull();

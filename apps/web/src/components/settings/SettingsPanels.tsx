@@ -2181,6 +2181,9 @@ export function GeneralSettingsPanel() {
   const backgroundActivityProfileOption = resolveBackgroundActivityProfileOption(settings);
   const mixedBackgroundActivity = useScopedSettingsMixed(["backgroundActivity"]);
   const mixedAddProjectBaseDirectory = useScopedSettingsMixed(["addProjectBaseDirectory"]);
+  const mixedWorktreeDirectory = useScopedSettingsMixed(["worktreeDirectory"]);
+  const mixedWorktreeProjectFolders = useScopedSettingsMixed(["worktreeProjectFolders"]);
+  const mixedWorktreeBranchPrefix = useScopedSettingsMixed(["worktreeBranchPrefix"]);
   const mixedTextGenerationModel = useScopedSettingsMixed(["textGenerationModelSelection"]);
   const backgroundActivityDescription =
     backgroundActivityProfileOption === "advanced"
@@ -2956,6 +2959,76 @@ export function GeneralSettingsPanel() {
                 updateSettings({ newWorktreesStartFromOrigin: Boolean(checked) })
               }
               aria-label="Start new worktrees from origin by default"
+            />
+          }
+        />
+        <SettingsRow
+          serverScoped
+          settingKeys={["worktreeDirectory"]}
+          {...searchableSetting("worktree-directory")}
+          description='Root for new worktrees. Leave empty to use the T3 home worktrees directory. Accepts an absolute path or "~/…".'
+          resetAction={
+            settings.worktreeDirectory ? (
+              <SettingResetButton
+                label="worktree directory"
+                onClick={() => updateSettings({ worktreeDirectory: "" })}
+              />
+            ) : null
+          }
+          control={
+            <DraftInput
+              size="sm"
+              className="w-full sm:w-72"
+              value={mixedWorktreeDirectory ? "" : settings.worktreeDirectory}
+              onCommit={(directory) => updateSettings({ worktreeDirectory: directory })}
+              placeholder={mixedWorktreeDirectory ? "Mixed" : "~/.herdr/worktrees"}
+              spellCheck={false}
+              aria-label="Worktree directory"
+            />
+          }
+        />
+        <SettingsRow
+          serverScoped
+          settingKeys={["worktreeProjectFolders"]}
+          {...searchableSetting("worktree-project-folders")}
+          description="Place new worktrees under a folder named for their project, so project-specific configuration can live beside them."
+          control={
+            <ScopedSwitch
+              settingKeys={["worktreeProjectFolders"]}
+              checked={mixedWorktreeProjectFolders ? false : settings.worktreeProjectFolders}
+              onCheckedChange={(checked) =>
+                updateSettings({ worktreeProjectFolders: Boolean(checked) })
+              }
+              aria-label="Group worktrees by project"
+            />
+          }
+        />
+        <SettingsRow
+          serverScoped
+          settingKeys={["worktreeBranchPrefix"]}
+          {...searchableSetting("worktree-branch-prefix")}
+          description="Prefix for new worktree branches, including their temporary names before the first turn. Use slash-separated Git branch segments without a trailing slash."
+          resetAction={
+            settings.worktreeBranchPrefix !== DEFAULT_UNIFIED_SETTINGS.worktreeBranchPrefix ? (
+              <SettingResetButton
+                label="worktree branch prefix"
+                onClick={() =>
+                  updateSettings({
+                    worktreeBranchPrefix: DEFAULT_UNIFIED_SETTINGS.worktreeBranchPrefix,
+                  })
+                }
+              />
+            ) : null
+          }
+          control={
+            <DraftInput
+              size="sm"
+              className="w-full sm:w-44"
+              value={mixedWorktreeBranchPrefix ? "" : settings.worktreeBranchPrefix}
+              onCommit={(prefix) => updateSettings({ worktreeBranchPrefix: prefix })}
+              placeholder={mixedWorktreeBranchPrefix ? "Mixed" : "t3code"}
+              spellCheck={false}
+              aria-label="Worktree branch prefix"
             />
           }
         />

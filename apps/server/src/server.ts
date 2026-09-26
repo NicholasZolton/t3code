@@ -366,6 +366,7 @@ const GitLayerLive = Layer.empty.pipe(
 );
 
 const GitWorkflowLayerLive = GitWorkflowService.layer.pipe(
+  Layer.provideMerge(ServerSettingsLayerLive),
   Layer.provideMerge(VcsDriverRegistryLayerLive),
   Layer.provideMerge(GitLayerLive),
 );
@@ -380,6 +381,7 @@ const ProjectCloneTrackerLayerLive = ProjectCloneTracker.layer.pipe(
 );
 
 const ReviewLayerLive = ReviewService.layer.pipe(
+  Layer.provideMerge(ServerSettingsLayerLive),
   Layer.provideMerge(GitVcsDriver.layer),
   Layer.provideMerge(VcsDriverRegistryLayerLive),
 );

@@ -4536,8 +4536,10 @@ it.layer(GitManagerTestLayer)("GitManager", (it) => {
       yield* runGit(repoDir, ["push", "-u", "origin", "feature/pr-worktree"]);
       yield* runGit(repoDir, ["push", "origin", "HEAD:refs/pull/77/head"]);
       yield* runGit(repoDir, ["checkout", "main"]);
+      const worktreeDirectory = yield* makeTempDir("t3code-pr-worktrees-");
 
       const { manager } = yield* makeManager({
+        serverSettings: { worktreeDirectory },
         ghScenario: {
           pullRequest: {
             number: 77,
@@ -4557,6 +4559,9 @@ it.layer(GitManagerTestLayer)("GitManager", (it) => {
       });
 
       expect(result.branch).toBe("feature/pr-worktree");
+      expect(result.worktreePath).toBe(
+        NodePath.join(worktreeDirectory, NodePath.basename(repoDir), "feature-pr-worktree"),
+      );
       expect(result.worktreePath).not.toBeNull();
       expect(NodeFS.existsSync(result.worktreePath as string)).toBe(true);
       const worktreeBranch = (yield* runGit(result.worktreePath as string, [
