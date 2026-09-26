@@ -76,6 +76,12 @@ import { formatProviderSkillDisplayName } from "@t3tools/client-runtime/provider
 import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
 import { importPastedComposerText } from "./composerInlineTokenPaste";
 import { didComposerSelectionChangeVisibly } from "./composerSelection";
+import {
+  ComposerVimExtension,
+  handleComposerVimKeyDown,
+  isComposerVimInsertMode,
+  setComposerVimClipboard,
+} from "./composerVimProseMirror";
 import type { ComposerDraftContextRecords } from "./composerContextPresentation";
 
 export interface ComposerPromptEditorHandle {
@@ -108,6 +114,9 @@ export interface ComposerPromptEditorProps {
    * literal character.
    */
   richTextEnabled?: boolean;
+  vimEnabled?: boolean;
+  vimSystemClipboard?: boolean;
+  vimMenuOpen?: boolean;
   /** Draft records behind the prompt's context references, keyed by context id. */
   contextRecords: ComposerDraftContextRecords;
   /** Structured clipboard payload for the given referenced ids, or null to skip. */
@@ -577,7 +586,10 @@ export function ComposerPromptEditorTiptap(props: ComposerPromptEditorProps) {
   // Both halves initialize from the controlled Markdown value, so the draft
   // survives the flip.
   return (
-    <ComposerPromptEditorTiptapInner key={props.richTextEnabled ? "rich" : "plain"} {...props} />
+    <ComposerPromptEditorTiptapInner
+      key={`${props.richTextEnabled ? "rich" : "plain"}-${props.vimEnabled ? "vim" : "standard"}`}
+      {...props}
+    />
   );
 }
 
@@ -586,6 +598,9 @@ function ComposerPromptEditorTiptapInner(props: ComposerPromptEditorProps) {
     value,
     cursor,
     richTextEnabled,
+    vimEnabled,
+    vimSystemClipboard,
+    vimMenuOpen,
     contextRecords,
     buildContextClipboardFragment,
     importContextFragment,
@@ -607,7 +622,16 @@ function ComposerPromptEditorTiptapInner(props: ComposerPromptEditorProps) {
   } = props;
   // The setting toggles styling, not the engine: both modes are Tiptap.
   // Plain mode disables the mark extensions, so markers stay literal text.
-  const richText = richTextEnabled ?? false;
+  const richText = (richTextEnabled ?? false) && !vimEnabled;
+  const vimEnabledRef = useRef(vimEnabled ?? false);
+  const vimMenuOpenRef = useRef(vimMenuOpen ?? false);
+  const [vimMode, setVimMode] = useState("normal");
+  useLayoutEffect(() => {
+    vimEnabledRef.current = vimEnabled ?? false;
+  }, [vimEnabled]);
+  useLayoutEffect(() => {
+    vimMenuOpenRef.current = vimMenuOpen ?? false;
+  }, [vimMenuOpen]);
 
   const onChangeRef = useRef(onChange);
   const onVisibleSelectionChangeRef = useRef(onVisibleSelectionChange);
@@ -693,6 +717,7 @@ function ComposerPromptEditorTiptapInner(props: ComposerPromptEditorProps) {
     const fromFlat = pmToFlat(map, from);
     const toFlat = pmToFlat(map, to);
     const nextValue = map.value;
+    const contextIds = vimEnabledRef.current ? collectInlineContextIds(nextValue) : map.contextIds;
     const nextCursor = clampCollapsedComposerCursor(map.value, flatToCollapsed(map, fromFlat));
     const nextExpandedCursor = Math.max(
       0,
@@ -710,8 +735,8 @@ function ComposerPromptEditorTiptapInner(props: ComposerPromptEditorProps) {
       previousSnapshot.value === nextValue &&
       previousSnapshot.cursor === nextCursor &&
       previousSnapshot.expandedCursor === nextExpandedCursor &&
-      previousSnapshot.contextIds.length === map.contextIds.length &&
-      previousSnapshot.contextIds.every((id, index) => id === map.contextIds[index])
+      previousSnapshot.contextIds.length === contextIds.length &&
+      previousSnapshot.contextIds.every((id, index) => id === contextIds[index])
     );
     if (isApplyingControlledUpdateRef.current) return;
     if (!snapshotChanged) {
@@ -730,7 +755,7 @@ function ComposerPromptEditorTiptapInner(props: ComposerPromptEditorProps) {
       value: nextValue,
       cursor: nextCursor,
       expandedCursor: nextExpandedCursor,
-      contextIds: map.contextIds,
+      contextIds,
     };
     const cursorAdjacentToMention =
       isCollapsedCursorAdjacentToInlineToken(nextValue, nextCursor, "left") ||
@@ -740,7 +765,7 @@ function ComposerPromptEditorTiptapInner(props: ComposerPromptEditorProps) {
       nextCursor,
       nextExpandedCursor,
       cursorAdjacentToMention,
-      map.contextIds,
+      contextIds,
     );
   }, []);
 
@@ -782,6 +807,7 @@ function ComposerPromptEditorTiptapInner(props: ComposerPromptEditorProps) {
         ComposerCitationExtension,
         ComposerContextReferenceExtension,
         ComposerMarkersExtension,
+        ...(vimEnabled ? [ComposerVimExtension.configure({ onModeChange: setVimMode })] : []),
         ...(richText
           ? [
               ComposerCodeExtension,
@@ -800,29 +826,51 @@ function ComposerPromptEditorTiptapInner(props: ComposerPromptEditorProps) {
             ]
           : []),
       ],
-      content: buildDocJson(
-        value,
-        (name) => {
-          const normalized = name.startsWith("$") ? name.slice(1) : name;
-          const found = skills.find((candidate) => candidate.name === normalized);
-          if (!found) {
-            return {
-              label: formatProviderSkillDisplayName({ name: normalized }),
-              description: null,
-            };
-          }
-          const shortDescription = found.shortDescription?.trim();
-          return {
-            label: formatProviderSkillDisplayName(found),
-            description: shortDescription || found.description?.trim() || null,
-          };
-        },
-        { styling: richText },
-      ),
+      content: vimEnabled
+        ? buildVimDocJson(value)
+        : buildDocJson(
+            value,
+            (name) => {
+              const normalized = name.startsWith("$") ? name.slice(1) : name;
+              const found = skills.find((candidate) => candidate.name === normalized);
+              if (!found) {
+                return {
+                  label: formatProviderSkillDisplayName({ name: normalized }),
+                  description: null,
+                };
+              }
+              const shortDescription = found.shortDescription?.trim();
+              return {
+                label: formatProviderSkillDisplayName(found),
+                description: shortDescription || found.description?.trim() || null,
+              };
+            },
+            { styling: richText },
+          ),
       editable: !disabled,
       editorProps: {
         attributes: editorAttributes,
         handleKeyDown: (view, event) => {
+          if (vimEnabledRef.current) {
+            // Let the composer dismiss an open slash/mention menu first.
+            if (event.key === "Escape" && onCommandKeyDownRef.current?.("Escape", event)) {
+              event.preventDefault();
+              return true;
+            }
+            if (
+              vimMenuOpenRef.current &&
+              (event.key === "Enter" ||
+                event.key === "Tab" ||
+                event.key === "ArrowDown" ||
+                event.key === "ArrowUp") &&
+              onCommandKeyDownRef.current?.(event.key, event)
+            ) {
+              event.preventDefault();
+              event.stopPropagation();
+              return true;
+            }
+            if (handleComposerVimKeyDown(view, event)) return true;
+          }
           if (
             isMacPlatform(navigator.platform) &&
             (event.key === "Home" || event.key === "End") &&
@@ -968,6 +1016,7 @@ function ComposerPromptEditorTiptapInner(props: ComposerPromptEditorProps) {
           return handled;
         },
         handleTextInput: (view, from, to, text) => {
+          if (vimEnabledRef.current && !isComposerVimInsertMode(view)) return true;
           if (text.length !== 1) return false;
           const closer = SURROUND_CLOSE[text];
           if (!closer || from === to) return false;
@@ -1022,6 +1071,10 @@ function ComposerPromptEditorTiptapInner(props: ComposerPromptEditorProps) {
             if (offset > 0 && !/\s/.test(map.value[offset - 1]!)) text = ` ${text}`;
           }
           const editorInstance = editorHolder.current;
+          if (vimEnabledRef.current) {
+            view.dispatch(view.state.tr.insertText(text));
+            return true;
+          }
           if (editorInstance) {
             insertMarkdownParagraphs(text, skillLabelFor, { styling: richText }, (content) => {
               editorInstance.commands.insertContent(content);
@@ -1049,6 +1102,10 @@ function ComposerPromptEditorTiptapInner(props: ComposerPromptEditorProps) {
     editorHolder.current = editor;
   }, [editor]);
 
+  useLayoutEffect(() => {
+    if (editor && vimEnabled) setComposerVimClipboard(editor.view, vimSystemClipboard ?? false);
+  }, [editor, vimEnabled, vimSystemClipboard]);
+
   // Tiptap forwards option changes to the view from a passive effect, so a
   // class change here would reach the ProseMirror element one tick after
   // React commits. The chat composer measures its resting and expanded
@@ -1070,7 +1127,7 @@ function ComposerPromptEditorTiptapInner(props: ComposerPromptEditorProps) {
       value: map.value,
       cursor: clampCollapsedComposerCursor(map.value, flatToCollapsed(map, fromFlat)),
       expandedCursor: Math.max(0, Math.min(map.value.length, flatToMarkdown(map, fromFlat))),
-      contextIds: map.contextIds,
+      contextIds: vimEnabled ? collectInlineContextIds(map.value) : map.contextIds,
     };
     const toFlat = pmToFlat(map, to);
     selectionRangeRef.current = {
@@ -1079,7 +1136,7 @@ function ComposerPromptEditorTiptapInner(props: ComposerPromptEditorProps) {
     };
     snapshotRef.current = next;
     return next;
-  }, [editor]);
+  }, [editor, vimEnabled]);
 
   // Controlled value/cursor from the store (history recall, chip insertion…).
   useLayoutEffect(() => {
@@ -1115,9 +1172,14 @@ function ComposerPromptEditorTiptapInner(props: ComposerPromptEditorProps) {
     const pendingCitation =
       citationRequestRef.current?.value === value ? citationRequestRef.current : null;
     if (previousSnapshot.value !== value) {
-      editor.commands.setContent(buildDocJson(value, skillLabelFor, { styling: richText }), {
-        emitUpdate: false,
-      });
+      editor.commands.setContent(
+        vimEnabled
+          ? buildVimDocJson(value)
+          : buildDocJson(value, skillLabelFor, { styling: richText }),
+        {
+          emitUpdate: false,
+        },
+      );
     }
     const map = serializeEditorDoc(editor.state.doc);
     const flat = collapsedToFlat(map, normalizedCursor);
@@ -1146,7 +1208,7 @@ function ComposerPromptEditorTiptapInner(props: ComposerPromptEditorProps) {
     queueMicrotask(() => {
       isApplyingControlledUpdateRef.current = false;
     });
-  }, [cursor, editor, richText, skillLabelFor, value]);
+  }, [cursor, editor, richText, skillLabelFor, value, vimEnabled]);
 
   const focusAt = useCallback(
     (nextCursor: number) => {
@@ -1297,7 +1359,7 @@ function ComposerPromptEditorTiptapInner(props: ComposerPromptEditorProps) {
         <ComposerCitationCommentContext value={citationCommentActions}>
           <div
             className={cn(
-              "relative flow-root font-(family-name:--font-composer,var(--font-sans)) text-(length:--font-size-prompt,var(--text-sm)) max-sm:pointer-coarse:text-(length:--font-size-prompt-touch)",
+              "group/vim relative flow-root font-(family-name:--font-composer,var(--font-sans)) text-(length:--font-size-prompt,var(--text-sm)) max-sm:pointer-coarse:text-(length:--font-size-prompt-touch)",
               containerClassName,
             )}
           >
@@ -1344,6 +1406,11 @@ function ComposerPromptEditorTiptapInner(props: ComposerPromptEditorProps) {
               onCopyCapture={(event) => handleCopyCut(event, false)}
               onCutCapture={(event) => handleCopyCut(event, true)}
             />
+            {vimEnabled && (
+              <span className="pointer-events-none absolute right-1 bottom-0 hidden rounded bg-muted px-1 text-3xs font-medium text-muted-foreground group-focus-within/vim:block">
+                {vimMode.toUpperCase()}
+              </span>
+            )}
             {isEmpty && contextRecords.size === 0 && placeholder ? (
               <div
                 className={cn(
@@ -1359,6 +1426,16 @@ function ComposerPromptEditorTiptapInner(props: ComposerPromptEditorProps) {
       </ComposerContextRecordsContext>
     </RichComposerSkillsContext>
   );
+}
+
+function buildVimDocJson(value: string): JSONContent {
+  return {
+    type: "doc",
+    content: value.split("\n").map((line) => ({
+      type: "paragraph",
+      ...(line ? { content: [{ type: "text", text: line }] } : {}),
+    })),
+  };
 }
 
 /**

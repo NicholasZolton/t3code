@@ -103,6 +103,18 @@ describe("ClientSettings rich text composer", () => {
   });
 });
 
+describe("ClientSettings Vim composer", () => {
+  it("defaults to ordinary editing with a private register and saves both preferences", () => {
+    expect(decodeClientSettings({})).toMatchObject({
+      composerVimEnabled: false,
+      composerVimSystemClipboard: false,
+    });
+    const preference = { composerVimEnabled: true, composerVimSystemClipboard: true };
+    expect(decodeClientSettingsPatch(preference)).toEqual(preference);
+    expect(encodeClientSettings(decodeClientSettings(preference))).toMatchObject(preference);
+  });
+});
+
 describe("ServerSettings default permissions", () => {
   it("keeps full access for settings saved before a default was configured", () => {
     expect(decodeServerSettings({}).defaultRuntimeMode).toBe("full-access");

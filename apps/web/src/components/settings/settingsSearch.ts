@@ -361,6 +361,18 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["composer rich text tiptap bold italic markdown styled wysiwyg"],
   },
   {
+    id: "composer-vim",
+    title: "Vim keybindings",
+    to: "/settings/general",
+    searchTerms: ["nvim neovim modal editing chatbox keyboard"],
+  },
+  {
+    id: "composer-vim-clipboard",
+    title: "Vim system clipboard",
+    to: "/settings/general",
+    searchTerms: ["nvim neovim vim yank paste register copy"],
+  },
+  {
     id: "composer-collapse",
     title: "Collapse composer on scroll",
     to: "/settings/general",

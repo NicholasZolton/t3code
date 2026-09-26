@@ -8,6 +8,8 @@ also lists the command IDs and defaults available in your version.
 In **Settings → General → Send shortcut**, choose whether Enter sends, requires
 `mod+Enter` for multiline prompts, or always requires `mod+Enter`. `Shift+Enter`
 inserts a new line. This applies to the web and desktop composer at desktop widths.
+With [Vim editing](./composer.md#vim-editing) enabled, Enter and Shift+Enter
+are inactive in Normal mode; switch to Insert mode to use their configured behavior.
 
 **Follow-up behavior** chooses Queue or Steer while the agent runs. Use
 `mod+Enter` to do the opposite for one message. When sending requires `mod+Enter`,

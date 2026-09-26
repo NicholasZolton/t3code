@@ -90,6 +90,20 @@ The quoted text and comment count toward the message limit.
 Mobile displays saved quotes and comments, but does not create citations or
 navigate to their sources.
 
+## Vim editing
+
+On web and desktop, turn on **Vim keybindings** in Settings → General to edit the
+chatbox with Vim motions, counts, operators, text objects, visual mode, registers,
+search, and dot repeat. Vim mode edits the literal Markdown prompt, including
+`@` references and citation markers, instead of displaying rich-text chips.
+Press `i` to type and `Esc` to return to Normal mode, where the character under
+the cursor is highlighted as a block. The current mode appears in the chatbox
+while it has focus. To have yanks, deletes, and `p` use the device clipboard,
+turn on **Vim system clipboard** in the same section; otherwise they use Vim's
+registers. Regular copy and paste shortcuts continue to work.
+In normal mode, plain `Enter` does not send; press `i` to use your configured
+send shortcut, or use a modified send shortcut directly.
+
 ## Recall a sent prompt
 
 Press `ArrowUp` in an empty composer to bring back the last prompt you sent in this thread. Press

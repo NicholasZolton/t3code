@@ -587,6 +587,13 @@ export function useSettingsRestore(onRestored?: () => void) {
       ...(settings.composerRichTextEnabled !== DEFAULT_UNIFIED_SETTINGS.composerRichTextEnabled
         ? ["Rich text composer"]
         : []),
+      ...(settings.composerVimEnabled !== DEFAULT_UNIFIED_SETTINGS.composerVimEnabled
+        ? ["Vim keybindings"]
+        : []),
+      ...(settings.composerVimSystemClipboard !==
+      DEFAULT_UNIFIED_SETTINGS.composerVimSystemClipboard
+        ? ["Vim system clipboard"]
+        : []),
       ...(settings.sendShortcut !== DEFAULT_UNIFIED_SETTINGS.sendShortcut ? ["Send shortcut"] : []),
       ...(settings.followUpBehavior !== DEFAULT_UNIFIED_SETTINGS.followUpBehavior
         ? ["Follow-up behavior"]
@@ -652,6 +659,8 @@ export function useSettingsRestore(onRestored?: () => void) {
       settings.confirmThreadUnpin,
       settings.composerCollapseOnScroll,
       settings.composerRichTextEnabled,
+      settings.composerVimEnabled,
+      settings.composerVimSystemClipboard,
       settings.sendShortcut,
       settings.followUpBehavior,
       settings.addProjectBaseDirectory,
@@ -769,6 +778,8 @@ export function useSettingsRestore(onRestored?: () => void) {
       showSkillsInSlashMenu: DEFAULT_UNIFIED_SETTINGS.showSkillsInSlashMenu,
       composerCollapseOnScroll: DEFAULT_UNIFIED_SETTINGS.composerCollapseOnScroll,
       composerRichTextEnabled: DEFAULT_UNIFIED_SETTINGS.composerRichTextEnabled,
+      composerVimEnabled: DEFAULT_UNIFIED_SETTINGS.composerVimEnabled,
+      composerVimSystemClipboard: DEFAULT_UNIFIED_SETTINGS.composerVimSystemClipboard,
       sendShortcut: DEFAULT_UNIFIED_SETTINGS.sendShortcut,
       followUpBehavior: DEFAULT_UNIFIED_SETTINGS.followUpBehavior,
       contextWindowMeterEnabled: DEFAULT_UNIFIED_SETTINGS.contextWindowMeterEnabled,
@@ -2649,6 +2660,59 @@ export function GeneralSettingsPanel() {
                 updateSettings({ composerRichTextEnabled: Boolean(checked) })
               }
               aria-label="Rich text composer"
+            />
+          }
+        />
+
+        <SettingsRow
+          {...searchableSetting("composer-vim")}
+          description="Edit the chatbox's literal Markdown with Vim motions, operators, visual mode, search, and registers."
+          resetAction={
+            settings.composerVimEnabled !== DEFAULT_UNIFIED_SETTINGS.composerVimEnabled ? (
+              <SettingResetButton
+                label="Vim keybindings"
+                onClick={() =>
+                  updateSettings({
+                    composerVimEnabled: DEFAULT_UNIFIED_SETTINGS.composerVimEnabled,
+                  })
+                }
+              />
+            ) : null
+          }
+          control={
+            <Switch
+              checked={settings.composerVimEnabled}
+              onCheckedChange={(checked) =>
+                updateSettings({ composerVimEnabled: Boolean(checked) })
+              }
+              aria-label="Vim keybindings"
+            />
+          }
+        />
+
+        <SettingsRow
+          {...searchableSetting("composer-vim-clipboard")}
+          description="Use the system clipboard for Vim yanks, deletes, and pastes. When off, use a private Vim register."
+          resetAction={
+            settings.composerVimSystemClipboard !==
+            DEFAULT_UNIFIED_SETTINGS.composerVimSystemClipboard ? (
+              <SettingResetButton
+                label="Vim system clipboard"
+                onClick={() =>
+                  updateSettings({
+                    composerVimSystemClipboard: DEFAULT_UNIFIED_SETTINGS.composerVimSystemClipboard,
+                  })
+                }
+              />
+            ) : null
+          }
+          control={
+            <Switch
+              checked={settings.composerVimSystemClipboard}
+              onCheckedChange={(checked) =>
+                updateSettings({ composerVimSystemClipboard: Boolean(checked) })
+              }
+              aria-label="Vim system clipboard"
             />
           }
         />

@@ -6847,6 +6847,9 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                   <ComposerPromptEditor
                     editorRef={composerEditorRef}
                     richTextEnabled={settings.composerRichTextEnabled}
+                    vimEnabled={settings.composerVimEnabled}
+                    vimSystemClipboard={settings.composerVimSystemClipboard}
+                    vimMenuOpen={composerMenuOpen && composerMenuItems.length > 0}
                     value={
                       isComposerApprovalState
                         ? ""
