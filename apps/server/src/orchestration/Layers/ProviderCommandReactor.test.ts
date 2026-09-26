@@ -20,6 +20,8 @@ import {
   EnvironmentId,
   EventId,
   MessageId,
+  MCP_THREADS_COMMAND_PREFIX,
+  MCP_TURN_ACCEPTED_ACTIVITY_KIND,
   ProjectId,
   ThreadId,
   TurnId,
@@ -896,6 +898,40 @@ describe("ProviderCommandReactor", () => {
     expect(thread?.session?.threadId).toBe("thread-1");
     expect(thread?.session?.status).toBe("starting");
     expect(thread?.session?.runtimeMode).toBe("approval-required");
+  });
+
+  it("records the accepted turn for an MCP message", async () => {
+    const harness = await createHarness();
+    const messageId = asMessageId("mcp-follow-up");
+    const accepted = await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const events = yield* harness.engine.subscribeDomainEvents;
+          yield* harness.engine.dispatch({
+            type: "thread.turn.start",
+            commandId: CommandId.make(`${MCP_THREADS_COMMAND_PREFIX}follow-up`),
+            threadId: ThreadId.make("thread-1"),
+            message: { messageId, role: "user", text: "Steer", attachments: [] },
+            interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+            runtimeMode: "approval-required",
+            createdAt: "2026-01-01T00:00:00.000Z",
+          });
+          return yield* events.pipe(
+            Stream.filter(
+              (event) =>
+                event.type === "thread.activity-appended" &&
+                event.payload.activity.kind === MCP_TURN_ACCEPTED_ACTIVITY_KIND,
+            ),
+            Stream.runHead,
+          );
+        }),
+      ),
+    );
+    expect(Option.getOrThrow(accepted)).toMatchObject({
+      payload: {
+        activity: { turnId: asTurnId("turn-1"), payload: { messageId } },
+      },
+    });
   });
 
   effectIt.effect("projects inline context before sending the provider turn", () =>
