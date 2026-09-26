@@ -3,6 +3,9 @@ import {
   type ChatAttachment,
   CommandId,
   EventId,
+  MCP_THREADS_COMMAND_PREFIX,
+  MCP_TURN_ACCEPTED_ACTIVITY_KIND,
+  mcpTurnAcceptedActivityId,
   type ModelSelection,
   type OrchestrationEvent,
   ProviderDriverKind,
@@ -1499,9 +1502,32 @@ const make = Effect.gen(function* () {
       return;
     }
 
-    const send = providerService
-      .sendTurn(sendTurnRequest.value)
-      .pipe(Effect.asVoid, Effect.catchCause(recoverTurnStartFailure));
+    const send = providerService.sendTurn(sendTurnRequest.value).pipe(
+      Effect.tap((turn) =>
+        event.commandId?.startsWith(MCP_THREADS_COMMAND_PREFIX)
+          ? Effect.gen(function* () {
+              const acceptedAt = DateTime.formatIso(yield* DateTime.now);
+              yield* orchestrationEngine.dispatch({
+                type: "thread.activity.append",
+                commandId: yield* serverCommandId("mcp-turn-accepted"),
+                threadId: event.payload.threadId,
+                activity: {
+                  id: mcpTurnAcceptedActivityId(event.payload.messageId),
+                  kind: MCP_TURN_ACCEPTED_ACTIVITY_KIND,
+                  summary: "MCP turn accepted",
+                  tone: "info",
+                  turnId: turn.turnId,
+                  payload: { messageId: event.payload.messageId },
+                  createdAt: acceptedAt,
+                },
+                createdAt: acceptedAt,
+              });
+            }).pipe(Effect.ignoreCause({ log: true }))
+          : Effect.void,
+      ),
+      Effect.asVoid,
+      Effect.catchCause(recoverTurnStartFailure),
+    );
     // The forked send settles `sent` from here on, so drop the entry the post-processing hook uses.
     if (resumed && event.commandId !== null) resumedTurnStarts.delete(event.commandId);
     yield* send.pipe(

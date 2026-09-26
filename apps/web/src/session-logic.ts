@@ -21,6 +21,7 @@ import {
 } from "@t3tools/client-runtime/work-log/presentation";
 import { extractToolActivityPresentation } from "@t3tools/client-runtime/work-log/tool-presentation";
 import {
+  MCP_TURN_ACCEPTED_ACTIVITY_KIND,
   isToolLifecycleItemType,
   type AssetResource,
   type OrchestrationLatestTurn,
@@ -474,7 +475,8 @@ export function deriveWorkLogEntries(
     ) {
       continue;
     }
-    if (activity.kind === "tool.started") continue;
+    if (activity.kind === "tool.started" || activity.kind === MCP_TURN_ACCEPTED_ACTIVITY_KIND)
+      continue;
     // Agent task.started rows are CTA seeds: they carry the true spawn turn,
     // which is the batch key (completions of background subagents arrive
     // under later synthetic turns and must not start new batches). They

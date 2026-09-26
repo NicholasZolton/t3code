@@ -25,6 +25,25 @@ in a new thread's model picker to add or remove them. A regular click returns to
 single model. Choose a base branch and send. Each selection starts a separate thread
 and worktree while you stay in the new thread composer. This requires a Git project.
 
+### Let an agent coordinate threads
+
+An agent running in T3 Code can use the `t3-code` MCP tools to list and read
+threads, start a thread with a prompt, send follow-ups, interrupt a running turn,
+and wait for a turn to finish or ask for input. Agents can inspect pending permission requests and
+questions in other threads, then approve, decline, or answer them using their
+request IDs. Thread reads can page through older messages and fetch the rest of a long response.
+Ask it to delegate a separate task if you want to keep
+working in your current thread. New agent-started threads use their own Git
+worktree by default; for a non-Git project or a shared checkout, the agent can
+request `worktree=false`. They appear in your thread list on every connected
+client.
+
+Agents can manage threads in their own project by default. In **Settings → General →
+Agent thread access**, choose **All projects in this environment** to let them
+list, start, read, send to, and answer requests in threads in other projects on
+the same server. This setting also applies to agents already running.
+On mobile, find it under **Settings → Agent behavior**.
+
 ## Pin and reorder threads
 
 Pin a thread from its menu to keep it above your active work.

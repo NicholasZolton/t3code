@@ -162,6 +162,11 @@ export type ProviderApprovalOption = typeof ProviderApprovalOption.Type;
 export const ProviderUserInputAnswers = Schema.Record(Schema.String, Schema.Unknown);
 export type ProviderUserInputAnswers = typeof ProviderUserInputAnswers.Type;
 
+export const MCP_THREADS_COMMAND_PREFIX = "mcp-threads:";
+export const MCP_TURN_ACCEPTED_ACTIVITY_KIND = "mcp.turn.accepted";
+export const mcpTurnAcceptedActivityId = (messageId: MessageId): EventId =>
+  EventId.make(`mcp-turn-accepted:${messageId}`);
+
 export const PROVIDER_SEND_TURN_MAX_INPUT_CHARS = 120_000;
 export const PROVIDER_SEND_TURN_MAX_ATTACHMENTS = 100;
 export const PROVIDER_SEND_TURN_MAX_IMAGE_BYTES = 10 * 1024 * 1024;

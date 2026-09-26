@@ -5,6 +5,7 @@ import {
   CheckpointRef,
   EventId,
   MessageId,
+  mcpTurnAcceptedActivityId,
   ProjectId,
   ThreadId,
   type ThreadPullRequestLink,
@@ -110,6 +111,157 @@ const projectionSnapshotLayer = it.layer(
 );
 
 projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
+  it.effect("reads an accepted turn and paged message text independently of the latest turn", () =>
+    Effect.gen(function* () {
+      const sql = yield* SqlClient.SqlClient;
+      const query = yield* ProjectionSnapshotQuery;
+      const threadId = ThreadId.make("mcp-read-thread");
+      const messageId = asMessageId("mcp-requested-message");
+      yield* sql`
+        INSERT INTO projection_projects
+          (project_id, title, workspace_root, scripts_json, created_at, updated_at)
+        VALUES ('mcp-read-project', 'MCP', '/mcp', '[]', '2026-09-01T00:00:00Z', '2026-09-01T00:00:00Z')
+      `;
+      yield* sql`
+        INSERT INTO projection_threads
+          (thread_id, project_id, title, model_selection_json, runtime_mode, interaction_mode,
+           latest_turn_id, created_at, updated_at)
+        VALUES (${threadId}, 'mcp-read-project', 'MCP',
+          '{"instanceId":"codex","model":"test"}', 'full-access', 'default',
+          'child-160', '2026-09-01T00:00:00Z', '2026-09-01T00:00:00Z')
+      `;
+      yield* sql`
+        INSERT INTO projection_thread_messages
+          (message_id, thread_id, role, text, is_streaming, created_at, updated_at)
+        VALUES
+          (${messageId}, ${threadId}, 'user', 'Start work', 0,
+            '2026-09-01T00:00:00Z', '2026-09-01T00:00:00Z'),
+          ('mcp-answer', ${threadId}, 'assistant', 'abcdefgh', 0,
+            '2026-09-01T00:00:01Z', '2026-09-01T00:00:01Z')
+      `;
+      yield* sql`
+        INSERT INTO projection_turns
+          (thread_id, turn_id, pending_message_id, state, requested_at, checkpoint_files_json)
+        VALUES (${threadId}, 'parent', ${messageId}, 'completed',
+          '2026-09-01T00:00:00Z', '[]')
+      `;
+      yield* sql`
+        WITH RECURSIVE children(number) AS
+          (SELECT 1 UNION ALL SELECT number + 1 FROM children WHERE number < 160)
+        INSERT INTO projection_turns
+          (thread_id, turn_id, state, requested_at, checkpoint_files_json)
+        SELECT ${threadId}, 'child-' || number, 'completed',
+          '2026-09-01T00:00:01Z', '[]' FROM children
+      `;
+      yield* sql`
+        INSERT INTO projection_thread_activities
+          (activity_id, thread_id, turn_id, tone, kind, summary, payload_json, created_at)
+        VALUES (${mcpTurnAcceptedActivityId(messageId)}, ${threadId}, 'parent', 'info',
+          'mcp.turn.accepted', 'Accepted', '{}', '2026-09-01T00:00:00Z')
+      `;
+      assert.deepStrictEqual(
+        yield* query.getThreadTurnStatus({ threadId, messageId }),
+        Option.some({
+          startFailed: false,
+          turnId: asTurnId("parent"),
+          turnState: "completed",
+        }),
+      );
+
+      const page = yield* query.getThreadMessagesPage({
+        threadId,
+        beforeMessageId: null,
+        limit: 1,
+        maxTextChars: 3,
+      });
+      assert.deepStrictEqual(page, [
+        {
+          messageId: asMessageId("mcp-answer"),
+          role: "assistant",
+          text: "abc",
+          createdAt: "2026-09-01T00:00:01Z",
+          nextTextOffset: 3,
+        },
+      ]);
+      assert.deepStrictEqual(
+        yield* query.getThreadMessageExcerpt({
+          threadId,
+          messageId: asMessageId("mcp-answer"),
+          textOffset: 3,
+          maxTextChars: 3,
+        }),
+        Option.some({
+          messageId: asMessageId("mcp-answer"),
+          role: "assistant",
+          text: "def",
+          createdAt: "2026-09-01T00:00:01Z",
+          nextTextOffset: 6,
+        }),
+      );
+      assert.deepStrictEqual(
+        yield* query.getThreadMessagesPage({
+          threadId,
+          beforeMessageId: asMessageId("mcp-answer"),
+          limit: 1,
+          maxTextChars: 3,
+        }),
+        [
+          {
+            messageId,
+            role: "user",
+            text: "Sta",
+            createdAt: "2026-09-01T00:00:00Z",
+            nextTextOffset: 3,
+          },
+        ],
+      );
+      assert.deepStrictEqual(
+        yield* query.getThreadMessageExcerpt({
+          threadId: ThreadId.make("another-thread"),
+          messageId: asMessageId("mcp-answer"),
+          textOffset: 0,
+          maxTextChars: 3,
+        }),
+        Option.none(),
+      );
+      yield* sql`
+        INSERT INTO projection_thread_messages
+          (message_id, thread_id, role, text, is_streaming, created_at, updated_at)
+        VALUES ('mcp-failed-message', ${threadId}, 'user', 'Next', 0,
+          '2026-09-01T00:00:02Z', '2026-09-01T00:00:02Z')
+      `;
+      yield* sql`
+        INSERT INTO projection_thread_activities
+          (activity_id, thread_id, tone, kind, summary, payload_json, created_at)
+        VALUES ('mcp-failure', ${threadId}, 'error', 'provider.turn.start.failed',
+          'Failed', '{"requestId":"mcp-failed-message"}', '2026-09-01T00:00:02Z')
+      `;
+      assert.deepStrictEqual(
+        yield* query.getThreadTurnStatus({ threadId, messageId }),
+        Option.some({
+          startFailed: false,
+          turnId: asTurnId("parent"),
+          turnState: "completed",
+        }),
+      );
+      assert.deepStrictEqual(
+        yield* query.getThreadTurnStatus({
+          threadId,
+          messageId: asMessageId("mcp-failed-message"),
+        }),
+        Option.some({
+          startFailed: true,
+          turnId: null,
+          turnState: null,
+        }),
+      );
+      yield* sql`DELETE FROM projection_thread_activities WHERE thread_id = ${threadId}`;
+      yield* sql`DELETE FROM projection_thread_messages WHERE thread_id = ${threadId}`;
+      yield* sql`DELETE FROM projection_turns WHERE thread_id = ${threadId}`;
+      yield* sql`DELETE FROM projection_threads WHERE thread_id = ${threadId}`;
+      yield* sql`DELETE FROM projection_projects WHERE project_id = 'mcp-read-project'`;
+    }),
+  );
   it.effect("hydrates read model from projection tables and computes snapshot sequence", () =>
     Effect.gen(function* () {
       const snapshotQuery = yield* ProjectionSnapshotQuery;
