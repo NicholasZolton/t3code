@@ -2,6 +2,7 @@ import { getSchemaByResolvedExtensions, Node, resolveExtensions } from "@tiptap/
 import StarterKit from "@tiptap/starter-kit";
 import { TaskList } from "@tiptap/extension-task-list";
 import { Node as ProseMirrorNode } from "@tiptap/pm/model";
+import { EditorState, TextSelection } from "@tiptap/pm/state";
 import { describe, expect, it } from "vite-plus/test";
 
 import {
@@ -15,6 +16,7 @@ import {
   pmToFlat,
   serializeEditorDoc,
 } from "./composer-rich-text-doc";
+import { deletePreviousComposerWord } from "./composer-delete-word";
 
 function stubAtom(name: string, attrs: Record<string, { default: unknown }>) {
   return Node.create({
@@ -121,6 +123,82 @@ function roundTripPlain(value: string) {
   const doc = ProseMirrorNode.fromJSON(plainSchema, json);
   return serializeEditorDoc(doc);
 }
+
+describe("terminal-style composer word deletion", () => {
+  it.each([
+    { value: "hello world", cursor: 11, expected: "hello " },
+    { value: "hello world  ", cursor: 13, expected: "hello " },
+    { value: "hello  ", cursor: 7, expected: "" },
+    { value: "foo.bar/baz", cursor: 11, expected: "" },
+    { value: "hello world", cursor: 8, expected: "hello rld" },
+    { value: "fix @README.md tail", cursor: 5, expected: "fix  tail" },
+    { value: "**hello world**", cursor: 11, expected: "**hello** " },
+    { value: "- [ ] buy milk", cursor: 8, expected: "- [ ] buy " },
+  ])(
+    "deletes the previous word in $value at flat cursor $cursor",
+    ({ value, cursor, expected }) => {
+      const doc = ProseMirrorNode.fromJSON(
+        schema,
+        buildDocJson(value, (name) => ({ label: name, description: null })),
+      );
+      const map = serializeEditorDoc(doc);
+      const state = EditorState.create({
+        doc,
+        selection: TextSelection.create(doc, flatToPm(map, cursor)),
+      });
+      const transaction = deletePreviousComposerWord(state);
+      expect(transaction).not.toBeNull();
+      expect(serializeEditorDoc(state.apply(transaction!).doc).value).toBe(expected);
+    },
+  );
+
+  it("deletes the selection and leaves the next line intact at the start of a line", () => {
+    const doc = ProseMirrorNode.fromJSON(
+      plainSchema,
+      buildDocJson("hello world\nnext", () => ({ label: "", description: null }), {
+        styling: false,
+      }),
+    );
+    const map = serializeEditorDoc(doc);
+    const selected = EditorState.create({
+      doc,
+      selection: TextSelection.create(doc, flatToPm(map, 6), flatToPm(map, 11)),
+    });
+    const deleted = deletePreviousComposerWord(selected);
+    expect(deleted).not.toBeNull();
+    expect(serializeEditorDoc(selected.apply(deleted!).doc).value).toBe("hello \nnext");
+
+    const lineStart = EditorState.create({
+      doc,
+      selection: TextSelection.create(doc, flatToPm(map, 12)),
+    });
+    expect(deletePreviousComposerWord(lineStart)).toBeNull();
+  });
+
+  it("stops at an inline hard break without deleting the previous line", () => {
+    const doc = schema.node("doc", null, [
+      schema.node("paragraph", null, [
+        schema.text("hello"),
+        schema.node("hardBreak"),
+        schema.text("world"),
+      ]),
+    ]);
+    const map = serializeEditorDoc(doc);
+    const atEnd = EditorState.create({
+      doc,
+      selection: TextSelection.create(doc, flatToPm(map, map.docLength)),
+    });
+    const deleted = deletePreviousComposerWord(atEnd);
+    expect(deleted).not.toBeNull();
+    expect(serializeEditorDoc(atEnd.apply(deleted!).doc).value).toBe("hello\n");
+
+    const atLineStart = EditorState.create({
+      doc,
+      selection: TextSelection.create(doc, flatToPm(map, "hello\n".length)),
+    });
+    expect(deletePreviousComposerWord(atLineStart)).toBeNull();
+  });
+});
 
 describe("composer rich text document model", () => {
   it.each(["€", "£", "¥", "₹", "₩", "₿", "𑿝"])(

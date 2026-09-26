@@ -1,4 +1,4 @@
-import { assert, describe, it } from "vite-plus/test";
+import { afterEach, assert, describe, it, vi } from "vite-plus/test";
 import {
   compileResolvedKeybindingsConfig,
   DEFAULT_RESOLVED_KEYBINDINGS,
@@ -414,6 +414,112 @@ describe("split/new/close terminal shortcuts", () => {
       isTerminalNewShortcut(event({ key: "m", ctrlKey: true }), keybindings, {
         platform: "Linux",
       }),
+    );
+  });
+});
+
+describe("composer word deletion shortcut", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("resolves composer focus from the keydown target for every shortcut consumer", () => {
+    class EditorTarget extends EventTarget {
+      constructor(private readonly insideComposer: boolean) {
+        super();
+      }
+
+      closest(selector: string): EditorTarget | null {
+        return selector === "[data-composer-editor]" && this.insideComposer ? this : null;
+      }
+    }
+
+    vi.stubGlobal("Element", EditorTarget);
+    const shortcut = event({ key: "w", ctrlKey: true, target: new EditorTarget(true) });
+    assert.equal(
+      resolveShortcutCommand(shortcut, DEFAULT_RESOLVED_KEYBINDINGS, { platform: "Linux" }),
+      "composer.deletePreviousWord",
+    );
+    assert.equal(
+      resolveShortcutCommand(
+        event({ ...shortcut, target: new EditorTarget(false) }),
+        DEFAULT_RESOLVED_KEYBINDINGS,
+        { platform: "Linux" },
+      ),
+      "rightPanel.close",
+    );
+  });
+
+  it("takes ctrl+w only in the composer and yields to close shortcuts elsewhere", () => {
+    const shortcut = event({ key: "w", ctrlKey: true });
+    const platform = "Linux";
+    assert.equal(
+      resolveShortcutCommand(shortcut, DEFAULT_RESOLVED_KEYBINDINGS, {
+        platform,
+        context: { composerFocus: true, editableFocus: true },
+      }),
+      "composer.deletePreviousWord",
+    );
+    assert.equal(
+      resolveShortcutCommand(shortcut, DEFAULT_RESOLVED_KEYBINDINGS, { platform }),
+      "rightPanel.close",
+    );
+    assert.equal(
+      resolveShortcutCommand(shortcut, DEFAULT_RESOLVED_KEYBINDINGS, {
+        platform,
+        context: { terminalFocus: true },
+      }),
+      "terminal.close",
+    );
+    assert.equal(
+      resolveShortcutCommand(shortcut, DEFAULT_RESOLVED_KEYBINDINGS, {
+        platform: "MacIntel",
+        context: { composerFocus: true },
+      }),
+      "composer.deletePreviousWord",
+    );
+  });
+
+  it("uses a custom binding instead of the hardcoded ctrl+w chord", () => {
+    const keybindings = mergeWithDefaultKeybindings(
+      compileResolvedKeybindingsConfig([
+        { key: "alt+backspace", command: "composer.deletePreviousWord", when: "composerFocus" },
+      ]),
+    );
+    const options = { platform: "Linux", context: { composerFocus: true } };
+    assert.equal(
+      resolveShortcutCommand(event({ key: "Backspace", altKey: true }), keybindings, options),
+      "composer.deletePreviousWord",
+    );
+    assert.equal(
+      resolveShortcutCommand(event({ key: "w", ctrlKey: true }), keybindings, options),
+      "rightPanel.close",
+    );
+  });
+
+  it("deletes in the composer when a saved close binding follows the composer rule", () => {
+    const keybindings = mergeWithDefaultKeybindings(
+      compileResolvedKeybindingsConfig([
+        { key: "ctrl+w", command: "composer.deletePreviousWord", when: "composerFocus" },
+        { key: "mod+w", command: "rightPanel.close", when: "!terminalFocus" },
+      ]),
+    );
+    const shortcut = event({ key: "w", ctrlKey: true });
+    assert.equal(
+      resolveShortcutCommand(shortcut, keybindings, {
+        platform: "Linux",
+        context: { composerFocus: true },
+      }),
+      "composer.deletePreviousWord",
+    );
+    assert.equal(
+      resolveShortcutCommand(shortcut, keybindings, { platform: "Linux" }),
+      "rightPanel.close",
+    );
+    assert.equal(
+      shortcutLabelForCommand(keybindings, "composer.deletePreviousWord", {
+        platform: "Linux",
+        context: { composerFocus: true },
+      }),
+      "Ctrl+W",
     );
   });
 });

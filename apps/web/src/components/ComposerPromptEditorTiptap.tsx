@@ -9,6 +9,7 @@ import { Decoration, DecorationSet } from "@tiptap/pm/view";
 import type {
   AssistantCitation,
   ComposerContextClipboardFragment,
+  ResolvedKeybindingsConfig,
   ServerProviderSkill,
 } from "@t3tools/contracts";
 import {
@@ -76,6 +77,8 @@ import { formatProviderSkillDisplayName } from "@t3tools/client-runtime/provider
 import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
 import { importPastedComposerText } from "./composerInlineTokenPaste";
 import { didComposerSelectionChangeVisibly } from "./composerSelection";
+import { deletePreviousComposerWord } from "~/composer-delete-word";
+import { resolveShortcutCommand } from "~/keybindings";
 import type { ComposerDraftContextRecords } from "./composerContextPresentation";
 
 export interface ComposerPromptEditorHandle {
@@ -102,6 +105,7 @@ export interface ComposerPromptEditorHandle {
 export interface ComposerPromptEditorProps {
   value: string;
   cursor: number;
+  keybindings: ResolvedKeybindingsConfig;
   /**
    * Render Markdown styling (bold, italic, code, strike, task checkboxes).
    * Off renders the same Tiptap engine as plain text: every marker stays a
@@ -585,6 +589,7 @@ function ComposerPromptEditorTiptapInner(props: ComposerPromptEditorProps) {
   const {
     value,
     cursor,
+    keybindings,
     richTextEnabled,
     contextRecords,
     buildContextClipboardFragment,
@@ -615,6 +620,7 @@ function ComposerPromptEditorTiptapInner(props: ComposerPromptEditorProps) {
   const buildFragmentRef = useRef(buildContextClipboardFragment);
   const importFragmentRef = useRef(importContextFragment);
   const skillsRef = useRef(skills);
+  const keybindingsRef = useRef(keybindings);
   const latestValueRef = useRef(value);
   // The editor instance for callbacks created before it exists (paste).
   // Effects flush before any user interaction, so this is always set.
@@ -638,6 +644,9 @@ function ComposerPromptEditorTiptapInner(props: ComposerPromptEditorProps) {
   useEffect(() => {
     skillsRef.current = skills;
   }, [skills]);
+  useEffect(() => {
+    keybindingsRef.current = keybindings;
+  }, [keybindings]);
   useLayoutEffect(() => {
     latestValueRef.current = value;
   }, [value]);
@@ -751,6 +760,7 @@ function ComposerPromptEditorTiptapInner(props: ComposerPromptEditorProps) {
         className,
       ),
       "data-testid": "composer-editor",
+      "data-composer-editor": "",
       "data-composer-rich-text": richText ? "true" : "false",
       "aria-placeholder": placeholder,
     }),
@@ -823,6 +833,18 @@ function ComposerPromptEditorTiptapInner(props: ComposerPromptEditorProps) {
       editorProps: {
         attributes: editorAttributes,
         handleKeyDown: (view, event) => {
+          if (
+            !event.isComposing &&
+            resolveShortcutCommand(event, keybindingsRef.current, {
+              context: { composerFocus: true, editableFocus: true },
+            }) === "composer.deletePreviousWord"
+          ) {
+            event.preventDefault();
+            event.stopPropagation();
+            const transaction = deletePreviousComposerWord(view.state);
+            if (transaction) view.dispatch(transaction);
+            return true;
+          }
           if (
             isMacPlatform(navigator.platform) &&
             (event.key === "Home" || event.key === "End") &&

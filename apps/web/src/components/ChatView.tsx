@@ -6754,14 +6754,24 @@ export default function ChatView(props: ChatViewProps) {
 
   useEffect(() => {
     const handler = (event: globalThis.KeyboardEvent) => {
-      if (preventRepeatedTerminalCloseShortcut(event, keybindings)) {
+      const composerOwnsShortcut =
+        (event.repeat || isTerminalCloseConfirmPending()) &&
+        !event.isComposing &&
+        resolveShortcutCommand(event, keybindings, {
+          context: getShortcutContext(event.target),
+        }) === "composer.deletePreviousWord";
+      if (!composerOwnsShortcut && preventRepeatedTerminalCloseShortcut(event, keybindings)) {
         event.stopPropagation();
         return;
       }
       // While a close confirmation is open, terminal focus has moved to the
       // dialog, so a deliberate second close shortcut would otherwise fall
       // through to the native window/tab close accelerator.
-      if (isTerminalCloseConfirmPending() && preventTerminalCloseShortcut(event, keybindings)) {
+      if (
+        !composerOwnsShortcut &&
+        isTerminalCloseConfirmPending() &&
+        preventTerminalCloseShortcut(event, keybindings)
+      ) {
         event.stopPropagation();
         return;
       }
