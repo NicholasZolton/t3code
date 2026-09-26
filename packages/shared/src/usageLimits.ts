@@ -321,6 +321,18 @@ export interface LimitPoolMember {
   readonly window: ServerProviderUsageWindow;
 }
 
+/** Plan multipliers are relative quota sizes; unknown plans retain the usual 1x share. */
+export function limitAccountWeight(account: LimitAccount): number {
+  const plan = account.plan?.trim().toLowerCase();
+  if (account.driver === "opencode") {
+    if (plan === "pro") return 20;
+    if (plan === "prolite") return 5;
+  }
+  const multiplier = plan?.match(/\b(\d+(?:\.\d+)?)\s*x\b/)?.[1];
+  const weight = multiplier ? Number(multiplier) : 1;
+  return Number.isFinite(weight) && weight > 0 ? weight : 1;
+}
+
 /**
  * One window id across every account that reports it: the pooled share left,
  * pace against the clock, and the resets in the order they will land, each
@@ -342,7 +354,7 @@ export interface LimitPoolWindow {
   readonly resets: ReadonlyArray<{
     readonly member: LimitPoolMember;
     readonly at: number;
-    /** Points of the pool the reset restores: the member's used share over the member count. */
+    /** Points of the pool the reset restores: the member's weighted used share. */
     readonly restoresPercent: number;
   }>;
 }
@@ -431,17 +443,30 @@ function poolWindows(accounts: readonly LimitAccount[], now: number): readonly L
   const pools = [...byKey.values()].map((members): LimitPoolWindow => {
     const memberByAccount = new Map(members.map((member) => [member.account.key, member]));
     const first = members[0]!.window;
-    const usedPercent = members.reduce((sum, m) => sum + m.window.usedPercent, 0) / members.length;
+    const totalWeight = members.reduce(
+      (sum, member) => sum + limitAccountWeight(member.account),
+      0,
+    );
+    const usedPercent =
+      members.reduce(
+        (sum, member) => sum + member.window.usedPercent * limitAccountWeight(member.account),
+        0,
+      ) / totalWeight;
     // Pace compares spend against the clock, so it is judged only over the
     // members that have a clock; a window with no reset would otherwise
     // count as spend with no time elapsed and skew the verdict.
     const timed = members.flatMap((m) => {
       const share = elapsedShare(m.window, now);
-      return share === null ? [] : [{ used: m.window.usedPercent, elapsed: share }];
+      return share === null
+        ? []
+        : [{ used: m.window.usedPercent, elapsed: share, weight: limitAccountWeight(m.account) }];
     });
-    const timedUsed = timed.reduce((sum, t) => sum + t.used, 0) / timed.length;
+    const timedWeight = timed.reduce((sum, t) => sum + t.weight, 0);
+    const timedUsed = timed.reduce((sum, t) => sum + t.used * t.weight, 0) / timedWeight;
     const meanElapsed =
-      timed.length > 0 ? timed.reduce((sum, t) => sum + t.elapsed, 0) / timed.length : null;
+      timed.length > 0
+        ? timed.reduce((sum, t) => sum + t.elapsed * t.weight, 0) / timedWeight
+        : null;
     const resets = members
       .flatMap((member) => {
         const at = resetMillis(member.window);
@@ -451,7 +476,9 @@ function poolWindows(accounts: readonly LimitAccount[], now: number): readonly L
               {
                 member,
                 at,
-                restoresPercent: Math.round(member.window.usedPercent / members.length),
+                restoresPercent: Math.round(
+                  (member.window.usedPercent * limitAccountWeight(member.account)) / totalWeight,
+                ),
               },
             ];
       })

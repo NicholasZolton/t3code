@@ -10,6 +10,7 @@ import {
   type LimitPool,
   type LimitPoolMember,
   type LimitPoolWindow,
+  limitAccountWeight,
   remainingPercent,
 } from "@t3tools/shared/usageLimits";
 import { AlertTriangleIcon, TicketIcon } from "lucide-react";
@@ -476,9 +477,8 @@ function RedeemableSegmentPopup({
 }
 
 /**
- * One pooled window as equal-width segments, one per account, each filled by
- * the share of that account's quota still open. Equal widths are honest: every
- * account contributes the same share of the pool, whatever its plan.
+ * One pooled window with each account's segment sized by its plan's share of
+ * the quota and filled by the share of that account's quota still open.
  *
  * Wide, each segment carries its own label. Narrow, the bar is a bare strip
  * and a legend below lists the accounts in the same order; both open the
@@ -500,7 +500,11 @@ function PoolBar({
     <div className="@container/pool min-w-0">
       <div
         className="grid gap-x-1 gap-y-1"
-        style={{ gridTemplateColumns: `repeat(${pool.columns.length}, minmax(0, 1fr))` }}
+        style={{
+          gridTemplateColumns: pool.columns
+            .map(({ account }) => `minmax(0, ${limitAccountWeight(account)}fr)`)
+            .join(" "),
+        }}
       >
         {pool.columns.map((member, position) =>
           member.window ? (

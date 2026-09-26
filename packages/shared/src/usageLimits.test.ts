@@ -20,6 +20,7 @@ import {
   displayLimitWindows,
   elapsedShare,
   formatResetsIn,
+  limitAccountWeight,
   limitsNotice,
   paceOf,
   providersWithLimits,
@@ -128,7 +129,7 @@ describe("providersWithLimits", () => {
   });
 });
 
-it("uses the pooled windows for OpenCode logins while leaving an expired account out of the average", () => {
+it("weights OpenCode logins by their plan while leaving an expired account out of the pool", () => {
   const accounts = openCodeLimitAccounts(
     [
       {
@@ -142,6 +143,7 @@ it("uses the pooled windows for OpenCode logins while leaving an expired account
         id: "second",
         label: "Personal",
         active: false,
+        plan: "prolite",
         limits: {
           checkedAt: "2026-09-03T11:00:00.000Z",
           windows: [{ ...window, usedPercent: 80 }],
@@ -164,7 +166,9 @@ it("uses the pooled windows for OpenCode logins while leaving an expired account
   );
   const pool = collectLimitPools(accounts, now)[0];
   expect(pool?.driver).toBe(ProviderDriverKind.make("opencode"));
-  expect(pool?.windows[0]?.remainingPercent).toBe(40);
+  expect(accounts.map(limitAccountWeight)).toEqual([20, 5]);
+  expect(pool?.windows[0]?.remainingPercent).toBe(52);
+  expect(pool?.windows[0]?.resets.map((reset) => reset.restoresPercent)).toEqual([16, 32]);
   expect(pool?.windows[0]?.members).toHaveLength(2);
   expect(pool?.windows[0]?.columns).toHaveLength(2);
   expect(accounts.map((account) => account.key)).toEqual([
@@ -667,6 +671,23 @@ describe("pooled account columns", () => {
     pool.windows.map((row) =>
       row.columns.map((member) => (member.window ? member.account.key : null)),
     );
+
+  it("sizes mixed plans by their quota and uses those shares for usage, pace, and resets", () => {
+    const accounts = [
+      { ...account("five", [{ ...window, usedPercent: 100 }]), plan: "Max 5x" },
+      { ...account("twenty", [{ ...window, usedPercent: 40 }]), plan: "Max 20x" },
+    ];
+    const [pool] = collectLimitPools(accounts, now);
+    expect(pool?.accounts.map(limitAccountWeight)).toEqual([5, 20]);
+    expect(pool?.windows[0]).toMatchObject({
+      usedPercent: 52,
+      remainingPercent: 48,
+      pace: "under",
+    });
+    expect(pool?.windows[0]?.resets.map((reset) => reset.restoresPercent)).toEqual([20, 32]);
+    expect(limitAccountWeight({ ...accounts[0]!, plan: "Unrecognized" })).toBe(1);
+    expect(limitAccountWeight({ ...accounts[0]!, plan: "ChatGPT Pro 5x Subscription" })).toBe(5);
+  });
 
   it("keeps session columns across rows with opposite reset and usage orders", () => {
     const accounts = [
