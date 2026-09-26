@@ -535,6 +535,71 @@ describe("ProviderRuntimeIngestion", () => {
     ]);
   });
 
+  it.each([
+    { delivery: "buffered", responseStreamingMode: "paragraph" as const },
+    { delivery: "streamed", responseStreamingMode: "token" as const },
+  ])("keeps $delivery OpenCode text parts as separate assistant messages", async (settings) => {
+    const harness = await createHarness({
+      serverSettings: { responseStreamingMode: settings.responseStreamingMode },
+    });
+    const base = {
+      provider: ProviderDriverKind.make("opencode"),
+      threadId: asThreadId("thread-1"),
+      turnId: asTurnId("opencode-multiple-text-parts"),
+      createdAt: "2026-01-01T00:00:01.000Z",
+    };
+    await harness.emitAndDrain([
+      { ...base, type: "turn.started", eventId: asEventId("text-parts-started") },
+      {
+        ...base,
+        type: "content.delta",
+        eventId: asEventId("first-text-delta"),
+        itemId: asItemId("msg-first:0"),
+        payload: { streamKind: "assistant_text", delta: "I'll check." },
+      },
+      {
+        ...base,
+        type: "item.completed",
+        eventId: asEventId("first-text-ended"),
+        itemId: asItemId("msg-first:0"),
+        payload: { itemType: "assistant_message", status: "completed", detail: "I'll check." },
+      },
+    ]);
+    const afterFirst = (await harness.readModel()).threads[0];
+    expect(afterFirst?.session?.status).toBe("running");
+    expect(afterFirst?.messages.filter((message) => message.role === "assistant")).toMatchObject([
+      { text: "I'll check.", streaming: false },
+    ]);
+
+    await harness.emitAndDrain([
+      {
+        ...base,
+        type: "content.delta",
+        eventId: asEventId("second-text-delta"),
+        itemId: asItemId("msg-last:0"),
+        payload: { streamKind: "assistant_text", delta: "Done." },
+      },
+      {
+        ...base,
+        type: "item.completed",
+        eventId: asEventId("second-text-ended"),
+        itemId: asItemId("msg-last:0"),
+        payload: { itemType: "assistant_message", status: "completed", detail: "Done." },
+      },
+      {
+        ...base,
+        type: "turn.completed",
+        eventId: asEventId("text-parts-completed"),
+        payload: { state: "completed" },
+      },
+    ]);
+    const thread = (await harness.readModel()).threads[0];
+    expect(thread?.messages.filter((message) => message.role === "assistant")).toMatchObject([
+      { text: "I'll check.", streaming: false },
+      { text: "Done.", streaming: false },
+    ]);
+  });
+
   it.each(["turn.completed", "turn.aborted"] as const)(
     "finalizes old buffered text on late %s without stopping the newer turn",
     async (terminalType) => {
