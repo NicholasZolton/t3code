@@ -24,6 +24,7 @@ import {
   computeMessageDurationStart,
   deriveMessagesTimelineRows,
   deriveMessagesTimelineRowsWithState,
+  latestEditableMessage,
   liveWorkEntryLabel,
   normalizeCompactToolLabel,
   resolveAssistantMessageCopyState,
@@ -263,6 +264,40 @@ describe("streaming row projection", () => {
       }
     },
   );
+
+  it("edits the latest user prompt only when its rewind boundary is available", () => {
+    const initial = fixture("Partial");
+    const history: TurnDiffSummary = {
+      turnId: initial.historyTurnId,
+      assistantMessageId: MessageId.make("history-assistant"),
+      checkpointTurnCount: 1,
+      checkpointRef: CheckpointRef.make("refs/t3/checkpoints/history-turn"),
+      status: "ready",
+      files: [],
+      completedAt: initial.time(4),
+    };
+    const current: TurnDiffSummary = {
+      ...history,
+      turnId: initial.turnId,
+      assistantMessageId: MessageId.make("live-assistant"),
+      checkpointTurnCount: 2,
+    };
+    expect(
+      latestEditableMessage({
+        timelineEntries: initial.timeline.entries,
+        turnDiffSummaries: [history],
+      }),
+    ).toBeNull();
+    expect(
+      latestEditableMessage({
+        timelineEntries: initial.timeline.entries,
+        turnDiffSummaries: [history, current],
+      }),
+    ).toEqual({
+      messageId: MessageId.make("live-user"),
+      turnCount: 1,
+    });
+  });
 
   it("owns checkpoint lookups across streaming and equal source snapshots", () => {
     const initial = fixture("Partial");

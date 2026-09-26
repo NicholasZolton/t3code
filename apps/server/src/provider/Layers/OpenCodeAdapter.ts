@@ -3835,7 +3835,7 @@ export function makeOpenCodeAdapter(
       do {
         const page = yield* runOpenCodeSdk("message.list", (signal) =>
           context.client.message.list(
-            { sessionID, order: "asc", ...(cursor ? { cursor } : {}) },
+            cursor ? { sessionID, cursor } : { sessionID, order: "asc" },
             { signal },
           ),
         ).pipe(Effect.mapError(toRequestError));

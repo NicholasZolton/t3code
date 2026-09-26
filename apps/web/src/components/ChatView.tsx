@@ -374,7 +374,11 @@ import { ExpandedImageDialog } from "./chat/ExpandedImageDialog";
 import { PullRequestThreadDialog } from "./PullRequestThreadDialog";
 import { MessagesTimeline } from "./chat/MessagesTimeline";
 import type { AssistantCitationRequest } from "./chat/AssistantCitationSource";
-import { resolveTimelineIsAtEnd, worktreeSetupAgentStarted } from "./chat/MessagesTimeline.logic";
+import {
+  latestEditableMessage,
+  resolveTimelineIsAtEnd,
+  worktreeSetupAgentStarted,
+} from "./chat/MessagesTimeline.logic";
 import { resolveComposerTimelineInset, resolveScrollToEndClearance } from "./composerFooterLayout";
 import { ChatHeader } from "./chat/ChatHeader";
 import { PanelLayoutControls, RightPanelMaximizeControl } from "./chat/PanelLayoutControls";
@@ -7211,6 +7215,46 @@ export default function ChatView(props: ChatViewProps) {
       supportsConversationRollback,
     ],
   );
+
+  useEffect(() => {
+    const onKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.defaultPrevented || event.repeat || isCommandPaletteOpen() || pendingRevert) return;
+      if (
+        resolveShortcutCommand(event, keybindings, {
+          context: getShortcutContext(event.target),
+        }) !== "thread.editPreviousKeepChanges"
+      )
+        return;
+      if (
+        paintOnlyDisplayedTimeline ||
+        !supportsConversationRollback ||
+        isRevertingCheckpoint ||
+        useComposerDraftStore.getState().rewindingThreadKeys.has(routeThreadKey)
+      )
+        return;
+      const target = latestEditableMessage({
+        timelineEntries: displayedTimeline.entries,
+        turnDiffSummaries: activeThread?.checkpoints ?? [],
+      });
+      if (!target) return;
+      event.preventDefault();
+      event.stopPropagation();
+      void onRevertToTurnCount(target.turnCount, target.messageId, false);
+    };
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => window.removeEventListener("keydown", onKeyDown, true);
+  }, [
+    activeThread?.checkpoints,
+    displayedTimeline.entries,
+    getShortcutContext,
+    isRevertingCheckpoint,
+    keybindings,
+    onRevertToTurnCount,
+    paintOnlyDisplayedTimeline,
+    pendingRevert,
+    routeThreadKey,
+    supportsConversationRollback,
+  ]);
 
   const onCompactContext = async () => {
     if (compactDisabled || !activeThread || !clientSettingsHydrated || sendInFlightRef.current) {
