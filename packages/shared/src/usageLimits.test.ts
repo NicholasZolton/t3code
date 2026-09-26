@@ -20,6 +20,7 @@ import {
   displayLimitWindows,
   elapsedShare,
   formatResetsIn,
+  limitAccountWeight,
   limitsNotice,
   paceOf,
   providersWithLimits,
@@ -128,7 +129,7 @@ describe("providersWithLimits", () => {
   });
 });
 
-it("uses the pooled windows for OpenCode logins while leaving an expired account out of the average", () => {
+it("weights OpenCode logins by their plan while leaving an expired account out of the pool", () => {
   const accounts = openCodeLimitAccounts(
     [
       {
@@ -142,6 +143,7 @@ it("uses the pooled windows for OpenCode logins while leaving an expired account
         id: "second",
         label: "Personal",
         active: false,
+        plan: "prolite",
         limits: {
           checkedAt: "2026-09-03T11:00:00.000Z",
           windows: [{ ...window, usedPercent: 80 }],
@@ -164,7 +166,9 @@ it("uses the pooled windows for OpenCode logins while leaving an expired account
   );
   const pool = collectLimitPools(accounts, now)[0];
   expect(pool?.driver).toBe(ProviderDriverKind.make("opencode"));
-  expect(pool?.windows[0]?.remainingPercent).toBe(40);
+  expect(accounts.map(limitAccountWeight)).toEqual([20, 5]);
+  expect(pool?.windows[0]?.remainingPercent).toBe(52);
+  expect(pool?.windows[0]?.resets.map((reset) => reset.restoresPercent)).toEqual([16, 32]);
   expect(pool?.windows[0]?.members).toHaveLength(2);
   expect(pool?.windows[0]?.columns).toHaveLength(2);
   expect(accounts.map((account) => account.key)).toEqual([
@@ -195,7 +199,7 @@ describe("pools", () => {
     const native = provider({
       driver: claude,
       instanceId: ProviderInstanceId.make("claude"),
-      auth: { status: "authenticated", email: "Same@example.com" },
+      auth: { status: "authenticated", email: "Same@example.com", label: "Max 20x" },
       usageLimits: { checkedAt, windows: [{ ...window, usedPercent: 40 }] },
     });
     const input = new Map([
@@ -222,7 +226,7 @@ describe("pools", () => {
                     id: "claude-same@example.com.json",
                     driver: claude,
                     email: "same@example.com",
-                    plan: "Claude Subscription",
+                    plan: "Max 5x",
                     usageLimits: { checkedAt, windows: [{ ...window, usedPercent: 10 }] },
                   },
                 ],
@@ -246,13 +250,14 @@ describe("pools", () => {
     });
     // The fresher native snapshot wins; the hub row is pre-filtered by email.
     expect(accounts[0]?.limits.windows[0]?.usedPercent).toBe(55);
+    expect(accounts[0]?.plan).toBe("Max 20x");
   });
 
   it("takes windows from a fresher hub read but credits and redeem from the native instance", () => {
     const native = provider({
       driver: claude,
       instanceId: ProviderInstanceId.make("claude"),
-      auth: { status: "authenticated", email: "same@example.com" },
+      auth: { status: "authenticated", email: "same@example.com", label: "Max 20x" },
       usageLimits: {
         checkedAt,
         windows: [{ ...window, usedPercent: 40 }],
@@ -274,6 +279,7 @@ describe("pools", () => {
                     id: "claude-same@example.com.json",
                     driver: claude,
                     email: "same@example.com",
+                    plan: "Max 5x",
                     usageLimits: {
                       checkedAt: "2026-09-03T11:30:00.000Z",
                       windows: [{ ...window, usedPercent: 55 }],
@@ -288,6 +294,8 @@ describe("pools", () => {
     ]);
     const [account] = collectLimitAccounts(input);
     expect(account?.limits.windows[0]?.usedPercent).toBe(55);
+    expect(account?.plan).toBe("Max 5x");
+    expect(account && limitAccountWeight(account)).toBe(5);
     expect(account?.limits.resetCredits?.availableCount).toBe(2);
     expect(account?.redeem).toEqual({ environmentId: "env-a", input: { instanceId: "claude" } });
     expect(account?.environments).toEqual([{ environmentId: "env-a", label: "Laptop" }]);
@@ -667,6 +675,23 @@ describe("pooled account columns", () => {
     pool.windows.map((row) =>
       row.columns.map((member) => (member.window ? member.account.key : null)),
     );
+
+  it("sizes mixed plans by their quota and uses those shares for usage, pace, and resets", () => {
+    const accounts = [
+      { ...account("five", [{ ...window, usedPercent: 100 }]), plan: "Max 5x" },
+      { ...account("twenty", [{ ...window, usedPercent: 40 }]), plan: "Max 20x" },
+    ];
+    const [pool] = collectLimitPools(accounts, now);
+    expect(pool?.accounts.map(limitAccountWeight)).toEqual([5, 20]);
+    expect(pool?.windows[0]).toMatchObject({
+      usedPercent: 52,
+      remainingPercent: 48,
+      pace: "under",
+    });
+    expect(pool?.windows[0]?.resets.map((reset) => reset.restoresPercent)).toEqual([20, 32]);
+    expect(limitAccountWeight({ ...accounts[0]!, plan: "Unrecognized" })).toBe(1);
+    expect(limitAccountWeight({ ...accounts[0]!, plan: "ChatGPT Pro 5x Subscription" })).toBe(5);
+  });
 
   it("keeps session columns across rows with opposite reset and usage orders", () => {
     const accounts = [

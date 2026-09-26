@@ -1,6 +1,11 @@
 import { useNavigation } from "@react-navigation/native";
 import type { LimitAccount, LimitPoolWindow } from "@t3tools/shared/usageLimits";
-import { formatDuration, formatResetsIn, remainingPercent } from "@t3tools/shared/usageLimits";
+import {
+  formatDuration,
+  formatResetsIn,
+  limitAccountWeight,
+  remainingPercent,
+} from "@t3tools/shared/usageLimits";
 import { useId } from "react";
 import { Pressable, View } from "react-native";
 import { Defs, Path, Pattern, Rect, Svg } from "react-native-svg";
@@ -114,7 +119,14 @@ export function PoolWindowCard({
       ) : null}
       <View className="flex-row gap-1">
         {pool.columns.map(({ account, window }, index) => {
-          if (!window) return <View key={account.key} className="h-7 min-w-0 flex-1" />;
+          if (!window)
+            return (
+              <View
+                key={account.key}
+                className="h-7 min-w-0"
+                style={{ flex: limitAccountWeight(account) }}
+              />
+            );
           return (
             <Pressable
               key={account.key}
@@ -122,7 +134,8 @@ export function PoolWindowCard({
               accessibilityLabel={`Segment ${index + 1}, ${accountName(account)}, ${remainingPercent(window)}% left${account.key === activeAccountKey ? ", active account" : ""}`}
               accessibilityHint="Show account details"
               onPress={() => openAccount(account)}
-              className="h-7 min-w-0 flex-1 overflow-hidden rounded-md bg-subtle"
+              className="h-7 min-w-0 overflow-hidden rounded-md bg-subtle"
+              style={{ flex: limitAccountWeight(account) }}
             >
               <AccountSegment
                 remaining={remainingPercent(window)}
