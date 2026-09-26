@@ -253,6 +253,29 @@ describe("thread undo shortcut", () => {
   });
 });
 
+describe("edit previous message shortcut", () => {
+  it("works from the composer on macOS and Windows without stealing terminal or picker keys", () => {
+    for (const [platform, modifier] of [
+      ["MacIntel", { metaKey: true }],
+      ["Win32", { ctrlKey: true }],
+    ] as const) {
+      const shortcut = event({ key: "z", altKey: true, ...modifier });
+      assert.equal(
+        resolveShortcutCommand(shortcut, DEFAULT_RESOLVED_KEYBINDINGS, {
+          platform,
+          context: { editableFocus: true },
+        }),
+        "thread.editPreviousKeepChanges",
+      );
+      for (const context of [{ terminalFocus: true }, { modelPickerOpen: true }]) {
+        assert.isNull(
+          resolveShortcutCommand(shortcut, DEFAULT_RESOLVED_KEYBINDINGS, { platform, context }),
+        );
+      }
+    }
+  });
+});
+
 describe("copy thread reference shortcut", () => {
   it("resolves Cmd+Shift+C on macOS and Ctrl+Shift+C elsewhere", () => {
     assert.equal(

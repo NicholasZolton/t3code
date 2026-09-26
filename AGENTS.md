@@ -117,6 +117,7 @@ For authorized mobile verification, a missing or outdated native client is a bui
 ## Pull requests
 
 - Never make a PR unless the developer explicitly asks you to do so.
+- Never make upstream PRs. PRs for this checkout must target `NicholasZolton/t3code`, never `pingdotgg/t3code`.
 - Conventional commit titles, plain language: `fix(web): new threads no longer spike CPU`.
 - Body: the problem in a sentence or two, then how you fixed it. End with the model and harness that did the work.
 - UI changes need before/after images. Motion or timing needs a short video.

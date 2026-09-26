@@ -938,6 +938,39 @@ function buildRevertTurnCountByUserMessageId(input: {
   return byUserMessageId;
 }
 
+export function latestEditableMessage(input: {
+  timelineEntries: ReadonlyArray<TimelineEntry>;
+  turnDiffSummaries: ReadonlyArray<TurnDiffSummary>;
+}): { messageId: MessageId; turnCount: number } | null {
+  const userEntry = input.timelineEntries.findLast(
+    (entry) => entry.kind === "message" && entry.message.role === "user",
+  );
+  if (!userEntry || userEntry.kind !== "message") return null;
+  const byAssistantMessageId = new Map<MessageId, TurnDiffSummary>();
+  for (const summary of input.turnDiffSummaries) {
+    if (summary.assistantMessageId) byAssistantMessageId.set(summary.assistantMessageId, summary);
+  }
+  const turnCount = revertTurnCounts(
+    input.timelineEntries,
+    input.turnDiffSummaries,
+    byAssistantMessageId,
+  ).get(userEntry.message.id);
+  return turnCount === undefined ? null : { messageId: userEntry.message.id, turnCount };
+}
+
+function revertTurnCounts(
+  timelineEntries: ReadonlyArray<TimelineEntry>,
+  turnDiffSummaries: ReadonlyArray<TurnDiffSummary>,
+  byAssistantMessageId: ReadonlyMap<MessageId, TurnDiffSummary>,
+): Map<MessageId, number> {
+  return buildRevertTurnCountByUserMessageId({
+    supportsConversationRollback: true,
+    timelineEntries,
+    turnDiffSummaryByAssistantMessageId: byAssistantMessageId,
+    inferredCheckpointTurnCountByTurnId: inferCheckpointTurnCountByTurnId(turnDiffSummaries),
+  });
+}
+
 export function deriveMessagesTimelineRows(input: {
   timelineEntries: ReadonlyArray<TimelineEntry>;
   latestTurn?: TimelineLatestTurn | null;
@@ -961,14 +994,13 @@ export function deriveMessagesTimelineRows(input: {
       turnDiffSummaryByAssistantMessageId.set(summary.assistantMessageId, summary);
     }
   }
-  const revertTurnCountByUserMessageId = buildRevertTurnCountByUserMessageId({
-    supportsConversationRollback: input.supportsConversationRollback,
-    timelineEntries: input.timelineEntries,
-    turnDiffSummaryByAssistantMessageId,
-    inferredCheckpointTurnCountByTurnId: input.supportsConversationRollback
-      ? inferCheckpointTurnCountByTurnId(input.turnDiffSummaries)
-      : {},
-  });
+  const revertTurnCountByUserMessageId = input.supportsConversationRollback
+    ? revertTurnCounts(
+        input.timelineEntries,
+        input.turnDiffSummaries,
+        turnDiffSummaryByAssistantMessageId,
+      )
+    : new Map<MessageId, number>();
   const nextRows: MessagesTimelineRow[] = [];
   const durationStartByMessageId = computeMessageDurationStart(
     input.timelineEntries.flatMap((entry) => (entry.kind === "message" ? [entry.message] : [])),

@@ -94,6 +94,8 @@ const runtimeMock = {
     promptEchoEvents: [] as Array<unknown>,
     closeError: null as Error | null,
     messages: [] as MessageEntry[],
+    messagePageSize: undefined as number | undefined,
+    messageListCalls: [] as Array<{ sessionID: string; order?: "asc" | "desc"; cursor?: string }>,
     forkMessagesBySession: new Map<string, MessageEntry[]>(),
     forkPreservesBoundary: true,
     subscribedEvents: [] as Array<unknown | Promise<unknown>>,
@@ -162,6 +164,8 @@ const runtimeMock = {
     this.state.promptEchoEvents.length = 0;
     this.state.closeError = null;
     this.state.messages = [];
+    this.state.messagePageSize = undefined;
+    this.state.messageListCalls.length = 0;
     this.state.forkMessagesBySession.clear();
     this.state.forkPreservesBoundary = true;
     this.state.subscribedEvents = [];
@@ -255,12 +259,21 @@ const OpenCodeRuntimeTestDouble: OpenCodeRuntimeShape = {
         }),
       },
       message: {
-        list: async ({ sessionID }: { sessionID: string }) => ({
-          data: (
-            runtimeMock.state.forkMessagesBySession.get(sessionID) ?? runtimeMock.state.messages
-          ).map((entry) => ({ id: entry.info.id, type: entry.info.role, content: entry.parts })),
-          cursor: {},
-        }),
+        list: async (input: { sessionID: string; order?: "asc" | "desc"; cursor?: string }) => {
+          runtimeMock.state.messageListCalls.push(input);
+          if (input.cursor && input.order) throw new Error("Cursor cannot be combined with order");
+          const entries =
+            runtimeMock.state.forkMessagesBySession.get(input.sessionID) ??
+            runtimeMock.state.messages;
+          const start = input.cursor ? Number(input.cursor) : 0;
+          const end = start + (runtimeMock.state.messagePageSize ?? entries.length);
+          return {
+            data: entries
+              .slice(start, end)
+              .map((entry) => ({ id: entry.info.id, type: entry.info.role, content: entry.parts })),
+            cursor: { next: end < entries.length ? String(end) : null },
+          };
+        },
       },
       session: {
         create: async (input: Record<string, unknown>) => {
@@ -4369,6 +4382,35 @@ it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
       NodeAssert.deepEqual(runtimeMock.state.promptCalls, []);
     }).pipe(Effect.provide(adapterLayer));
   });
+
+  it.effect("rewinds across message pages without combining a cursor with order", () =>
+    Effect.gen(function* () {
+      const adapter = yield* OpenCodeAdapter;
+      const threadId = asThreadId("thread-rollback-paginated");
+      yield* adapter.startSession({ threadId, runtimeMode: "full-access" });
+      runtimeMock.state.messages = [
+        { info: { id: "user-1", role: "user" }, parts: [] },
+        { info: { id: "assistant-1", role: "assistant" }, parts: [] },
+        { info: { id: "user-2", role: "user" }, parts: [] },
+        { info: { id: "assistant-2", role: "assistant" }, parts: [] },
+      ];
+      runtimeMock.state.messagePageSize = 2;
+
+      const snapshot = yield* adapter.rollbackThread(threadId, 1);
+      NodeAssert.deepEqual(
+        snapshot.turns.map((turn) => turn.id),
+        ["assistant-1_fork"],
+      );
+      NodeAssert.deepEqual(runtimeMock.state.forkCalls.at(-1)?.before, "user-2");
+      NodeAssert.deepEqual(
+        runtimeMock.state.messageListCalls.filter((call) => call.cursor),
+        [
+          { sessionID: "http://127.0.0.1:9999/session", cursor: "2" },
+          { sessionID: "http://127.0.0.1:9999/session", cursor: "2" },
+        ],
+      );
+    }),
+  );
 
   it.effect("forks before the removed user prompt and resumes only retained history", () =>
     Effect.gen(function* () {
