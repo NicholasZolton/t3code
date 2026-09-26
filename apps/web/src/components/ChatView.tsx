@@ -22,6 +22,8 @@ import {
   type ChatFileAttachment,
   DEFAULT_MODEL,
   type EnvironmentId,
+  type DesktopBridge,
+  type DesktopSshPortlessForwardInput,
   type MessageId,
   type ModelSelection,
   type ProjectScript,
@@ -115,6 +117,7 @@ import {
   type AtomCommandResult,
 } from "@t3tools/client-runtime/state/runtime";
 import * as Cause from "effect/Cause";
+import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import { AsyncResult } from "effect/unstable/reactivity";
 import { isElectron } from "../env";
@@ -1465,6 +1468,18 @@ function releaseChatTimelineAnchor<T extends { readonly messageId: MessageId | n
   return current.messageId === null ? current : { ...current, messageId: null };
 }
 
+let portlessForwardRequest: Promise<void> = Promise.resolve();
+
+function syncPortlessForwardInOrder(
+  sync: NonNullable<DesktopBridge["syncSshPortlessForward"]>,
+  input: DesktopSshPortlessForwardInput,
+): void {
+  portlessForwardRequest = portlessForwardRequest
+    .then(() => sync(input))
+    .then(() => undefined)
+    .catch((error: unknown) => console.warn("SSH Portless forward failed.", error));
+}
+
 export default function ChatView(props: ChatViewProps) {
   const {
     environmentId,
@@ -2148,6 +2163,29 @@ export default function ChatView(props: ChatViewProps) {
     [activeThread?.environmentId, activeThread?.projectId],
   );
   const activeProject = useProject(activeProjectRef);
+  const portlessEnvironment = activeThread
+    ? environmentById.get(activeThread.environmentId)
+    : undefined;
+  const activeConnection = portlessEnvironment?.entry;
+  const sshProfile = activeConnection?.profile;
+  const sshTarget =
+    portlessEnvironment?.connection.phase === "connected" &&
+    activeConnection?.target._tag === "SshConnectionTarget" &&
+    sshProfile &&
+    Option.isSome(sshProfile) &&
+    sshProfile.value._tag === "SshConnectionProfile"
+      ? sshProfile.value.target
+      : null;
+  const portlessCwd = activeThread?.worktreePath ?? activeProject?.workspaceRoot ?? null;
+  useEffect(() => {
+    const sync = window.desktopBridge?.syncSshPortlessForward;
+    if (!sync) return;
+    const input = sshTarget && portlessCwd ? { target: sshTarget, cwd: portlessCwd } : null;
+    syncPortlessForwardInOrder(sync, input);
+    return () => {
+      syncPortlessForwardInOrder(sync, null);
+    };
+  }, [sshTarget, portlessCwd]);
   // Environment settings with the active project's overrides applied.
   const activeProjectSettings = useMemo(
     () => resolveProjectSettings(settings, activeProject?.id ?? null, activeProject ?? undefined),

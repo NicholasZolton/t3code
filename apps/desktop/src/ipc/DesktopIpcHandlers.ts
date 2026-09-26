@@ -28,6 +28,7 @@ import {
   issueSshWebSocketTicket,
   resolveSshHost,
   resolveSshPasswordPrompt,
+  syncSshPortlessForward,
 } from "./methods/sshEnvironment.ts";
 import {
   checkForUpdate,
@@ -109,6 +110,7 @@ export const installDesktopIpcHandlers = Effect.fn("desktop.ipc.installHandlers"
   yield* ipc.handle(resolveSshHost);
   yield* ipc.handle(ensureSshEnvironment);
   yield* ipc.handle(disconnectSshEnvironment);
+  yield* ipc.handle(syncSshPortlessForward);
   yield* ipc.handle(fetchSshEnvironmentDescriptor);
   yield* ipc.handle(bootstrapSshBearerSession);
   yield* ipc.handle(fetchSshSessionState);

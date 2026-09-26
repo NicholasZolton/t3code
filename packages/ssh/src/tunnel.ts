@@ -166,6 +166,10 @@ export interface SshEnvironmentManagerShape {
   readonly disconnectEnvironment: (
     target: DesktopSshEnvironmentTarget,
   ) => Effect.Effect<void, SshEnvironmentEffectError, SshEnvironmentEffectContext>;
+  /** The selected SSH thread owns the sole same-port local Portless forward. */
+  readonly syncPortlessForward: (
+    input: { readonly target: DesktopSshEnvironmentTarget; readonly cwd: string } | null,
+  ) => Effect.Effect<number | null, SshEnvironmentEffectError, SshEnvironmentEffectContext>;
 }
 
 const RemoteLaunchResult = Schema.Struct({
@@ -1344,6 +1348,14 @@ const makeSshEnvironmentManager = Effect.fn("ssh/tunnel.SshEnvironmentManager.ma
   const tunnels = new Map<string, SshTunnelEntry>();
   const targetLocks = new Map<string, Semaphore.Semaphore>();
   const authSecrets = new Map<string, string>();
+  const portlessLock = Semaphore.makeUnsafe(1);
+  let portlessForward: {
+    readonly key: string;
+    readonly cwd: string;
+    readonly port: number;
+    readonly scope: Scope.Scope;
+    readonly process: ChildProcessSpawner.ChildProcessHandle;
+  } | null = null;
 
   // Keep one lock per target so reconnect cannot reuse a server while stop is pending.
   const withTargetLock = Effect.fn("ssh/tunnel.withTargetLock")(function* <A, E, R>(
@@ -1378,12 +1390,12 @@ const makeSshEnvironmentManager = Effect.fn("ssh/tunnel.SshEnvironmentManager.ma
 
   yield* Scope.addFinalizer(
     managerScope,
-    Effect.sync(() => [...tunnels.values()]).pipe(
-      Effect.flatMap((entries) =>
-        Effect.forEach(entries, closeTunnelEntry, { concurrency: "unbounded" }),
-      ),
-      Effect.ignore,
-    ),
+    Effect.gen(function* () {
+      if (portlessForward) yield* Scope.close(portlessForward.scope, Exit.void);
+      yield* Effect.forEach([...tunnels.values()], closeTunnelEntry, {
+        concurrency: "unbounded",
+      });
+    }).pipe(Effect.ignore),
   );
 
   const promptForPassword = Effect.fn("ssh/tunnel.promptForPassword")(function* (
@@ -1495,6 +1507,195 @@ const makeSshEnvironmentManager = Effect.fn("ssh/tunnel.SshEnvironmentManager.ma
       promptCount: 0,
       authSecret: authSecrets.get(input.key) ?? null,
     });
+  });
+
+  const closePortlessForward = Effect.fn("ssh/portless.close")(function* () {
+    if (portlessForward === null) return;
+    const current = portlessForward;
+    portlessForward = null;
+    yield* Scope.close(current.scope, Exit.void).pipe(Effect.ignore);
+  });
+
+  const syncPortlessForward = Effect.fn("ssh/portless.sync")(function* (
+    input: { readonly target: DesktopSshEnvironmentTarget; readonly cwd: string } | null,
+  ): Effect.fn.Return<number | null, SshEnvironmentEffectError, SshEnvironmentEffectContext> {
+    return yield* portlessLock.withPermits(1)(
+      Effect.gen(function* () {
+        if (input === null) {
+          yield* closePortlessForward();
+          return null;
+        }
+        const base = yield* resolveSshTarget(input.target.alias || input.target.hostname);
+        const target: DesktopSshEnvironmentTarget = {
+          ...base,
+          ...(input.target.username !== null ? { username: input.target.username } : {}),
+          ...(input.target.port !== null ? { port: input.target.port } : {}),
+        };
+        const key = targetConnectionKey(target);
+        if (!tunnels.has(key)) {
+          yield* closePortlessForward();
+          return null;
+        }
+        if (portlessForward?.key === key && portlessForward.cwd === input.cwd) {
+          if (yield* portlessForward.process.isRunning.pipe(Effect.orElseSucceed(() => false))) {
+            return portlessForward.port;
+          }
+        }
+        yield* closePortlessForward();
+
+        const quotedCwd = `'${input.cwd.replaceAll("'", "'\\''")}'`;
+        // Read only the matching process's Portless setting: a non-interactive
+        // SSH shell does not inherit the environment of an active agent turn.
+        const script = `python3 - ${quotedCwd} <<'PY'
+import os
+import sys
+
+ports = set()
+for entry in (os.scandir('/proc') if os.path.isdir('/proc') else ()):
+    if not entry.name.isdigit():
+        continue
+    try:
+        if os.readlink(entry.path + '/cwd') != sys.argv[1]:
+            continue
+        with open(entry.path + '/environ', 'rb') as environment:
+            for variable in environment.read().split(b'\\0'):
+                if variable.startswith(b'PORTLESS_PORT='):
+                    ports.add(variable.partition(b'=')[2].decode('ascii'))
+    except (OSError, UnicodeError):
+        continue
+if len(ports) == 1:
+    print(ports.pop())
+PY`;
+        const result = yield* runWithSshAuth({
+          key,
+          target,
+          operation: (authOptions) =>
+            runSshCommand(target, {
+              ...authOptions,
+              remoteCommandArgs: ["sh", "-s"],
+              stdin: script,
+              timeoutMs: 15_000,
+            }),
+        });
+        const rawPort = result.stdout.trim();
+        const port = Number(rawPort);
+        if (!/^\d{1,5}$/.test(rawPort) || port < 1 || port > 65_535) return null;
+
+        const net = yield* NetService.NetService;
+        if (!(yield* net.canListenOnHost(port, "127.0.0.1"))) {
+          return yield* new SshReadinessError({
+            message: `Local Portless port ${port} is already in use.`,
+          });
+        }
+        const hostSpec = yield* buildSshHostSpecEffect(target);
+        const command = yield* resolveSshCommand;
+        const authSecret = authSecrets.get(key);
+        const childEnvironment = yield* buildSshChildEnvironment(
+          authSecret === undefined ? {} : { authSecret, interactiveAuth: true },
+        ).pipe(
+          Effect.mapError(
+            (cause) =>
+              new SshCommandError({
+                command: [command],
+                exitCode: null,
+                stderr: "",
+                message: "Failed to prepare SSH authentication for the Portless forward.",
+                cause,
+              }),
+          ),
+        );
+        const args = [
+          ...baseSshArgs(target, { batchMode: authSecrets.has(key) ? "no" : "yes" }),
+          "-o",
+          "ExitOnForwardFailure=yes",
+          "-o",
+          "ControlMaster=no",
+          "-o",
+          "ServerAliveInterval=15",
+          "-o",
+          "ServerAliveCountMax=3",
+          "-n",
+          "-N",
+          "-L",
+          `127.0.0.1:${port}:127.0.0.1:${port}`,
+          hostSpec,
+        ];
+        const scope = yield* Scope.make("sequential");
+        const child = yield* (yield* ChildProcessSpawner.ChildProcessSpawner)
+          .spawn(
+            ChildProcess.make(command, args, {
+              env: childEnvironment,
+              extendEnv: true,
+              stdin: { stream: Stream.empty, endOnDone: true },
+            }),
+          )
+          .pipe(
+            Scope.provide(scope),
+            Effect.mapError(
+              (cause) =>
+                new SshCommandError({
+                  command: [command, ...args],
+                  exitCode: null,
+                  stderr: "",
+                  message: `Failed to start Portless forward for ${target.alias}.`,
+                  cause,
+                }),
+            ),
+            Effect.tapError(() => Scope.close(scope, Exit.void)),
+          );
+        yield* Scope.addFinalizer(
+          scope,
+          child
+            .kill({ killSignal: "SIGTERM", forceKillAfter: TUNNEL_SHUTDOWN_TIMEOUT_MS })
+            .pipe(Effect.ignore),
+        );
+        yield* Effect.raceFirst(
+          Effect.gen(function* () {
+            for (let attempt = 0; attempt < 40; attempt++) {
+              if (
+                yield* net.hasListenerOnHost(port, "127.0.0.1").pipe(
+                  Effect.mapError(
+                    (cause) =>
+                      new SshReadinessError({
+                        message: `Failed to check local Portless port ${port}.`,
+                        cause,
+                      }),
+                  ),
+                )
+              )
+                return;
+              yield* Effect.sleep("100 millis");
+            }
+            return yield* new SshReadinessError({
+              message: `Portless forward did not listen on local port ${port}.`,
+            });
+          }),
+          child.exitCode.pipe(
+            Effect.flatMap(
+              (exitCode) =>
+                new SshReadinessError({
+                  message: `Portless forward exited before listening on local port ${port} (exit ${exitCode}).`,
+                }),
+            ),
+          ),
+        ).pipe(
+          Effect.mapError((cause) =>
+            cause instanceof SshReadinessError
+              ? cause
+              : new SshReadinessError({
+                  message: `Could not start Portless forward on port ${port}.`,
+                  cause,
+                }),
+          ),
+          Effect.onExit((exit) =>
+            Exit.isSuccess(exit) ? Effect.void : Scope.close(scope, Exit.void),
+          ),
+        );
+        portlessForward = { key, cwd: input.cwd, port, process: child, scope };
+        yield* Effect.logInfo("ssh.portless.forward.ready", { alias: target.alias, port });
+        return port;
+      }),
+    );
   });
 
   const createTunnelEntry = Effect.fn("ssh/tunnel.ensureTunnelEntry.create")(function* (input: {
@@ -1737,6 +1938,9 @@ const makeSshEnvironmentManager = Effect.fn("ssh/tunnel.SshEnvironmentManager.ma
       ...(target.port !== null ? { port: target.port } : {}),
     };
     const key = targetConnectionKey(resolvedTarget);
+    yield* portlessLock.withPermits(1)(
+      portlessForward?.key === key ? closePortlessForward() : Effect.void,
+    );
     yield* withTargetLock(
       key,
       Effect.gen(function* () {
@@ -1766,7 +1970,11 @@ const makeSshEnvironmentManager = Effect.fn("ssh/tunnel.SshEnvironmentManager.ma
     );
   });
 
-  return SshEnvironmentManager.of({ ensureEnvironment, disconnectEnvironment });
+  return SshEnvironmentManager.of({
+    ensureEnvironment,
+    disconnectEnvironment,
+    syncPortlessForward,
+  });
 });
 
 /**

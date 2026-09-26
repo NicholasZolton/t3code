@@ -590,6 +590,67 @@ describe("ssh tunnel scripts", () => {
     },
   );
 
+  it.effect("forwards the active SSH project's Portless port and closes it on switch", () => {
+    const commands: Array<ReadonlyArray<string>> = [];
+    let forwardKills = 0;
+    let portlessListening = false;
+    const spawner = ChildProcessSpawner.make((command) =>
+      Effect.sync(() => {
+        const args = commandArgs(command);
+        commands.push(args);
+        if (args.includes("-N")) {
+          if (args.includes("127.0.0.1:58345:127.0.0.1:58345")) portlessListening = true;
+          return makeRunningProcess(() => {
+            if (args.some((arg) => arg.includes("58345"))) {
+              forwardKills += 1;
+              portlessListening = false;
+            }
+          });
+        }
+        if (args.includes("sh") && args.includes("--")) {
+          return makeSuccessfulProcess('{"remotePort":3773}\n');
+        }
+        if (args.includes("sh")) return makeSuccessfulProcess("58345\n");
+        return makeSuccessfulProcess("\n");
+      }),
+    );
+    const layer = Layer.mergeAll(
+      NodeServices.layer,
+      Layer.succeed(ChildProcessSpawner.ChildProcessSpawner, spawner),
+      Layer.succeed(HttpClient.HttpClient, testHttpClient),
+      Layer.succeed(
+        NetService.NetService,
+        NetService.NetService.of({
+          ...testNetService,
+          hasListenerOnHost: (port) => Effect.succeed(port === 58345 && portlessListening),
+        }),
+      ),
+      SshPasswordPrompt.disabledLayer,
+      SshEnvironmentManager.layer({ resolveCliRunner: Effect.succeed(ARCHIVE) }),
+    );
+    const target = {
+      alias: "devbox",
+      hostname: "devbox.example.com",
+      username: "julius",
+      port: 2222,
+    } as const;
+
+    return Effect.gen(function* () {
+      const manager = yield* SshEnvironmentManager;
+      yield* manager.ensureEnvironment(target);
+      assert.equal(yield* manager.syncPortlessForward({ target, cwd: "/project/one" }), 58345);
+      assert.equal(yield* manager.syncPortlessForward({ target, cwd: "/project/one" }), 58345);
+      assert.equal(
+        commands.filter((args) => args.includes("127.0.0.1:58345:127.0.0.1:58345")).length,
+        1,
+      );
+      assert.equal(yield* manager.syncPortlessForward({ target, cwd: "/project/two" }), 58345);
+      assert.equal(forwardKills, 1);
+      assert.equal(yield* manager.syncPortlessForward(null), null);
+      assert.equal(forwardKills, 2);
+    }).pipe(Effect.provide(layer));
+  });
+
   it.effect.each(["local tunnel", "remote server"] as const)(
     "waits for %s shutdown before reconnecting the same target",
     (stalledStep) =>

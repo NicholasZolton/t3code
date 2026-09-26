@@ -386,6 +386,11 @@ export const DesktopSshEnvironmentTargetSchema = Schema.Struct({
 });
 export type DesktopSshEnvironmentTarget = typeof DesktopSshEnvironmentTargetSchema.Type;
 
+export const DesktopSshPortlessForwardInputSchema = Schema.NullOr(
+  Schema.Struct({ target: DesktopSshEnvironmentTargetSchema, cwd: Schema.String }),
+);
+export type DesktopSshPortlessForwardInput = typeof DesktopSshPortlessForwardInputSchema.Type;
+
 export type DesktopSshHostSource = "ssh-config" | "known-hosts";
 export const DesktopSshHostSourceSchema = Schema.Literals(["ssh-config", "known-hosts"]);
 
@@ -1175,6 +1180,7 @@ export interface DesktopBridge {
     options?: { issuePairingToken?: boolean },
   ) => Promise<DesktopSshEnvironmentBootstrap>;
   disconnectSshEnvironment: (target: DesktopSshEnvironmentTarget) => Promise<void>;
+  syncSshPortlessForward?: (input: DesktopSshPortlessForwardInput) => Promise<number | null>;
   fetchSshEnvironmentDescriptor: (httpBaseUrl: string) => Promise<ExecutionEnvironmentDescriptor>;
   bootstrapSshBearerSession: (
     httpBaseUrl: string,
