@@ -7,8 +7,11 @@ export function deletePreviousComposerWord(state: EditorState): Transaction | nu
 
   const { $from } = selection;
   if (!$from.parent.isTextblock) return null;
-  const preceding = $from.parent.textBetween(0, $from.parentOffset, "", "\uFFFC");
-  const match = preceding.match(/(?:\S+\s*|\s+)$/u);
+  const preceding = $from.parent.textBetween(0, $from.parentOffset, "", (node) =>
+    node.type.name === "hardBreak" ? "\n" : "\uFFFC",
+  );
+  const line = preceding.slice(preceding.lastIndexOf("\n") + 1);
+  const match = line.match(/(?:\S+\s*|\s+)$/u);
   if (!match) return null;
 
   return state.tr.delete($from.pos - match[0].length, $from.pos).scrollIntoView();

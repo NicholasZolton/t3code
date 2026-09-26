@@ -174,6 +174,30 @@ describe("terminal-style composer word deletion", () => {
     });
     expect(deletePreviousComposerWord(lineStart)).toBeNull();
   });
+
+  it("stops at an inline hard break without deleting the previous line", () => {
+    const doc = schema.node("doc", null, [
+      schema.node("paragraph", null, [
+        schema.text("hello"),
+        schema.node("hardBreak"),
+        schema.text("world"),
+      ]),
+    ]);
+    const map = serializeEditorDoc(doc);
+    const atEnd = EditorState.create({
+      doc,
+      selection: TextSelection.create(doc, flatToPm(map, map.docLength)),
+    });
+    const deleted = deletePreviousComposerWord(atEnd);
+    expect(deleted).not.toBeNull();
+    expect(serializeEditorDoc(atEnd.apply(deleted!).doc).value).toBe("hello\n");
+
+    const atLineStart = EditorState.create({
+      doc,
+      selection: TextSelection.create(doc, flatToPm(map, "hello\n".length)),
+    });
+    expect(deletePreviousComposerWord(atLineStart)).toBeNull();
+  });
 });
 
 describe("composer rich text document model", () => {
