@@ -1,8 +1,6 @@
 import {
   CommandId,
   MCP_THREADS_COMMAND_PREFIX,
-  MCP_TURN_ACCEPTED_ACTIVITY_KIND,
-  mcpTurnAcceptedActivityId,
   MessageId,
   ThreadId,
   type OrchestrationCommand,
@@ -10,6 +8,7 @@ import {
 } from "@t3tools/contracts";
 import { buildTemporaryWorktreeBranchName } from "@t3tools/shared/git";
 import { derivePendingRequests } from "@t3tools/shared/pendingRequests";
+import { resolveProjectSettings } from "@t3tools/shared/projectSettings";
 import * as Crypto from "effect/Crypto";
 import * as DateTime from "effect/DateTime";
 import * as Duration from "effect/Duration";
@@ -172,7 +171,14 @@ const make = Effect.gen(function* () {
         const createdAt = yield* now;
         const title =
           input.title ?? (input.prompt.split("\n")[0]!.trim().slice(0, 80) || "New thread");
-        const modelSelection = input.modelSelection ?? source.modelSelection;
+        const projectDefaults = resolveProjectSettings(
+          yield* serverSettings.getSettings.pipe(Effect.mapError(describeError)),
+          projectId,
+          project.value,
+        ).settings;
+        const modelSelection =
+          input.modelSelection ?? projectDefaults.defaultModelSelection ?? source.modelSelection;
+        const runtimeMode = projectDefaults.defaultRuntimeMode;
         const worktreeToken = useWorktree ? yield* freshId : null;
         const worktreeBranch = useWorktree
           ? buildTemporaryWorktreeBranchName(() => worktreeToken!.replaceAll("-", ""))
@@ -184,15 +190,15 @@ const make = Effect.gen(function* () {
           message: { messageId, role: "user", text: input.prompt, attachments: [] },
           modelSelection,
           titleSeed: title,
-          runtimeMode: source.runtimeMode,
-          interactionMode: source.interactionMode,
+          runtimeMode,
+          interactionMode: "default",
           bootstrap: {
             createThread: {
               projectId,
               title,
               modelSelection,
-              runtimeMode: source.runtimeMode,
-              interactionMode: source.interactionMode,
+              runtimeMode,
+              interactionMode: "default",
               branch: useWorktree ? baseBranch : null,
               worktreePath: null,
               createdAt,
@@ -250,19 +256,38 @@ const make = Effect.gen(function* () {
         const target = yield* requireTarget(input.threadId);
         const thread = yield* detail(input.threadId);
         const { approvals, userInputs } = derivePendingRequests(thread.activities);
+        const page = yield* snapshots
+          .getThreadMessagesPage({
+            threadId: input.threadId,
+            beforeMessageId: input.beforeMessageId ?? null,
+            limit: MAX_MESSAGES + 1,
+            maxTextChars: MAX_MESSAGE_CHARS,
+          })
+          .pipe(Effect.mapError(describeError));
+        if (input.textOffset !== undefined && input.messageId === undefined) {
+          return yield* fail("Pass messageId to read a message's remaining text.");
+        }
+        const expandedMessage =
+          input.messageId === undefined
+            ? null
+            : yield* snapshots
+                .getThreadMessageExcerpt({
+                  threadId: input.threadId,
+                  messageId: input.messageId,
+                  textOffset: input.textOffset ?? 0,
+                  maxTextChars: MAX_MESSAGE_CHARS,
+                })
+                .pipe(Effect.map(Option.getOrNull), Effect.mapError(describeError));
+        if (input.messageId !== undefined && expandedMessage === null) {
+          return yield* fail("Message not found in this thread.");
+        }
         return {
           ...summary(target),
           approvals,
           questions: userInputs,
-          messages: thread.messages
-            .filter((entry) => entry.role === "user" || entry.role === "assistant")
-            .slice(-MAX_MESSAGES)
-            .map((entry) => ({
-              messageId: entry.id,
-              role: entry.role === "user" ? ("user" as const) : ("assistant" as const),
-              text: entry.text.slice(0, MAX_MESSAGE_CHARS),
-              createdAt: entry.createdAt,
-            })),
+          messages: page.slice(0, MAX_MESSAGES).toReversed(),
+          nextMessageId: page.length > MAX_MESSAGES ? page[MAX_MESSAGES - 1]!.messageId : null,
+          expandedMessage,
         };
       }),
     threads_approve: (input) =>
@@ -330,54 +355,44 @@ const make = Effect.gen(function* () {
           const events = yield* engine.subscribeDomainEvents;
           const check = Effect.fn("ThreadsToolkit.checkWait")(function* () {
             const target = yield* requireTarget(input.threadId);
-            const thread = yield* detail(input.threadId);
-            const requestedIndex = thread.messages.findIndex(
-              (entry) => entry.id === input.messageId && entry.role === "user",
-            );
-            const requested = thread.messages[requestedIndex];
-            if (!requested)
-              return yield* fail("Message not found in this thread's recent history.");
-            const laterMessage = thread.messages
-              .slice(requestedIndex + 1)
-              .some((entry) => entry.role === "user");
-            if (laterMessage)
-              return yield* fail("A later turn superseded this message; read the thread.");
-            const turn = thread.latestTurn;
-            const startFailed = thread.activities.some(
-              (activity) =>
-                activity.kind === "provider.turn.start.failed" &&
-                typeof activity.payload === "object" &&
-                activity.payload !== null &&
-                "requestId" in activity.payload &&
-                activity.payload.requestId === input.messageId,
-            );
-            // The normal detail window can evict this receipt on a long turn.
-            const accepted =
-              !startFailed &&
-              !target.hasPendingApprovals &&
-              !target.hasPendingUserInput &&
-              turn !== null &&
-              turn.state !== "running"
-                ? yield* snapshots
-                    .getThreadDetailById(input.threadId, {
-                      activityKinds: [MCP_TURN_ACCEPTED_ACTIVITY_KIND],
-                    })
-                    .pipe(Effect.mapError(describeError))
-                : Option.none();
-            const acceptedTurnId = Option.isSome(accepted)
-              ? (accepted.value.activities.find(
-                  (activity) => activity.id === mcpTurnAcceptedActivityId(input.messageId),
-                )?.turnId ?? null)
-              : null;
-            const state = startFailed
+            const status = yield* snapshots
+              .getThreadTurnStatus({
+                threadId: input.threadId,
+                messageId: input.messageId,
+              })
+              .pipe(Effect.mapError(describeError));
+            if (Option.isNone(status)) return yield* fail("Message not found in this thread.");
+            let needsInput = false;
+            if (
+              status.value.turnState === "running" &&
+              status.value.turnId !== null &&
+              (target.hasPendingApprovals || target.hasPendingUserInput)
+            ) {
+              const thread = yield* detail(input.threadId);
+              const { approvals, userInputs } = derivePendingRequests(thread.activities);
+              const pendingIds = new Set<string>(
+                [...approvals, ...userInputs].map((request) => request.requestId),
+              );
+              needsInput = thread.activities.some(
+                (activity) =>
+                  (activity.kind === "approval.requested" ||
+                    activity.kind === "user-input.requested") &&
+                  (activity.turnId === status.value.turnId ||
+                    (activity.turnId === null &&
+                      target.session?.activeTurnId === status.value.turnId)) &&
+                  typeof activity.payload === "object" &&
+                  activity.payload !== null &&
+                  "requestId" in activity.payload &&
+                  typeof activity.payload.requestId === "string" &&
+                  pendingIds.has(activity.payload.requestId),
+              );
+            }
+            const state = status.value.startFailed
               ? "error"
-              : target.hasPendingApprovals || target.hasPendingUserInput
-                ? "needs-input"
-                : turn !== null &&
-                    turn.state !== "running" &&
-                    acceptedTurnId !== null &&
-                    turn.turnId === acceptedTurnId
-                  ? turn.state
+              : status.value.turnState !== "running"
+                ? status.value.turnState
+                : needsInput
+                  ? "needs-input"
                   : null;
             return state === null
               ? Option.none<{
@@ -395,7 +410,7 @@ const make = Effect.gen(function* () {
                   threadId: input.threadId,
                   messageId: input.messageId,
                   state,
-                  turnId: turn?.turnId ?? null,
+                  turnId: status.value.turnId,
                 });
           });
           const initial = yield* check();

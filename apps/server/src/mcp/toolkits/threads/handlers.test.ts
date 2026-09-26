@@ -132,6 +132,10 @@ const makeFixture = Effect.gen(function* () {
   const messages = new Map<ThreadId, Array<OrchestrationMessage>>();
   const activities = new Map<ThreadId, Array<OrchestrationThreadActivity>>();
   const acceptedActivities = new Map<ThreadId, Array<OrchestrationThreadActivity>>();
+  const acceptedTurnStates = new Map<
+    MessageId,
+    "running" | "completed" | "interrupted" | "error"
+  >();
   const commands: Array<OrchestrationCommand> = [];
   const events = yield* PubSub.unbounded<OrchestrationEvent>();
   const checked = yield* Deferred.make<void>();
@@ -154,6 +158,69 @@ const makeFixture = Effect.gen(function* () {
                     ),
                     proposedPlans: [],
                     checkpoints: [],
+                  })
+                : Option.none(),
+            );
+          },
+          getThreadTurnStatus: ({ threadId, messageId }) =>
+            Effect.gen(function* () {
+              yield* Deferred.succeed(checked, undefined);
+              const history = messages.get(threadId) ?? [];
+              const index = history.findIndex(
+                (entry) => entry.id === messageId && entry.role === "user",
+              );
+              if (index < 0) return Option.none();
+              const acceptedTurnId =
+                acceptedActivities
+                  .get(threadId)
+                  ?.find((activity) => activity.id === mcpTurnAcceptedActivityId(messageId))
+                  ?.turnId ?? null;
+              const latestTurn = threads.get(threadId)?.latestTurn;
+              return Option.some({
+                startFailed: (activities.get(threadId) ?? []).some(
+                  (activity) =>
+                    activity.kind === "provider.turn.start.failed" &&
+                    typeof activity.payload === "object" &&
+                    activity.payload !== null &&
+                    "requestId" in activity.payload &&
+                    activity.payload.requestId === messageId,
+                ),
+                turnId: acceptedTurnId,
+                turnState:
+                  acceptedTurnStates.get(messageId) ??
+                  (latestTurn?.turnId === acceptedTurnId ? latestTurn.state : null),
+              });
+            }),
+          getThreadMessagesPage: ({ threadId, beforeMessageId, limit, maxTextChars }) =>
+            Effect.sync(() => {
+              const entries = (messages.get(threadId) ?? [])
+                .filter((entry) => entry.role === "user" || entry.role === "assistant")
+                .toReversed();
+              const cursor =
+                beforeMessageId === null
+                  ? 0
+                  : entries.findIndex((entry) => entry.id === beforeMessageId) + 1;
+              return entries.slice(cursor, cursor + limit).map((entry) => ({
+                messageId: entry.id,
+                role: entry.role === "user" ? ("user" as const) : ("assistant" as const),
+                text: entry.text.slice(0, maxTextChars),
+                createdAt: entry.createdAt,
+                nextTextOffset: entry.text.length > maxTextChars ? maxTextChars : null,
+              }));
+            }),
+          getThreadMessageExcerpt: ({ threadId, messageId, textOffset, maxTextChars }) => {
+            const entry = messages.get(threadId)?.find((message) => message.id === messageId);
+            return Effect.succeed(
+              entry && (entry.role === "user" || entry.role === "assistant")
+                ? Option.some({
+                    messageId: entry.id,
+                    role: entry.role === "user" ? ("user" as const) : ("assistant" as const),
+                    text: entry.text.slice(textOffset, textOffset + maxTextChars),
+                    createdAt: entry.createdAt,
+                    nextTextOffset:
+                      entry.text.length > textOffset + maxTextChars
+                        ? textOffset + maxTextChars
+                        : null,
                   })
                 : Option.none(),
             );
@@ -284,6 +351,7 @@ const makeFixture = Effect.gen(function* () {
     messages,
     activities,
     acceptedActivities,
+    acceptedTurnStates,
     commands,
     events,
     checked,
@@ -783,6 +851,58 @@ it.effect("starts and follows up in a sibling thread through the shared dispatch
   }),
 );
 
+it.effect("uses the target project's model and permission defaults for a new thread", () =>
+  Effect.gen(function* () {
+    const fixture = yield* makeFixture;
+    yield* Ref.set(fixture.settings, {
+      ...crossProjectSettings,
+      projectSettingsOverrides: {
+        [otherProjectId]: {
+          defaultModelSelection: {
+            instanceId: ProviderInstanceId.make("codex"),
+            model: "project-model",
+          },
+          defaultRuntimeMode: "approval-required",
+        },
+      },
+    });
+    yield* Effect.gen(function* () {
+      const started = yield* call("threads_start", {
+        projectId: otherProjectId,
+        prompt: "Work with target defaults",
+        worktree: false,
+      });
+      expect(started.isError).toBeFalsy();
+      const created = fixture.commands.find((command) => command.type === "thread.create");
+      if (created?.type !== "thread.create") throw new Error("Expected a new thread");
+      expect(created).toMatchObject({
+        modelSelection: { instanceId: "codex", model: "project-model" },
+        runtimeMode: "approval-required",
+        interactionMode: "default",
+      });
+      expect(
+        fixture.commands.find((command) => command.type === "thread.turn.start"),
+      ).toMatchObject({
+        modelSelection: { instanceId: "codex", model: "project-model" },
+        runtimeMode: "approval-required",
+      });
+      const explicit = yield* call("threads_start", {
+        projectId: otherProjectId,
+        prompt: "Use the selected model",
+        modelSelection: { instanceId: ProviderInstanceId.make("codex"), model: "explicit-model" },
+        worktree: false,
+      });
+      expect(explicit.isError).toBeFalsy();
+      expect(
+        fixture.commands.findLast((command) => command.type === "thread.create"),
+      ).toMatchObject({
+        modelSelection: { model: "explicit-model" },
+        runtimeMode: "approval-required",
+      });
+    }).pipe(Effect.provide(fixture.testLayer));
+  }),
+);
+
 it.effect("starts a separate worktree with the same bootstrap sequence as the client", () =>
   Effect.gen(function* () {
     const fixture = yield* makeFixture;
@@ -946,6 +1066,86 @@ it.effect("waits for the accepted turn when a message steers an older running tu
   }),
 );
 
+it.effect("reports the accepted parent despite later user work and a child's pending input", () =>
+  Effect.gen(function* () {
+    const fixture = yield* makeFixture;
+    const messageId = MessageId.make("fanout-message");
+    const turnId = TurnId.make("fanout-parent");
+    fixture.messages.set(siblingId, [
+      {
+        id: messageId,
+        role: "user",
+        text: "Review with subagents",
+        turnId: null,
+        streaming: false,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      },
+      {
+        id: MessageId.make("later-message"),
+        role: "user",
+        text: "Later task",
+        turnId: null,
+        streaming: false,
+        createdAt: "2026-08-01T00:00:01.000Z",
+        updatedAt: "2026-08-01T00:00:01.000Z",
+      },
+    ]);
+    const childTurnId = TurnId.make("fanout-child");
+    fixture.threads.set(siblingId, {
+      ...thread(siblingId),
+      hasPendingUserInput: true,
+      latestTurn: {
+        turnId: childTurnId,
+        state: "running",
+        requestedAt: timestamp,
+        startedAt: timestamp,
+        completedAt: timestamp,
+        assistantMessageId: null,
+      },
+    });
+    fixture.activities.set(siblingId, [
+      {
+        id: EventId.make("child-question"),
+        kind: "user-input.requested",
+        tone: "info",
+        summary: "Child question",
+        payload: {
+          requestId: ApprovalRequestId.make("child-question"),
+          questions: [
+            {
+              id: "q",
+              header: "Question",
+              question: "Proceed?",
+              options: [],
+              multiSelect: false,
+              allowCustomAnswer: true,
+            },
+          ],
+        },
+        turnId: childTurnId,
+        createdAt: timestamp,
+      },
+    ]);
+    fixture.acceptedTurnStates.set(messageId, "completed");
+    fixture.acceptedActivities.set(siblingId, [
+      {
+        id: mcpTurnAcceptedActivityId(messageId),
+        kind: MCP_TURN_ACCEPTED_ACTIVITY_KIND,
+        tone: "info",
+        summary: "MCP turn accepted",
+        payload: { messageId },
+        turnId,
+        createdAt: timestamp,
+      },
+    ]);
+    yield* Effect.gen(function* () {
+      const result = yield* call("threads_wait", { threadId: siblingId, messageId });
+      expect(result.structuredContent).toMatchObject({ state: "completed", turnId });
+    }).pipe(Effect.provide(fixture.testLayer));
+  }),
+);
+
 it.effect("returns pending input without sending another turn to a blocked thread", () =>
   Effect.gen(function* () {
     const fixture = yield* makeFixture;
@@ -961,7 +1161,43 @@ it.effect("returns pending input without sending another turn to a blocked threa
         updatedAt: timestamp,
       },
     ]);
+    const turnId = TurnId.make("blocked-turn");
     fixture.threads.set(siblingId, { ...thread(siblingId), hasPendingUserInput: true });
+    fixture.acceptedTurnStates.set(messageId, "running");
+    fixture.acceptedActivities.set(siblingId, [
+      {
+        id: mcpTurnAcceptedActivityId(messageId),
+        kind: MCP_TURN_ACCEPTED_ACTIVITY_KIND,
+        tone: "info",
+        summary: "MCP turn accepted",
+        payload: { messageId },
+        turnId,
+        createdAt: timestamp,
+      },
+    ]);
+    fixture.activities.set(siblingId, [
+      {
+        id: EventId.make("blocked-question"),
+        kind: "user-input.requested",
+        tone: "info",
+        summary: "Answer this",
+        payload: {
+          requestId: ApprovalRequestId.make("blocked-question"),
+          questions: [
+            {
+              id: "q",
+              header: "Question",
+              question: "Proceed?",
+              options: [],
+              multiSelect: false,
+              allowCustomAnswer: true,
+            },
+          ],
+        },
+        turnId,
+        createdAt: timestamp,
+      },
+    ]);
     yield* Effect.gen(function* () {
       const waiting = yield* call("threads_wait", { threadId: siblingId, messageId });
       expect(waiting.structuredContent).toMatchObject({ state: "needs-input" });
@@ -1036,7 +1272,7 @@ it.effect("waits for a failure tied to the requested message, not an older sessi
   ),
 );
 
-it.effect("bounds thread history returned to an MCP client", () =>
+it.effect("pages thread messages and makes the rest of a long result retrievable", () =>
   Effect.gen(function* () {
     const fixture = yield* makeFixture;
     fixture.messages.set(
@@ -1059,6 +1295,29 @@ it.effect("bounds thread history returned to an MCP client", () =>
       expect(output.messages).toHaveLength(10);
       expect(output.messages[0]?.messageId).toBe(MessageId.make("message-3"));
       expect(output.messages.every((entry) => entry.text.length === 1_500)).toBe(true);
+      expect(read.structuredContent).toMatchObject({ nextMessageId: MessageId.make("message-3") });
+      const older = yield* call("threads_read", {
+        threadId: siblingId,
+        beforeMessageId: MessageId.make("message-3"),
+      });
+      expect(older.structuredContent).toMatchObject({ nextMessageId: null });
+      const olderMessages = yield* decodeMessages(older.structuredContent);
+      expect(olderMessages.messages.map((entry) => entry.messageId)).toEqual([
+        MessageId.make("message-0"),
+        MessageId.make("message-1"),
+        MessageId.make("message-2"),
+      ]);
+      const continued = yield* call("threads_read", {
+        threadId: siblingId,
+        messageId: MessageId.make("message-0"),
+        textOffset: 1_500,
+      });
+      expect(continued.structuredContent).toMatchObject({
+        expandedMessage: { text: "x".repeat(1_500), nextTextOffset: 3_000 },
+      });
+      expect(
+        (yield* call("threads_read", { threadId: siblingId, textOffset: 1_500 })).isError,
+      ).toBe(true);
     }).pipe(Effect.provide(fixture.testLayer));
   }),
 );

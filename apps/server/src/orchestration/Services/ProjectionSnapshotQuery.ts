@@ -26,6 +26,8 @@ import type {
   OrchestrationThreadShell,
   ProjectId,
   ThreadId,
+  TurnId,
+  OrchestrationLatestTurnState,
 } from "@t3tools/contracts";
 import * as Context from "effect/Context";
 import type * as Option from "effect/Option";
@@ -77,6 +79,20 @@ export interface ProjectionThreadDetailQuery {
    * the activity query. Omit this option to preserve the full detail response.
    */
   readonly activityKinds?: ReadonlyArray<string>;
+}
+
+export interface ProjectionThreadMessageExcerpt {
+  readonly messageId: MessageId;
+  readonly role: "user" | "assistant";
+  readonly text: string;
+  readonly createdAt: string;
+  readonly nextTextOffset: number | null;
+}
+
+export interface ProjectionThreadTurnStatus {
+  readonly startFailed: boolean;
+  readonly turnId: TurnId | null;
+  readonly turnState: OrchestrationLatestTurnState | null;
 }
 
 /**
@@ -271,6 +287,28 @@ export interface ProjectionSnapshotQueryShape {
     }>,
     ProjectionRepositoryError
   >;
+
+  /** Read one MCP-requested turn without hydrating or paging its thread history. */
+  readonly getThreadTurnStatus: (input: {
+    readonly threadId: ThreadId;
+    readonly messageId: MessageId;
+  }) => Effect.Effect<Option.Option<ProjectionThreadTurnStatus>, ProjectionRepositoryError>;
+
+  /** Page user and assistant messages newest first, with bounded text excerpts. */
+  readonly getThreadMessagesPage: (input: {
+    readonly threadId: ThreadId;
+    readonly beforeMessageId: MessageId | null;
+    readonly limit: number;
+    readonly maxTextChars: number;
+  }) => Effect.Effect<ReadonlyArray<ProjectionThreadMessageExcerpt>, ProjectionRepositoryError>;
+
+  /** Read the next bounded text segment of one user or assistant message. */
+  readonly getThreadMessageExcerpt: (input: {
+    readonly threadId: ThreadId;
+    readonly messageId: MessageId;
+    readonly textOffset: number;
+    readonly maxTextChars: number;
+  }) => Effect.Effect<Option.Option<ProjectionThreadMessageExcerpt>, ProjectionRepositoryError>;
 
   /**
    * Read a single active thread detail snapshot by id.

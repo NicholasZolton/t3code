@@ -5005,6 +5005,9 @@ describe("agent browser access", () => {
             );
           }).pipe(Effect.orDie),
         getThreadDetailById: () => Effect.die("unused"),
+        getThreadTurnStatus: () => Effect.die("unused"),
+        getThreadMessagesPage: () => Effect.die("unused"),
+        getThreadMessageExcerpt: () => Effect.die("unused"),
         getThreadDetailSnapshot: () => Effect.die("unused"),
         searchThreads: () => Effect.die("unused"),
       });

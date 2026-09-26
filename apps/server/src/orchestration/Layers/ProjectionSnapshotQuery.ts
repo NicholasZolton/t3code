@@ -6,11 +6,14 @@ import {
   CheckpointRef,
   IsoDateTime,
   MessageId,
+  MCP_TURN_ACCEPTED_ACTIVITY_KIND,
+  mcpTurnAcceptedActivityId,
   NonNegativeInt,
   OrchestrationCheckpointFile,
   OrchestrationCheckpointStatus,
   OrchestrationProposedPlanId,
   OrchestrationReadModel,
+  OrchestrationLatestTurn,
   OrchestrationThreadSearchSource,
   OrchestrationShellSnapshot,
   OrchestrationThread,
@@ -19,7 +22,6 @@ import {
   ProjectIconOverride,
   TurnId,
   type OrchestrationCheckpointSummary,
-  type OrchestrationLatestTurn,
   type OrchestrationMessage,
   type OrchestrationProjectShell,
   type OrchestrationProposedPlan,
@@ -213,6 +215,30 @@ const ThreadIdLookupInput = Schema.Struct({
 const TurnStartMessageLookupInput = Schema.Struct({
   threadId: ThreadId,
   messageId: MessageId,
+});
+const ThreadMessagesPageInput = Schema.Struct({
+  threadId: ThreadId,
+  beforeMessageId: Schema.NullOr(MessageId),
+  limit: NonNegativeInt,
+  maxTextChars: NonNegativeInt,
+});
+const ThreadMessageExcerptInput = Schema.Struct({
+  threadId: ThreadId,
+  messageId: MessageId,
+  textOffset: NonNegativeInt,
+  maxTextChars: NonNegativeInt,
+});
+const ThreadMessageExcerptRow = Schema.Struct({
+  messageId: MessageId,
+  role: Schema.Literals(["user", "assistant"]),
+  text: Schema.String,
+  createdAt: IsoDateTime,
+  nextTextOffset: Schema.NullOr(NonNegativeInt),
+});
+const ThreadTurnStatusRow = Schema.Struct({
+  startFailed: Schema.Number,
+  turnId: Schema.NullOr(TurnId),
+  turnState: Schema.NullOr(OrchestrationLatestTurn.fields.state),
 });
 const ThreadActivityKindsLookupInput = Schema.Struct({
   threadId: ThreadId,
@@ -1387,6 +1413,67 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
         ) AS "hasOtherUserMessages"
       FROM projection_thread_messages
       WHERE thread_id = ${threadId} AND message_id = ${messageId}
+      LIMIT 1
+    `,
+  });
+
+  const getThreadTurnStatusRow = SqlSchema.findOneOption({
+    Request: TurnStartMessageLookupInput,
+    Result: ThreadTurnStatusRow,
+    execute: ({ threadId, messageId }) => sql`
+      SELECT
+        EXISTS (
+          SELECT 1 FROM projection_thread_activities AS failed
+          WHERE failed.thread_id = requested.thread_id
+            AND failed.kind = 'provider.turn.start.failed'
+            AND json_extract(failed.payload_json, '$.requestId') = ${messageId}
+        ) AS "startFailed",
+        accepted.turn_id AS "turnId",
+        turns.state AS "turnState"
+      FROM projection_thread_messages AS requested
+      LEFT JOIN projection_thread_activities AS accepted
+        ON accepted.activity_id = ${mcpTurnAcceptedActivityId(MessageId.make(messageId))}
+        AND accepted.thread_id = requested.thread_id
+        AND accepted.kind = ${MCP_TURN_ACCEPTED_ACTIVITY_KIND}
+      LEFT JOIN projection_turns AS turns
+        ON turns.thread_id = requested.thread_id AND turns.turn_id = accepted.turn_id
+      WHERE requested.thread_id = ${threadId}
+        AND requested.message_id = ${messageId} AND requested.role = 'user'
+      LIMIT 1
+    `,
+  });
+
+  const getThreadMessagesPageRows = SqlSchema.findAll({
+    Request: ThreadMessagesPageInput,
+    Result: ThreadMessageExcerptRow,
+    execute: ({ threadId, beforeMessageId, limit, maxTextChars }) => sql`
+      SELECT message_id AS "messageId", role,
+        substr(text, 1, ${maxTextChars}) AS text,
+        created_at AS "createdAt",
+        CASE WHEN length(text) > ${maxTextChars} THEN ${maxTextChars} ELSE NULL END AS "nextTextOffset"
+      FROM projection_thread_messages
+      WHERE thread_id = ${threadId} AND role IN ('user', 'assistant')
+        AND (${beforeMessageId} IS NULL OR (created_at, message_id) < (
+          SELECT created_at, message_id FROM projection_thread_messages
+          WHERE thread_id = ${threadId} AND message_id = ${beforeMessageId}
+        ))
+      ORDER BY created_at DESC, message_id DESC
+      LIMIT ${limit}
+    `,
+  });
+
+  const getThreadMessageExcerptRow = SqlSchema.findOneOption({
+    Request: ThreadMessageExcerptInput,
+    Result: ThreadMessageExcerptRow,
+    execute: ({ threadId, messageId, textOffset, maxTextChars }) => sql`
+      SELECT message_id AS "messageId", role,
+        substr(text, ${textOffset + 1}, ${maxTextChars}) AS text,
+        created_at AS "createdAt",
+        CASE WHEN length(text) > ${textOffset + maxTextChars}
+          THEN ${textOffset + maxTextChars} ELSE NULL END AS "nextTextOffset"
+      FROM projection_thread_messages
+      WHERE thread_id = ${threadId} AND message_id = ${messageId}
+        AND role IN ('user', 'assistant')
       LIMIT 1
     `,
   });
@@ -3395,6 +3482,45 @@ pending_approval_requests AS (
     }));
   });
 
+  const getThreadTurnStatus: ProjectionSnapshotQueryShape["getThreadTurnStatus"] = (input) =>
+    getThreadTurnStatusRow(input).pipe(
+      Effect.map(
+        Option.map((row) => ({
+          startFailed: row.startFailed === 1,
+          turnId: row.turnId,
+          turnState: row.turnState,
+        })),
+      ),
+      Effect.mapError(
+        toPersistenceSqlOrDecodeError(
+          "ProjectionSnapshotQuery.getThreadTurnStatus:query",
+          "ProjectionSnapshotQuery.getThreadTurnStatus:decodeRow",
+        ),
+      ),
+    );
+
+  const getThreadMessagesPage: ProjectionSnapshotQueryShape["getThreadMessagesPage"] = (input) =>
+    getThreadMessagesPageRows(input).pipe(
+      Effect.mapError(
+        toPersistenceSqlOrDecodeError(
+          "ProjectionSnapshotQuery.getThreadMessagesPage:query",
+          "ProjectionSnapshotQuery.getThreadMessagesPage:decodeRows",
+        ),
+      ),
+    );
+
+  const getThreadMessageExcerpt: ProjectionSnapshotQueryShape["getThreadMessageExcerpt"] = (
+    input,
+  ) =>
+    getThreadMessageExcerptRow(input).pipe(
+      Effect.mapError(
+        toPersistenceSqlOrDecodeError(
+          "ProjectionSnapshotQuery.getThreadMessageExcerpt:query",
+          "ProjectionSnapshotQuery.getThreadMessageExcerpt:decodeRow",
+        ),
+      ),
+    );
+
   // Contiguous turn range bounding a windowed detail read; undefined loads the
   // full thread. Resolved from a window request inside the snapshot
   // transaction (see getThreadDetailSnapshot).
@@ -3860,6 +3986,9 @@ pending_approval_requests AS (
     getThreadShellById,
     getThreadRuntimeContext,
     getTurnStartMessage,
+    getThreadTurnStatus,
+    getThreadMessagesPage,
+    getThreadMessageExcerpt,
     getThreadDetailById,
     getThreadDetailSnapshot,
   } satisfies ProjectionSnapshotQueryShape;

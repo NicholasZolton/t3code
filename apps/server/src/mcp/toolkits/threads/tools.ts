@@ -77,6 +77,7 @@ const message = Schema.Struct({
   role: Schema.Literals(["user", "assistant"]),
   text: Schema.String,
   createdAt: Schema.String,
+  nextTextOffset: Schema.NullOr(NonNegativeInt),
 });
 
 // Native question IDs and option labels can be answer keys, including whitespace.
@@ -178,11 +179,18 @@ const interrupt = Tool.make("threads_interrupt", {
 
 const read = Tool.make("threads_read", {
   description:
-    "Read an accessible thread's status, recent messages, pending approvals and questions. Use the returned request IDs with threads_approve or threads_answer. Messages are bounded; use the T3 Code client to see the complete history.",
-  parameters: target,
+    "Read an accessible thread's status, messages, pending approvals and questions. Use nextMessageId as beforeMessageId to page older messages. Message text is bounded; pass its messageId and nextTextOffset to read the next segment in expandedMessage. Use request IDs with threads_approve or threads_answer.",
+  parameters: Schema.Struct({
+    ...target.fields,
+    beforeMessageId: Schema.optional(MessageId),
+    messageId: Schema.optional(MessageId),
+    textOffset: Schema.optional(NonNegativeInt),
+  }),
   success: Schema.Struct({
     ...threadSummary.fields,
     messages: Schema.Array(message),
+    nextMessageId: Schema.NullOr(MessageId),
+    expandedMessage: Schema.NullOr(message),
     approvals: Schema.Array(pendingApproval),
     questions: Schema.Array(pendingQuestion),
   }),
