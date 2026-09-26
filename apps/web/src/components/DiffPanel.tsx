@@ -44,7 +44,7 @@ import {
   resolveFileDiffPath,
 } from "../lib/diffRendering";
 import { PREFERRED_HIGHLIGHTER } from "../lib/syntaxHighlighting";
-import { areAllDiffFilesCollapsed, toggleAllDiffFiles } from "../lib/diffCollapse";
+import { areAllDiffFilesCollapsed, isTestDiffFile } from "../lib/diffCollapse";
 import { useTurnDiffSummaries } from "../hooks/useTurnDiffSummaries";
 import { useWorkspaceMutationRefresh } from "../hooks/useWorkspaceMutationRefresh";
 import { useProject, useThread } from "../state/entities";
@@ -114,10 +114,8 @@ function getCachedFileEntry(fileDiff: FileDiffMetadata) {
 
 interface CollapsedDiffFilesState {
   readonly scopeKey: string | null;
-  readonly fileKeys: ReadonlySet<string>;
+  readonly overrides: ReadonlyMap<string, boolean>;
 }
-
-const EMPTY_COLLAPSED_DIFF_FILE_KEYS: ReadonlySet<string> = new Set();
 
 interface DiffPanelProps {
   mode?: DiffPanelMode;
@@ -144,7 +142,7 @@ export default function DiffPanel({
   const [baseRefQuery, setBaseRefQuery] = useState("");
   const [collapsedDiffFiles, setCollapsedDiffFiles] = useState<CollapsedDiffFilesState>(() => ({
     scopeKey: null,
-    fileKeys: EMPTY_COLLAPSED_DIFF_FILE_KEYS,
+    overrides: new Map(),
   }));
   const [codeViewRevision, setCodeViewRevision] = useState(0);
   const [codeView, setCodeView] = useState<AnnotatableCodeViewHandle | null>(null);
@@ -460,15 +458,26 @@ export default function DiffPanel({
   );
   const defaultCollapsedDiffFileKeys = useMemo(
     () =>
-      settings.diffFilesCollapsed
-        ? new Set(renderableFileEntries.map((file) => file.fileKey))
-        : EMPTY_COLLAPSED_DIFF_FILE_KEYS,
+      new Set(
+        renderableFileEntries
+          .filter(
+            ({ fileDiff }) =>
+              settings.diffFilesCollapsed || isTestDiffFile(resolveFileDiffPath(fileDiff)),
+          )
+          .map(({ fileKey }) => fileKey),
+      ),
     [renderableFileEntries, settings.diffFilesCollapsed],
   );
-  const collapsedDiffFileKeys =
-    collapsedDiffFiles.scopeKey === collapseScopeKey
-      ? collapsedDiffFiles.fileKeys
-      : defaultCollapsedDiffFileKeys;
+  const collapsedDiffFileKeys = useMemo(() => {
+    const keys = new Set(defaultCollapsedDiffFileKeys);
+    if (collapsedDiffFiles.scopeKey === collapseScopeKey) {
+      for (const [key, collapsed] of collapsedDiffFiles.overrides) {
+        if (collapsed) keys.add(key);
+        else keys.delete(key);
+      }
+    }
+    return keys;
+  }, [collapseScopeKey, collapsedDiffFiles, defaultCollapsedDiffFileKeys]);
   const renderLoadingBoundary = useCallback(
     () =>
       settledFileCount < renderableFiles.length ? (
@@ -541,11 +550,9 @@ export default function DiffPanel({
       const file = renderableFileEntries[index];
       if (!file) return;
       setCollapsedDiffFiles((current) => {
-        const next = new Set(
-          current.scopeKey === collapseScopeKey ? current.fileKeys : defaultCollapsedDiffFileKeys,
-        );
-        next.delete(file.fileKey);
-        return { scopeKey: collapseScopeKey, fileKeys: next };
+        const next = new Map(current.scopeKey === collapseScopeKey ? current.overrides : []);
+        next.set(file.fileKey, false);
+        return { scopeKey: collapseScopeKey, overrides: next };
       });
       if (lazySource && index >= settledFileCount) {
         requestFile(index);
@@ -555,7 +562,6 @@ export default function DiffPanel({
     [
       renderableFileEntries,
       collapseScopeKey,
-      defaultCollapsedDiffFileKeys,
       requestTreeReveal,
       lazySource,
       settledFileCount,
@@ -607,32 +613,42 @@ export default function DiffPanel({
   const toggleDiffFileCollapsed = useCallback(
     (fileKey: string) => {
       setCollapsedDiffFiles((current) => {
-        const next = new Set(
-          current.scopeKey === collapseScopeKey ? current.fileKeys : defaultCollapsedDiffFileKeys,
-        );
-        if (next.has(fileKey)) {
-          next.delete(fileKey);
-        } else {
-          next.add(fileKey);
-        }
-        return { scopeKey: collapseScopeKey, fileKeys: next };
+        const next = new Map(current.scopeKey === collapseScopeKey ? current.overrides : []);
+        next.set(fileKey, !collapsedDiffFileKeys.has(fileKey));
+        return { scopeKey: collapseScopeKey, overrides: next };
       });
     },
-    [collapseScopeKey, defaultCollapsedDiffFileKeys],
+    [collapseScopeKey, collapsedDiffFileKeys],
   );
 
   const toggleDiffFileCollapse = useCallback(() => {
     setCodeViewRevision((current) => current + 1);
-    setCollapsedDiffFiles((current) => {
-      const currentKeys =
-        current.scopeKey === collapseScopeKey ? current.fileKeys : defaultCollapsedDiffFileKeys;
-
-      return {
-        scopeKey: collapseScopeKey,
-        fileKeys: toggleAllDiffFiles(diffFileKeys, currentKeys),
-      };
+    setCollapsedDiffFiles({
+      scopeKey: collapseScopeKey,
+      overrides: new Map(diffFileKeys.map((key) => [key, !allDiffFilesCollapsed])),
     });
-  }, [collapseScopeKey, defaultCollapsedDiffFileKeys, diffFileKeys]);
+  }, [allDiffFilesCollapsed, collapseScopeKey, diffFileKeys]);
+
+  const collapseVisibleDiffFile = useCallback(() => {
+    const viewer = codeView?.getInstance();
+    const container = viewer?.getContainerElement();
+    if (!viewer || !container) return;
+    const bounds = container.getBoundingClientRect();
+    const visible = viewer.getRenderedItems().find(({ element }) => {
+      const rect = element.getBoundingClientRect();
+      return rect.bottom > bounds.top && rect.top < bounds.bottom;
+    });
+    if (!visible) return;
+    const index = codeViewFiles.findIndex((file) => file.fileKey === visible.id);
+    const file =
+      index < 0 ? undefined : codeViewFiles.slice(index).find((candidate) => !candidate.collapsed);
+    if (!file) return;
+    toggleDiffFileCollapsed(file.fileKey);
+    const next = codeViewFiles
+      .slice(codeViewFiles.indexOf(file) + 1)
+      .find((candidate) => !candidate.collapsed);
+    if (next) requestTreeReveal(next.fileKey);
+  }, [codeView, codeViewFiles, requestTreeReveal, toggleDiffFileCollapsed]);
 
   const selectTurn = (turnId: TurnId) => {
     if (!routeThreadRef) return;
@@ -1026,6 +1042,22 @@ export default function DiffPanel({
               <div className="flex min-h-0 flex-1 overflow-hidden">
                 <div
                   className="min-h-0 min-w-0 flex-1"
+                  tabIndex={0}
+                  onKeyDownCapture={(event) => {
+                    if (
+                      event.key.toLowerCase() !== "v" ||
+                      event.metaKey ||
+                      event.ctrlKey ||
+                      event.altKey ||
+                      event.shiftKey ||
+                      (event.target instanceof HTMLElement &&
+                        (event.target.isContentEditable ||
+                          event.target.closest("input, textarea, select, [contenteditable]")))
+                    )
+                      return;
+                    event.preventDefault();
+                    collapseVisibleDiffFile();
+                  }}
                   onClickCapture={(event) => {
                     const composedPath = event.nativeEvent.composedPath?.() ?? [];
                     for (const node of composedPath) {
@@ -1051,7 +1083,14 @@ export default function DiffPanel({
                         node instanceof HTMLElement && node.hasAttribute("data-diffs-header"),
                     );
                     const headerFilePath = header?.querySelector("[data-title]")?.textContent;
-                    if (!headerFilePath) return;
+                    if (!headerFilePath) {
+                      if (
+                        !(event.target instanceof HTMLElement) ||
+                        !event.target.closest("input, textarea, select, [contenteditable]")
+                      )
+                        event.currentTarget.focus({ preventScroll: true });
+                      return;
+                    }
                     const file = codeViewFiles.find(
                       (candidate) => candidate.filePath === headerFilePath,
                     );
