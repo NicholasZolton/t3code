@@ -1,4 +1,5 @@
 import { preloadPatchFile } from "@pierre/diffs/ssr";
+import { useAtomValue } from "@effect/atom-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ComposerPromptEditor, type ComposerPromptEditorHandle } from "../ComposerPromptEditor";
 import { EMPTY_COMPOSER_CONTEXT_RECORDS } from "../composerContextPresentation";
@@ -8,6 +9,7 @@ import { DISCONNECTED_COMPOSER_PLACEHOLDER } from "../../composerPlaceholder";
 import { resolveDiffThemeName, type DiffThemeName } from "../../lib/diffRendering";
 import { PREFERRED_HIGHLIGHTER } from "../../lib/syntaxHighlighting";
 import { GhosttyTerminalSurface } from "~/terminal/ghostty/surface";
+import { primaryServerKeybindingsAtom } from "../../state/server";
 
 // The font previews are the real surfaces, not lookalikes: the composer's
 // Tiptap editor, the diff panel's file diff, and the Ghostty canvas
@@ -29,6 +31,7 @@ function noop() {}
 
 /** A live composer editor: type in it to feel the family and size. */
 export function PromptFontPreview() {
+  const keybindings = useAtomValue(primaryServerKeybindingsAtom);
   const editorRef = useRef<ComposerPromptEditorHandle>(null);
   const [prompt, setPrompt] = useState(PROMPT_PREVIEW_TEXT);
   const [cursor, setCursor] = useState(PROMPT_PREVIEW_TEXT.length);
@@ -40,6 +43,7 @@ export function PromptFontPreview() {
     <div className="mt-1 mb-2 rounded-lg border border-border bg-background px-3 py-2">
       <ComposerPromptEditor
         editorRef={editorRef}
+        keybindings={keybindings}
         value={prompt}
         cursor={cursor}
         contextRecords={EMPTY_COMPOSER_CONTEXT_RECORDS}

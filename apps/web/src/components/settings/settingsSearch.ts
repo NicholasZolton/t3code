@@ -318,6 +318,12 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["output token paragraph buffered wait turn legacy"],
   },
   {
+    id: "agent-thread-access",
+    title: "Agent thread access",
+    to: "/settings/general",
+    searchTerms: ["agent mcp thread project environment cross project delegation access"],
+  },
+  {
     id: "hide-whitespace-changes",
     title: "Hide whitespace changes",
     to: "/settings/general",

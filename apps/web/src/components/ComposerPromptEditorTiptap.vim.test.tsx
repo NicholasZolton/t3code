@@ -2,6 +2,7 @@
 import { act, createRef } from "react";
 import { createRoot } from "react-dom/client";
 import { describe, expect, it, vi } from "vite-plus/test";
+import { DEFAULT_RESOLVED_KEYBINDINGS } from "@t3tools/shared/keybindings";
 
 import {
   ComposerPromptEditorTiptap,
@@ -27,6 +28,7 @@ describe("Vim composer integration", () => {
         <ComposerPromptEditorTiptap
           value={draft}
           cursor={cursor}
+          keybindings={DEFAULT_RESOLVED_KEYBINDINGS}
           richTextEnabled
           vimEnabled={vimEnabled}
           vimSystemClipboard={false}

@@ -7,6 +7,7 @@ import type { CSSProperties, ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   type BackgroundActivityProfile,
+  type AgentThreadAccess,
   type DesktopUpdateChannel,
   ProviderDriverKind,
   type ProviderInstanceId,
@@ -182,6 +183,11 @@ const RESPONSE_STREAMING_MODE_LABELS: Record<ResponseStreamingMode, string> = {
   turn: "Wait for the full response",
   paragraph: "Show finished paragraphs",
   token: "Token by token (legacy)",
+};
+
+const AGENT_THREAD_ACCESS_LABELS: Record<AgentThreadAccess, string> = {
+  project: "Current project",
+  environment: "All projects in this environment",
 };
 
 const RESPONSE_STREAMING_MODE_DESCRIPTIONS: Record<ResponseStreamingMode, string> = {
@@ -2137,6 +2143,7 @@ export function GeneralSettingsPanel() {
   const [backgroundActivityDialogOpen, setBackgroundActivityDialogOpen] = useState(false);
   const [tokenStreamingWarningOpen, setTokenStreamingWarningOpen] = useState(false);
   const mixedResponseStreamingMode = useScopedSettingsMixed(["responseStreamingMode"]);
+  const mixedAgentThreadAccess = useScopedSettingsMixed(["agentThreadAccess"]);
   const lastEnabledProjectGroupingMode = useRef<SidebarProjectGroupingMode>(
     readLastEnabledProjectGroupingMode(),
   );
@@ -2451,6 +2458,49 @@ export function GeneralSettingsPanel() {
                 }}
               />
             </>
+          }
+        />
+        <SettingsRow
+          serverScoped
+          settingKeys={["agentThreadAccess"]}
+          {...searchableSetting("agent-thread-access")}
+          description="Choose which projects agents can manage with T3 Code thread tools. Applies to active agent sessions."
+          mixed={mixedAgentThreadAccess}
+          resetAction={
+            scope.kind !== "project" &&
+            scope.kind !== "checkout" &&
+            settings.agentThreadAccess !== DEFAULT_UNIFIED_SETTINGS.agentThreadAccess ? (
+              <SettingResetButton
+                label="agent thread access"
+                onClick={() =>
+                  updateSettings({ agentThreadAccess: DEFAULT_UNIFIED_SETTINGS.agentThreadAccess })
+                }
+              />
+            ) : null
+          }
+          control={
+            <Select
+              value={mixedAgentThreadAccess ? null : settings.agentThreadAccess}
+              onValueChange={(value) => {
+                if (value === "project" || value === "environment") {
+                  updateSettings({ agentThreadAccess: value });
+                }
+              }}
+            >
+              <SelectTrigger size="sm" className="w-full sm:w-64" aria-label="Agent thread access">
+                <SelectValue>
+                  {(value: AgentThreadAccess | null) =>
+                    value === null ? "Mixed" : AGENT_THREAD_ACCESS_LABELS[value]
+                  }
+                </SelectValue>
+              </SelectTrigger>
+              <SelectPopup align="end" alignItemWithTrigger={false}>
+                <SelectItem value="project">{AGENT_THREAD_ACCESS_LABELS.project}</SelectItem>
+                <SelectItem value="environment">
+                  {AGENT_THREAD_ACCESS_LABELS.environment}
+                </SelectItem>
+              </SelectPopup>
+            </Select>
           }
         />
         <SettingsRow

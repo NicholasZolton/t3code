@@ -6846,6 +6846,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                 <ComposerContextActionsContext value={composerContextActions}>
                   <ComposerPromptEditor
                     editorRef={composerEditorRef}
+                    keybindings={keybindings}
                     richTextEnabled={settings.composerRichTextEnabled}
                     vimEnabled={settings.composerVimEnabled}
                     vimSystemClipboard={settings.composerVimSystemClipboard}

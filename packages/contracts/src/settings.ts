@@ -1010,6 +1010,9 @@ export const WorktreeDirectory = TrimmedString.check(
   Schema.isPattern(/^(?:$|~(?:[\\/]|$)|[\\/]|[a-zA-Z]:[\\/])/),
 );
 
+export const AgentThreadAccess = Schema.Literals(["project", "environment"]);
+export type AgentThreadAccess = typeof AgentThreadAccess.Type;
+
 export const PROJECT_SCOPED_SERVER_SETTING_KEYS = [
   "worktreeCleanup",
   "defaultModelSelection",
@@ -1125,6 +1128,9 @@ export const ServerSettings = Schema.Struct({
    * between a desktop window and a phone attached to the same server.
    */
   enableAgentBrowserAccess: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+  agentThreadAccess: AgentThreadAccess.pipe(
+    Schema.withDecodingDefault(Effect.succeed("project" as const)),
+  ),
   projectAgentBrowserAccessOverrides: Schema.Record(ProjectId, Schema.Boolean).pipe(
     Schema.withDecodingDefault(Effect.succeed({})),
   ),
@@ -1494,6 +1500,7 @@ export const ServerSettingsPatch = Schema.Struct({
   enableProviderUpdateChecks: Schema.optionalKey(Schema.Boolean),
   continueThreadsAfterServerUpdate: Schema.optionalKey(Schema.Boolean),
   enableAgentBrowserAccess: Schema.optionalKey(Schema.Boolean),
+  agentThreadAccess: Schema.optionalKey(AgentThreadAccess),
   projectAgentBrowserAccessOverrides: Schema.optionalKey(
     Schema.Record(ProjectId, Schema.NullOr(Schema.Boolean)),
   ),

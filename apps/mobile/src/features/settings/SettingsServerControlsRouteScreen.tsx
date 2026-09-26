@@ -4,6 +4,7 @@ import { ScreenScrollView as ScrollView } from "../../components/ScreenScrollVie
 import { SymbolView } from "../../components/AppSymbol";
 import { AppText as Text, AppTextInput } from "../../components/AppText";
 import {
+  type AgentThreadAccess,
   type ResponseStreamingMode,
   type ServerSettings,
   type ServerSettingsPatch,
@@ -119,6 +120,23 @@ const STREAMING_CHOICES: ReadonlyArray<{
     mode: "token",
     label: "Token by token (legacy)",
     description: "Repaint for every token; this can be slower.",
+  },
+];
+
+const THREAD_ACCESS_CHOICES: ReadonlyArray<{
+  readonly mode: AgentThreadAccess;
+  readonly label: string;
+  readonly description: string;
+}> = [
+  {
+    mode: "project",
+    label: "Current project",
+    description: "Agents can manage threads in their own project.",
+  },
+  {
+    mode: "environment",
+    label: "All projects in this environment",
+    description: "Agents can manage threads across this server's projects.",
   },
 ];
 
@@ -442,6 +460,31 @@ function ServerSettingsDetail(props: { readonly page: SettingsPage }) {
                       onValueChange={(value) => write({ enableAgentBrowserAccess: value })}
                     />
                   </SettingsSection>
+                  {!projectSelected ? (
+                    <SettingsSection
+                      title="Agent thread access"
+                      trailing={
+                        pendingWrites === 0 && isMixed("agentThreadAccess") ? (
+                          <MixedValuesLabel projectSelected={false} />
+                        ) : null
+                      }
+                    >
+                      {THREAD_ACCESS_CHOICES.map((choice, index) => (
+                        <ChoiceRow
+                          key={choice.mode}
+                          label={choice.label}
+                          description={choice.description}
+                          selected={
+                            !isMixed("agentThreadAccess") &&
+                            uniform("agentThreadAccess") === choice.mode
+                          }
+                          separated={index > 0}
+                          disabled={disabledFor("agentThreadAccess")}
+                          onPress={() => write({ agentThreadAccess: choice.mode })}
+                        />
+                      ))}
+                    </SettingsSection>
+                  ) : null}
                 </>
               ) : null}
 

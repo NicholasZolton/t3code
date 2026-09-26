@@ -10,6 +10,10 @@ In **Settings → General → Send shortcut**, choose whether Enter sends, requi
 inserts a new line. This applies to the web and desktop composer at desktop widths.
 With [Vim editing](./composer.md#vim-editing) enabled, Enter and Shift+Enter
 are inactive in Normal mode; switch to Insert mode to use their configured behavior.
+With the composer focused, `Ctrl+W` deletes the previous whitespace-delimited
+word; inline context chips delete as a unit. Change the **Composer: Delete Previous
+Word** shortcut in **Settings → Keybindings**. Windows and Linux browsers reserve
+`Ctrl+W` to close the tab, so choose a different shortcut there or use the desktop app.
 
 **Follow-up behavior** chooses Queue or Steer while the agent runs. Use
 `mod+Enter` to do the opposite for one message. When sending requires `mod+Enter`,
@@ -86,10 +90,11 @@ Join modifiers and a key with `+`, such as `mod+shift+d` or `ctrl+l`.
 ## When conditions
 
 Available context keys are `terminalFocus`, `terminalOpen`, `previewFocus`,
-`previewOpen`, `modelPickerOpen`, `editableFocus`, `isWeb`, and `isDesktop`.
-`editableFocus` is true while a text field, the composer, or another editor has
+`previewOpen`, `modelPickerOpen`, `editableFocus`, `composerFocus`, `isWeb`, and
+`isDesktop`. `editableFocus` is true while a text field, the composer, or another editor has
 the keyboard. `isWeb` is true in a browser tab. `isDesktop` is true in the
-desktop app. Unknown keys evaluate to `false`.
+desktop app. `composerFocus` is true while typing in the chat composer.
+Unknown keys evaluate to `false`.
 
 `mod+1` through `mod+9` jump to the first nine threads, and to models while the
 model picker is open. Those defaults use `isDesktop` so they do not steal the
@@ -106,7 +111,8 @@ Combine keys with `!` for not, `&&` for and, `||` for or, and parentheses:
 
 The last rule whose key and condition both match wins, even if it belongs to a
 different command. Put a more specific rule after a general one when they share
-a shortcut.
+a shortcut. While the composer is focused, its previous-word shortcut takes
+precedence over a close shortcut using the same keys.
 
 ## Commands with special behavior
 

@@ -5,7 +5,11 @@ import {
   requestKindFromRequestType,
   type PendingApproval,
 } from "@t3tools/client-runtime/pending-requests";
-import { UserInputAttachmentAnswerPayload, isToolLifecycleItemType } from "@t3tools/contracts";
+import {
+  MCP_TURN_ACCEPTED_ACTIVITY_KIND,
+  UserInputAttachmentAnswerPayload,
+  isToolLifecycleItemType,
+} from "@t3tools/contracts";
 import type {
   OrchestrationLatestTurn,
   OrchestrationThread,
@@ -432,7 +436,8 @@ function deriveWorkLogEntries(
       (activity.tone !== "error" || activity.kind === "worktree-setup")
     )
       continue;
-    if (activity.kind === "tool.started") continue;
+    if (activity.kind === "tool.started" || activity.kind === MCP_TURN_ACCEPTED_ACTIVITY_KIND)
+      continue;
     // Like web: an agent's task.started row anchors its batch. It has a fixed
     // id and timestamp, unlike progress ticks, whose stable per-task id is
     // rewritten with a new createdAt on every update (and would otherwise
