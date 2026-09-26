@@ -5,7 +5,9 @@ import {
   type ProviderInstanceId,
 } from "@t3tools/contracts";
 import {
+  collectLimitPools,
   collectOpenCodeAccountTargets,
+  openCodeLimitAccounts,
   type LimitPresentations,
 } from "@t3tools/shared/usageLimits";
 import { useEffect, useState } from "react";
@@ -15,7 +17,8 @@ import { useAtomCommand } from "../../state/use-atom-command";
 import { ProviderInstanceIcon } from "../chat/ProviderInstanceIcon";
 import { RedactedSensitiveText } from "../settings/RedactedSensitiveText";
 import { Button } from "../ui/button";
-import { formatResetsIn, remainingPercent } from "@t3tools/shared/usageLimits";
+import { PoolSection } from "./UsageLimitsPooled";
+import { PROVIDER_PRESENTATION } from "./usageProviders";
 
 function InstanceAccounts({
   environmentId,
@@ -64,69 +67,74 @@ function InstanceAccounts({
     }
   };
 
+  const limitAccounts = openCodeLimitAccounts(accounts ?? [], environmentId, instanceId, label);
+  const pool = collectLimitPools(limitAccounts, now)[0];
+  const unavailable = (accounts ?? []).filter((account) => account.limits.windows.length === 0);
   return (
     <section className="flex flex-col gap-3">
-      <h2 className="flex items-center gap-2 text-sm font-medium text-foreground">
-        <ProviderInstanceIcon
-          driverKind={ProviderDriverKind.make("opencode")}
-          displayName="OpenCode"
-          indicatorBackground="var(--background)"
-          className="size-5"
-          iconClassName="size-4 text-foreground/80"
+      {pool?.windows.length ? (
+        <PoolSection
+          pool={pool}
+          now={now}
+          label={`OpenCode · Codex · ${label}`}
+          color={PROVIDER_PRESENTATION.codex.color}
+          accountAction={(account) => {
+            const credential = accounts?.find(
+              (candidate) => account.key === `${environmentId}:${instanceId}:${candidate.id}`,
+            );
+            return credential
+              ? {
+                  active: credential.active,
+                  busy: busyId !== null,
+                  onSwitch: () => void switchAccount(credential.id),
+                }
+              : null;
+          }}
         />
-        OpenCode · Codex {label}
-      </h2>
-      {accounts?.map((account) => (
+      ) : (
+        <h2 className="flex items-center gap-2 text-sm font-medium text-foreground">
+          <ProviderInstanceIcon
+            driverKind={ProviderDriverKind.make("opencode")}
+            displayName="OpenCode"
+            indicatorBackground="var(--background)"
+            className="size-5"
+            iconClassName="size-4 text-foreground/80"
+          />
+          OpenCode · Codex · {label}
+        </h2>
+      )}
+      {unavailable.map((account) => (
         <div
           key={account.id}
-          className="flex flex-col gap-2 rounded-lg border border-border/60 p-4"
+          className="flex items-center justify-between gap-3 rounded-lg border border-border/60 p-4 text-xs"
         >
-          <div className="flex items-center justify-between gap-3">
-            <span className="flex min-w-0 items-center gap-1 text-sm font-medium text-foreground">
-              {account.label.includes("@") ? (
-                <RedactedSensitiveText
-                  value={account.label}
-                  ariaLabel="Toggle account label visibility"
-                  revealTooltip="Click to reveal label"
-                  hideTooltip="Click to hide label"
-                />
-              ) : (
-                <span className="truncate">{account.label}</span>
-              )}
-              {account.plan ? (
-                <span className="text-muted-foreground">· {account.plan}</span>
-              ) : null}
-            </span>
-            {account.active ? (
-              <span className="text-xs text-muted-foreground">Active</span>
+          <div className="flex min-w-0 flex-col gap-1">
+            {account.label.includes("@") ? (
+              <RedactedSensitiveText
+                value={account.label}
+                ariaLabel="Toggle account label visibility"
+                revealTooltip="Click to reveal label"
+                hideTooltip="Click to hide label"
+              />
             ) : (
-              <Button
-                size="xs"
-                variant="outline"
-                disabled={busyId !== null}
-                onClick={() => void switchAccount(account.id)}
-              >
-                {busyId === account.id ? "Switching…" : "Switch to account"}
-              </Button>
+              <span className="truncate text-foreground">{account.label}</span>
             )}
+            <span className="text-muted-foreground">
+              {account.limits.unavailable?.message ?? "No usage windows reported."}
+            </span>
           </div>
-          {account.limits.unavailable ? (
-            <p className="text-xs text-muted-foreground">{account.limits.unavailable.message}</p>
-          ) : null}
-          {!account.limits.unavailable && account.limits.windows.length === 0 ? (
-            <p className="text-xs text-muted-foreground">No usage windows reported.</p>
-          ) : null}
-          {account.limits.windows.map((window) => (
-            <div
-              key={window.id}
-              className="flex justify-between gap-3 text-xs text-muted-foreground"
+          {account.active ? (
+            <span className="text-muted-foreground">Active</span>
+          ) : (
+            <Button
+              size="xs"
+              variant="outline"
+              disabled={busyId !== null}
+              onClick={() => void switchAccount(account.id)}
             >
-              <span>{window.label}</span>
-              <span className="tabular-nums">
-                {remainingPercent(window)}% left · {formatResetsIn(window, now) ?? "reset unknown"}
-              </span>
-            </div>
-          ))}
+              {busyId === account.id ? "Switching…" : "Switch to account"}
+            </Button>
+          )}
         </div>
       ))}
       {accounts?.length === 0 ? (
@@ -144,7 +152,6 @@ function InstanceAccounts({
   );
 }
 
-/** The account store is local to an OpenCode instance's environment. */
 export function OpenCodeAccounts({
   presentations,
   now,

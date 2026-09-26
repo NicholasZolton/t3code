@@ -1,17 +1,21 @@
 import type { EnvironmentId, OpenCodeCodexAccount, ProviderInstanceId } from "@t3tools/contracts";
 import {
+  collectLimitPools,
   collectOpenCodeAccountTargets,
   formatResetsIn,
+  openCodeLimitAccounts,
   remainingPercent,
   type LimitPresentations,
 } from "@t3tools/shared/usageLimits";
 import { useEffect, useState } from "react";
-import { Pressable, View } from "react-native";
+import { Modal, Pressable, ScrollView, View } from "react-native";
 
 import { AppText as Text } from "../../components/AppText";
 import { ProviderIcon } from "../../components/ProviderIcon";
 import { serverEnvironment } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
+import { PoolWindowCard } from "./UsagePoolWindowCard";
+import { useProviderColors } from "./usageProviders";
 
 function AccountLabel({ label }: { readonly label: string }) {
   const [revealed, setRevealed] = useState(false);
@@ -50,7 +54,9 @@ function InstanceAccounts({
   const activate = useAtomCommand(serverEnvironment.activateOpenCodeAccount, {
     reportFailure: false,
   });
+  const colors = useProviderColors();
   const [accounts, setAccounts] = useState<readonly OpenCodeCodexAccount[] | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   useEffect(() => {
@@ -81,52 +87,52 @@ function InstanceAccounts({
       setBusyId(null);
     }
   };
+
+  const limitAccounts = openCodeLimitAccounts(accounts ?? [], environmentId, instanceId, label);
+  const pool = collectLimitPools(limitAccounts, now)[0];
+  const selected = accounts?.find((account) => account.id === selectedId);
+  const active = accounts?.find((account) => account.active);
+  const activeAccountKey = active ? `${environmentId}:${instanceId}:${active.id}` : undefined;
+  const unavailable = (accounts ?? []).filter((account) => account.limits.windows.length === 0);
   return (
     <View className="gap-3">
       <View className="flex-row items-center gap-2 px-1">
         <ProviderIcon provider="opencode" size={18} />
-        <Text className="text-base font-t3-medium text-foreground">OpenCode · Codex {label}</Text>
+        <Text className="text-base font-t3-medium text-foreground">OpenCode · Codex · {label}</Text>
       </View>
-      {accounts?.map((account) => (
-        <View key={account.id} className="gap-3 rounded-[24px] border-continuous bg-card p-4">
-          <View className="flex-row items-center justify-between gap-3">
-            <AccountLabel label={account.label} />
-            {account.plan ? (
-              <Text className="text-xs text-foreground-muted">{account.plan}</Text>
-            ) : null}
-            {account.active ? (
-              <Text className="text-xs text-foreground-muted">Active</Text>
-            ) : (
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Switch to this OpenCode account"
-                disabled={busyId !== null}
-                onPress={() => void switchAccount(account.id)}
-                className="min-h-[44px] justify-center active:opacity-60"
-              >
-                <Text className="text-sm text-foreground">
-                  {busyId === account.id ? "Switching…" : "Switch"}
-                </Text>
-              </Pressable>
-            )}
-          </View>
-          {account.limits.unavailable ? (
-            <Text className="text-xs text-foreground-muted">
-              {account.limits.unavailable.message}
-            </Text>
-          ) : null}
-          {!account.limits.unavailable && account.limits.windows.length === 0 ? (
-            <Text className="text-xs text-foreground-muted">No usage windows reported.</Text>
-          ) : null}
-          {account.limits.windows.map((window) => (
-            <View key={window.id} className="flex-row justify-between gap-3">
-              <Text className="text-xs text-foreground-muted">{window.label}</Text>
-              <Text className="text-xs tabular-nums text-foreground-muted">
-                {remainingPercent(window)}% left · {formatResetsIn(window, now) ?? "reset unknown"}
-              </Text>
-            </View>
-          ))}
-        </View>
+      {pool?.windows.map((window) => (
+        <PoolWindowCard
+          key={`${window.kind}:${window.id}`}
+          pool={window}
+          color={colors.codex}
+          now={now}
+          environmentIds={[environmentId]}
+          activeAccountKey={activeAccountKey}
+          onOpenAccount={(account) =>
+            setSelectedId(
+              accounts?.find(
+                (candidate) => account.key === `${environmentId}:${instanceId}:${candidate.id}`,
+              )?.id ?? null,
+            )
+          }
+        />
+      ))}
+      {unavailable.map((account) => (
+        <Pressable
+          key={account.id}
+          accessibilityRole="button"
+          accessibilityLabel="Show OpenCode account details"
+          onPress={() => setSelectedId(account.id)}
+          className="gap-1 rounded-[24px] border-continuous bg-card p-4 active:opacity-60"
+        >
+          <Text className="text-sm font-t3-medium text-foreground">
+            {account.label.includes("@") ? "••••••@••••••" : account.label}
+            {account.active ? " · Active" : ""}
+          </Text>
+          <Text className="text-xs text-foreground-muted">
+            {account.limits.unavailable?.message ?? "No usage windows reported."}
+          </Text>
+        </Pressable>
       ))}
       {accounts?.length === 0 ? (
         <Text className="text-xs text-foreground-muted">
@@ -141,6 +147,72 @@ function InstanceAccounts({
           {message}
         </Text>
       ) : null}
+      <Modal
+        visible={selected !== undefined}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setSelectedId(null)}
+      >
+        <View className="flex-1 items-center justify-center bg-backdrop px-6">
+          <ScrollView
+            className="max-h-[80%] w-full max-w-md grow-0 rounded-3xl bg-screen"
+            contentContainerClassName="gap-4 p-6"
+          >
+            <View className="flex-row items-center justify-between gap-3">
+              <Text className="text-lg font-t3-semibold text-foreground">OpenCode account</Text>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Close account details"
+                onPress={() => setSelectedId(null)}
+                className="min-h-[44px] justify-center"
+              >
+                <Text className="text-foreground">Done</Text>
+              </Pressable>
+            </View>
+            {selected ? (
+              <>
+                <View className="flex-row">
+                  <AccountLabel label={selected.label} />
+                </View>
+                {selected.plan ? (
+                  <Text className="text-sm text-foreground-muted">{selected.plan}</Text>
+                ) : null}
+                <Text className="text-sm text-foreground-muted">{label}</Text>
+                {selected.limits.windows.map((window) => (
+                  <Text key={window.id} className="text-sm text-foreground">
+                    {window.label}: {remainingPercent(window)}% left ·{" "}
+                    {formatResetsIn(window, now) ?? "reset unknown"}
+                  </Text>
+                ))}
+                {selected.limits.unavailable ? (
+                  <Text className="text-sm text-foreground-muted">
+                    {selected.limits.unavailable.message}
+                  </Text>
+                ) : null}
+                {selected.active ? (
+                  <Text className="text-sm text-foreground-muted">Active account</Text>
+                ) : (
+                  <Pressable
+                    accessibilityRole="button"
+                    disabled={busyId !== null}
+                    onPress={() => void switchAccount(selected.id)}
+                    className="min-h-[44px] justify-center rounded-xl bg-subtle px-4 active:opacity-60"
+                  >
+                    <Text className="text-center text-foreground">
+                      {busyId === selected.id ? "Switching…" : "Switch to account"}
+                    </Text>
+                  </Pressable>
+                )}
+                {message ? (
+                  <Text accessibilityRole="alert" className="text-xs text-foreground-muted">
+                    {message}
+                  </Text>
+                ) : null}
+              </>
+            ) : null}
+          </ScrollView>
+        </View>
+      </Modal>
     </View>
   );
 }

@@ -16,6 +16,7 @@ import {
   collectLimitAccounts,
   collectLimitNotices,
   collectLimitPools,
+  openCodeLimitAccounts,
   displayLimitWindows,
   elapsedShare,
   formatResetsIn,
@@ -125,6 +126,51 @@ describe("providersWithLimits", () => {
       ]),
     ).toEqual([codex]);
   });
+});
+
+it("uses the pooled windows for OpenCode logins while leaving an expired account out of the average", () => {
+  const accounts = openCodeLimitAccounts(
+    [
+      {
+        id: "first",
+        label: "Work",
+        active: true,
+        plan: "pro",
+        limits: { checkedAt: "2026-09-03T11:00:00.000Z", windows: [window] },
+      },
+      {
+        id: "second",
+        label: "Personal",
+        active: false,
+        limits: {
+          checkedAt: "2026-09-03T11:00:00.000Z",
+          windows: [{ ...window, usedPercent: 80 }],
+        },
+      },
+      {
+        id: "expired",
+        label: "Old",
+        active: false,
+        limits: {
+          checkedAt: "2026-09-03T11:00:00.000Z",
+          windows: [],
+          unavailable: { reason: "probeFailed", message: "Expired login" },
+        },
+      },
+    ],
+    EnvironmentId.make("local"),
+    ProviderInstanceId.make("opencode"),
+    "My Mac",
+  );
+  const pool = collectLimitPools(accounts, now)[0];
+  expect(pool?.driver).toBe(ProviderDriverKind.make("opencode"));
+  expect(pool?.windows[0]?.remainingPercent).toBe(40);
+  expect(pool?.windows[0]?.members).toHaveLength(2);
+  expect(pool?.windows[0]?.columns).toHaveLength(2);
+  expect(accounts.map((account) => account.key)).toEqual([
+    "local:opencode:first",
+    "local:opencode:second",
+  ]);
 });
 
 describe("pools", () => {

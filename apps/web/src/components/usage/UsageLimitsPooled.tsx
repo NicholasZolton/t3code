@@ -32,6 +32,14 @@ import {
   useResetCredit,
 } from "./UsageLimits";
 
+interface AccountSwitchAction {
+  readonly active: boolean;
+  readonly busy: boolean;
+  readonly onSwitch: () => void;
+}
+
+type AccountAction = (account: LimitAccount) => AccountSwitchAction | null;
+
 /** `someone@example.com` → `SE`: enough to tell accounts apart, too little to identify one. */
 function accountInitials(email: string): string {
   const [local = "", domain = ""] = email.split("@");
@@ -73,7 +81,7 @@ function AccountAvatar({
   readonly account: LimitAccount;
   readonly className?: string;
 }) {
-  if (account.redeem) {
+  if (account.redeem || account.driver === "opencode") {
     return (
       <ProviderInstanceIcon
         driverKind={account.driver}
@@ -139,6 +147,7 @@ function SegmentPopover({
   now,
   redeem,
   onRedeem,
+  action,
 }: {
   readonly account: LimitAccount;
   readonly window: LimitPoolMember["window"];
@@ -147,6 +156,7 @@ function SegmentPopover({
   /** Redeem state owned by the segment, since the confirm lives outside this popover. */
   readonly redeem: ReturnType<typeof useResetCredit> | null;
   readonly onRedeem: () => void;
+  readonly action: AccountSwitchAction | null;
 }) {
   const timestampFormat = usePrimarySettings((settings) => settings.timestampFormat);
   const remaining = remainingPercent(window);
@@ -210,6 +220,16 @@ function SegmentPopover({
           </span>
         </div>
       ) : null}
+      {action ? (
+        <div className="flex items-center justify-between gap-3 border-t border-border/60 pt-2.5">
+          {action.active ? <span className="text-muted-foreground">Active account</span> : null}
+          {!action.active ? (
+            <Button size="xs" variant="outline" disabled={action.busy} onClick={action.onSwitch}>
+              {action.busy ? "Switching…" : "Switch to account"}
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -227,6 +247,7 @@ function PoolSegment({
   now,
   index,
   showAccountName,
+  accountAction,
 }: {
   readonly account: LimitAccount;
   readonly window: LimitPoolMember["window"];
@@ -236,11 +257,13 @@ function PoolSegment({
   /** 1-based position in the bar, shown on the strip and its legend row to tie them together. */
   readonly index: number;
   readonly showAccountName: boolean;
+  readonly accountAction?: AccountAction | undefined;
 }) {
   const [open, setOpen] = useState(false);
   const remaining = remainingPercent(window);
   const resetsIn = formatResetsIn(window, now);
   const credits = account.limits.resetCredits?.availableCount ?? 0;
+  const action = accountAction?.(account) ?? null;
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger
@@ -249,7 +272,7 @@ function PoolSegment({
           <button
             type="button"
             style={{ gridColumn: index, gridRow: 1 }}
-            aria-label={`${account.displayName ?? (account.email ? accountInitials(account.email) : account.driver)}: ${remaining}% left${resetsIn ? `, ${resetsIn}` : ""}${credits ? `, ${credits} reset ${credits === 1 ? "credit" : "credits"} banked` : ""}`}
+            aria-label={`${account.displayName ?? (account.email ? accountInitials(account.email) : account.driver)}: ${remaining}% left${action?.active ? ", active account" : ""}${resetsIn ? `, ${resetsIn}` : ""}${credits ? `, ${credits} reset ${credits === 1 ? "credit" : "credits"} banked` : ""}`}
             className="relative h-5 min-w-0 cursor-pointer overflow-hidden rounded-md bg-muted text-start outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background data-[popup-open]:ring-1 data-[popup-open]:ring-border @2xl/pool:h-8"
           />
         }
@@ -284,6 +307,9 @@ function PoolSegment({
               className="min-w-0 truncate font-medium text-foreground"
             />
           ) : null}
+          {action?.active ? (
+            <span className="shrink-0 text-2xs text-muted-foreground">Active</span>
+          ) : null}
           <span className="shrink-0 font-semibold text-foreground tabular-nums">{remaining}%</span>
           {/* Countdown and badge get their own plate: fill and hatching run under them otherwise. */}
           <span className="ms-auto flex shrink-0 items-center gap-1.5 rounded-sm bg-background/85 px-1.5 py-0.5 text-2xs text-foreground tabular-nums">
@@ -304,7 +330,14 @@ function PoolSegment({
           </span>
         </div>
       </PopoverTrigger>
-      <LegendRow account={account} window={window} color={color} now={now} index={index} />
+      <LegendRow
+        account={account}
+        window={window}
+        color={color}
+        now={now}
+        index={index}
+        active={action?.active ?? false}
+      />
       {account.redeem ? (
         <RedeemableSegmentPopup
           account={account}
@@ -323,6 +356,7 @@ function PoolSegment({
             now={now}
             redeem={null}
             onRedeem={() => {}}
+            action={action}
           />
         </PopoverPopup>
       )}
@@ -341,12 +375,14 @@ function LegendRow({
   color,
   now,
   index,
+  active,
 }: {
   readonly account: LimitAccount;
   readonly window: LimitPoolMember["window"];
   readonly color: string;
   readonly now: number;
   readonly index: number;
+  readonly active: boolean;
 }) {
   const remaining = remainingPercent(window);
   const resetsIn = formatResetsIn(window, now);
@@ -367,6 +403,7 @@ function LegendRow({
         <span className="relative">{index}</span>
       </span>
       <AccountName account={account} className="min-w-0 truncate font-medium text-foreground" />
+      {active ? <span className="shrink-0 text-2xs text-muted-foreground">Active</span> : null}
       <span className="shrink-0 font-semibold text-foreground tabular-nums">{remaining}%</span>
       <span className="ms-auto flex shrink-0 items-center gap-1.5 text-2xs text-muted-foreground tabular-nums">
         {resetsIn?.replace("resets in ", "↻ ") ?? ""}
@@ -416,6 +453,7 @@ function RedeemableSegmentPopup({
           reset={reset}
           now={now}
           redeem={redeem}
+          action={null}
           onRedeem={() => {
             closePopover();
             redeem.setConfirming(true);
@@ -450,10 +488,12 @@ function PoolBar({
   pool,
   color,
   now,
+  accountAction,
 }: {
   readonly pool: LimitPoolWindow;
   readonly color: string;
   readonly now: number;
+  readonly accountAction?: AccountAction | undefined;
 }) {
   const restores = new Map(pool.resets.map((reset) => [reset.member.account.key, reset]));
   return (
@@ -473,6 +513,7 @@ function PoolBar({
               now={now}
               index={position + 1}
               showAccountName={pool.columns.length > 1}
+              accountAction={accountAction}
             />
           ) : null,
         )}
@@ -491,12 +532,14 @@ function PoolWindowCard({
   now,
   label,
   description,
+  accountAction,
 }: {
   readonly pool: LimitPoolWindow;
   readonly color: string;
   readonly now: number;
   readonly label?: string | undefined;
   readonly description?: string | undefined;
+  readonly accountAction?: AccountAction | undefined;
 }) {
   // The soonest reset that hands anything back; an untouched account resets to no effect.
   const nextRefill = pool.resets.find((reset) => reset.restoresPercent > 0);
@@ -517,7 +560,7 @@ function PoolWindowCard({
           </span>
         ) : null}
       </div>
-      <PoolBar pool={pool} color={color} now={now} />
+      <PoolBar pool={pool} color={color} now={now} accountAction={accountAction} />
       {description ? (
         <p className="text-xs text-muted-foreground md:col-span-2">{description}</p>
       ) : null}
@@ -525,9 +568,19 @@ function PoolWindowCard({
   );
 }
 
-function PoolSection({ pool, now }: { readonly pool: LimitPool; readonly now: number }) {
-  const color = barColor(pool.driver);
-  const label = getDriverOption(pool.driver)?.label ?? String(pool.driver);
+export function PoolSection({
+  pool,
+  now,
+  label = getDriverOption(pool.driver)?.label ?? String(pool.driver),
+  color = barColor(pool.driver),
+  accountAction,
+}: {
+  readonly pool: LimitPool;
+  readonly now: number;
+  readonly label?: string;
+  readonly color?: string;
+  readonly accountAction?: AccountAction | undefined;
+}) {
   const windows = displayLimitWindows(pool);
   return (
     <section className="flex flex-col gap-3">
@@ -551,6 +604,7 @@ function PoolSection({ pool, now }: { readonly pool: LimitPool; readonly now: nu
             now={now}
             label={details?.label}
             description={details?.description}
+            accountAction={accountAction}
           />
         );
       })}

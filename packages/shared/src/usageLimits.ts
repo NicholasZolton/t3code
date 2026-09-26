@@ -9,6 +9,8 @@ import {
   type EnvironmentId,
   type UsageLimitsReport,
   type ProviderInstanceId,
+  ProviderDriverKind,
+  type OpenCodeCodexAccount,
   type ProviderConsumeResetCreditInput,
   type ServerProviderSlashCommand,
   isProviderAvailable,
@@ -130,6 +132,29 @@ export interface LimitAccount {
     readonly input: ProviderConsumeResetCreditInput;
   } | null;
   readonly limits: ServerProviderUsageLimits;
+}
+
+/** OpenCode logins are per instance; expired accounts stay switchable but do not occupy pool segments. */
+export function openCodeLimitAccounts(
+  accounts: readonly OpenCodeCodexAccount[],
+  environmentId: EnvironmentId,
+  instanceId: ProviderInstanceId,
+  label: string,
+): readonly LimitAccount[] {
+  return accounts
+    .filter((account) => account.limits.windows.length > 0)
+    .map((account) => ({
+      key: `${environmentId}:${instanceId}:${account.id}`,
+      driver: ProviderDriverKind.make("opencode"),
+      displayName: account.label.includes("@") ? null : account.label,
+      email: account.label.includes("@") ? account.label : undefined,
+      plan: account.plan,
+      accentColor: undefined,
+      environments: [{ environmentId, label }],
+      sourceLabel: null,
+      redeem: null,
+      limits: account.limits,
+    }));
 }
 
 /**
