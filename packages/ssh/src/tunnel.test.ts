@@ -506,6 +506,7 @@ describe("ssh tunnel scripts", () => {
               tunnelKillCount += 1;
             });
           }
+          if (args.includes("t3-portless-discovery")) return makeSuccessfulProcess("");
           if (args.includes("sh") && args.includes("--")) {
             return makeSuccessfulProcess('{"remotePort":3773}\n');
           }
@@ -590,7 +591,7 @@ describe("ssh tunnel scripts", () => {
     },
   );
 
-  it.effect("forwards the active SSH project's Portless port and closes it on switch", () => {
+  it.effect("forwards Portless when SSH connects and keeps it across thread switches", () => {
     const commands: Array<ReadonlyArray<string>> = [];
     let forwardKills = 0;
     let portlessListening = false;
@@ -606,6 +607,9 @@ describe("ssh tunnel scripts", () => {
               portlessListening = false;
             }
           });
+        }
+        if (args.includes("t3-portless-discovery")) {
+          return makeSuccessfulProcess("T3_PORTLESS_DEFAULT:58345\n");
         }
         if (args.includes("sh") && args.includes("--")) {
           return makeSuccessfulProcess('{"remotePort":3773}\n');
@@ -638,6 +642,10 @@ describe("ssh tunnel scripts", () => {
     return Effect.gen(function* () {
       const manager = yield* SshEnvironmentManager;
       yield* manager.ensureEnvironment(target);
+      assert.equal(
+        commands.filter((args) => args.includes("127.0.0.1:58345:127.0.0.1:58345")).length,
+        1,
+      );
       assert.equal(yield* manager.syncPortlessForward({ target, cwd: "/project/one" }), 58345);
       assert.equal(yield* manager.syncPortlessForward({ target, cwd: "/project/one" }), 58345);
       assert.equal(
@@ -645,9 +653,119 @@ describe("ssh tunnel scripts", () => {
         1,
       );
       assert.equal(yield* manager.syncPortlessForward({ target, cwd: "/project/two" }), 58345);
-      assert.equal(forwardKills, 1);
+      assert.equal(forwardKills, 0);
       assert.equal(yield* manager.syncPortlessForward(null), null);
-      assert.equal(forwardKills, 2);
+      assert.equal(forwardKills, 0);
+    }).pipe(Effect.provide(layer));
+  });
+
+  it.effect("gives the active thread priority when SSH environments share a Portless port", () => {
+    const forwardHosts: string[] = [];
+    const stoppedHosts: string[] = [];
+    let listening = false;
+    const spawner = ChildProcessSpawner.make((command) =>
+      Effect.sync(() => {
+        const args = commandArgs(command);
+        if (args.includes("-N")) {
+          if (args.includes("127.0.0.1:58345:127.0.0.1:58345")) {
+            const host = args.at(-1) ?? "";
+            forwardHosts.push(host);
+            listening = true;
+            return makeRunningProcess(() => {
+              stoppedHosts.push(host);
+              listening = false;
+            });
+          }
+          return makeRunningProcess(() => undefined);
+        }
+        if (args.includes("t3-portless-discovery"))
+          return makeSuccessfulProcess("T3_PORTLESS_DEFAULT:58345\n");
+        if (args.includes("sh") && args.includes("--"))
+          return makeSuccessfulProcess('{"remotePort":3773}\n');
+        if (args.includes("sh")) return makeSuccessfulProcess("58345\n");
+        return makeSuccessfulProcess("\n");
+      }),
+    );
+    const layer = Layer.mergeAll(
+      NodeServices.layer,
+      Layer.succeed(ChildProcessSpawner.ChildProcessSpawner, spawner),
+      Layer.succeed(HttpClient.HttpClient, testHttpClient),
+      Layer.succeed(
+        NetService.NetService,
+        NetService.NetService.of({
+          ...testNetService,
+          hasListenerOnHost: (port) => Effect.succeed(port === 58345 && listening),
+        }),
+      ),
+      SshPasswordPrompt.disabledLayer,
+      SshEnvironmentManager.layer({ resolveCliRunner: Effect.succeed(ARCHIVE) }),
+    );
+    const first = { alias: "first", hostname: "first.example.com", username: null, port: null };
+    const second = { alias: "second", hostname: "second.example.com", username: null, port: null };
+
+    return Effect.gen(function* () {
+      const manager = yield* SshEnvironmentManager;
+      yield* manager.ensureEnvironment(first);
+      yield* manager.ensureEnvironment(second);
+      assert.deepEqual(forwardHosts, ["first"]);
+      assert.equal(yield* manager.syncPortlessForward({ target: second, cwd: "/project" }), 58345);
+      assert.deepEqual(forwardHosts, ["first", "second"]);
+      assert.deepEqual(stoppedHosts, ["first"]);
+      yield* manager.syncPortlessForward(null);
+      assert.deepEqual(forwardHosts, ["first", "second", "first"]);
+      assert.deepEqual(stoppedHosts, ["first", "second"]);
+    }).pipe(Effect.provide(layer));
+  });
+
+  it.effect("forwards distinct Portless routes without needing an open thread", () => {
+    const forwards: string[] = [];
+    const stopped: string[] = [];
+    const spawner = ChildProcessSpawner.make((command) =>
+      Effect.sync(() => {
+        const args = commandArgs(command);
+        if (args.includes("-N")) {
+          const forward = args[args.indexOf("-L") + 1];
+          if (forward?.startsWith("127.0.0.1:")) forwards.push(forward);
+          return makeRunningProcess(() => {
+            if (forward?.startsWith("127.0.0.1:")) stopped.push(forward);
+          });
+        }
+        if (args.includes("t3-portless-discovery"))
+          return makeSuccessfulProcess(
+            "one.localhost:58345\ntwo.localhost:49329\nT3_PORTLESS_DEFAULT:\n",
+          );
+        if (args.includes("sh") && args.includes("--"))
+          return makeSuccessfulProcess('{"remotePort":3773}\n');
+        if (args.includes("sh")) return makeSuccessfulProcess("49329\n");
+        return makeSuccessfulProcess("\n");
+      }),
+    );
+    const layer = Layer.mergeAll(
+      NodeServices.layer,
+      Layer.succeed(ChildProcessSpawner.ChildProcessSpawner, spawner),
+      Layer.succeed(HttpClient.HttpClient, testHttpClient),
+      Layer.succeed(
+        NetService.NetService,
+        NetService.NetService.of({
+          ...testNetService,
+          hasListenerOnHost: (port) => Effect.succeed(port === 58345 || port === 49329),
+        }),
+      ),
+      SshPasswordPrompt.disabledLayer,
+      SshEnvironmentManager.layer({ resolveCliRunner: Effect.succeed(ARCHIVE) }),
+    );
+    const target = { alias: "devbox", hostname: "devbox", username: null, port: null };
+    return Effect.gen(function* () {
+      const manager = yield* SshEnvironmentManager;
+      yield* manager.ensureEnvironment(target);
+      assert.deepEqual(forwards, [
+        "127.0.0.1:58345:127.0.0.1:58345",
+        "127.0.0.1:49329:127.0.0.1:49329",
+      ]);
+      assert.equal(yield* manager.syncPortlessForward({ target, cwd: "/project" }), 49329);
+      assert.deepEqual(stopped, []);
+      yield* manager.syncPortlessForward(null);
+      assert.deepEqual(stopped, []);
     }).pipe(Effect.provide(layer));
   });
 
@@ -688,6 +806,7 @@ describe("ssh tunnel scripts", () => {
               }
               return tunnel;
             }
+            if (args.includes("t3-portless-discovery")) return makeSuccessfulProcess("");
             if (args.includes("--")) {
               if (isTarget) {
                 launches += 1;
