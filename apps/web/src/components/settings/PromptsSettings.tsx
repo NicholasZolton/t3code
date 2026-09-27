@@ -90,7 +90,7 @@ export function PromptsSettings() {
               .map(([promptName, promptBody]) => (
                 <div
                   key={promptName}
-                  className="flex flex-wrap items-center gap-3 px-3 py-3 sm:px-4"
+                  className="flex flex-wrap items-center gap-3 px-3 pt-2 pb-3 sm:px-4"
                 >
                   <div className="min-w-40 flex-1">
                     <code className="text-sm font-medium text-foreground">&gt;{promptName}</code>
