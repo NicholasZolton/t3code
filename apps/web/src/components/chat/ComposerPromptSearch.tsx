@@ -1,10 +1,18 @@
 import type { EnvironmentId, OrchestrationSearchPromptsResult } from "@t3tools/contracts";
 import { scoreQueryMatch } from "@t3tools/shared/searchRanking";
+import { MessageSquareIcon } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { orchestrationEnvironment } from "../../state/orchestration";
 import { useEnvironmentQuery } from "../../state/query";
 import { useDebouncedValue } from "../../state/queries";
-import { Dialog, DialogPopup, DialogTitle } from "../ui/dialog";
+import { CommandPaletteContent } from "../CommandPaletteContent";
+import {
+  CommandDialog,
+  CommandDialogPopup,
+  CommandFooterAction,
+  CommandItem,
+  CommandList,
+} from "../ui/command";
 import { recallableComposerPrompt } from "./composerPromptHistory";
 
 type PromptMatch = OrchestrationSearchPromptsResult["matches"][number];
@@ -41,7 +49,6 @@ export function ComposerPromptSearch(props: {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [offset, setOffset] = useState(0);
   const [priorMatches, setPriorMatches] = useState<ReadonlyArray<PromptMatch>>([]);
-  const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const debouncedQuery = useDebouncedValue(query.trim(), 150);
   const result = useEnvironmentQuery(
@@ -60,7 +67,7 @@ export function ComposerPromptSearch(props: {
   const nextOffset = loading ? null : result.data?.nextOffset;
 
   useEffect(() => {
-    listRef.current?.querySelectorAll('[role="option"]')[selectedIndex]?.scrollIntoView({
+    listRef.current?.querySelectorAll("[data-prompt-result]")[selectedIndex]?.scrollIntoView({
       block: "nearest",
     });
   }, [selectedIndex]);
@@ -76,84 +83,101 @@ export function ComposerPromptSearch(props: {
         !event.shiftKey)
     ) {
       event.preventDefault();
+      event.stopPropagation();
       if (matches.length > 0) {
         const direction = event.key === "ArrowUp" ? -1 : 1;
         setSelectedIndex((index) => (index + direction + matches.length) % matches.length);
       }
     } else if (event.key === "Enter" && selected) {
       event.preventDefault();
+      event.stopPropagation();
       props.onSelect(selected.prompt);
     }
   };
 
   return (
-    <Dialog
+    <CommandDialog
       open
       onOpenChange={(open) => {
         if (!open) props.onClose();
       }}
     >
-      <DialogPopup aria-label="Search prompt history">
-        <DialogTitle>Search prompt history</DialogTitle>
-        <input
-          ref={inputRef}
-          autoFocus
-          aria-label="Search sent prompts"
-          maxLength={200}
-          className="mt-4 w-full rounded-md border bg-transparent px-3 py-2 text-sm outline-none"
-          placeholder="Search sent prompts…"
+      <CommandDialogPopup
+        aria-label="Prompt history"
+        className="overflow-hidden"
+        onBackdropPointerDown={props.onClose}
+      >
+        <CommandPaletteContent
+          mode="none"
           value={query}
-          onChange={(event) => {
-            setQuery(event.target.value);
+          onValueChange={(value) => {
+            setQuery(value);
             setSelectedIndex(0);
             setOffset(0);
             setPriorMatches([]);
-            listRef.current?.scrollTo({ top: 0 });
+            listRef.current
+              ?.closest<HTMLElement>('[data-slot="scroll-area-viewport"]')
+              ?.scrollTo({ top: 0 });
           }}
-          onKeyDown={onKeyDown}
-        />
-        <div
-          ref={listRef}
-          className="mt-2 max-h-80 overflow-y-auto"
-          role="listbox"
-          aria-label="Sent prompts"
+          inputProps={{
+            "aria-label": "Search sent prompts",
+            placeholder: "Search sent prompts…",
+            maxLength: 200,
+            onKeyDown,
+          }}
+          footerActionLabel="Use prompt"
+          footerTrailing={
+            nextOffset !== null && nextOffset !== undefined ? (
+              <CommandFooterAction
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => {
+                  setPriorMatches([...priorMatches, ...(result.data?.matches ?? [])]);
+                  setOffset(nextOffset);
+                }}
+              >
+                Load older prompts
+              </CommandFooterAction>
+            ) : null
+          }
         >
           {matches.length > 0 ? (
-            matches.map((match, index) => (
-              <button
-                key={match.id}
-                type="button"
-                role="option"
-                aria-selected={index === Math.min(selectedIndex, matches.length - 1)}
-                className="block w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-accent aria-selected:bg-accent"
-                onMouseEnter={() => setSelectedIndex(index)}
-                onClick={() => props.onSelect(match.prompt)}
-              >
-                <span className="line-clamp-2 whitespace-pre-wrap wrap-anywhere">
-                  {match.prompt}
-                </span>
-              </button>
-            ))
+            <CommandList ref={listRef}>
+              <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
+                {query.trim() ? "Matching prompts" : "Recent prompts"}
+              </div>
+              {matches.map((match, index) => {
+                const [firstLine, ...otherLines] = match.prompt.split("\n");
+                const detail = otherLines.join(" ").trim();
+                return (
+                  <CommandItem
+                    key={match.id}
+                    value={match.id}
+                    active={index === Math.min(selectedIndex, matches.length - 1)}
+                    data-prompt-result="true"
+                    onMouseMove={() => setSelectedIndex(index)}
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => props.onSelect(match.prompt)}
+                  >
+                    <MessageSquareIcon className="size-4 shrink-0 text-icon-muted" aria-hidden />
+                    <span className="flex min-w-0 flex-1 flex-col text-left">
+                      <span className="line-clamp-2 wrap-anywhere text-sm leading-5">
+                        {firstLine}
+                      </span>
+                      {detail && (
+                        <span className="truncate text-xs text-secondary-label">{detail}</span>
+                      )}
+                    </span>
+                  </CommandItem>
+                );
+              })}
+            </CommandList>
           ) : (
-            <p className="px-3 py-5 text-center text-sm text-muted-foreground">
+            <p className="px-5 py-10 text-center text-sm text-muted-foreground">
               {loading ? "Searching…" : (result.error ?? "No sent prompts found")}
             </p>
           )}
-          {nextOffset !== null && nextOffset !== undefined && (
-            <button
-              type="button"
-              className="w-full rounded-lg px-3 py-2 text-center text-sm text-muted-foreground hover:bg-accent"
-              onClick={() => {
-                setPriorMatches([...priorMatches, ...(result.data?.matches ?? [])]);
-                setOffset(nextOffset);
-                inputRef.current?.focus();
-              }}
-            >
-              Load older prompts
-            </button>
-          )}
-        </div>
-      </DialogPopup>
-    </Dialog>
+        </CommandPaletteContent>
+      </CommandDialogPopup>
+    </CommandDialog>
   );
 }
