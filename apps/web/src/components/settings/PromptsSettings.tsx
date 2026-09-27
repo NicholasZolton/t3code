@@ -71,7 +71,7 @@ export function PromptsSettings() {
           </Button>
         }
       >
-        <p className="px-3 text-xs leading-relaxed text-muted-foreground sm:px-4">
+        <p className="px-3 pb-2 text-xs leading-relaxed text-muted-foreground sm:px-4">
           Type <code className="font-mono text-foreground">&gt;name</code> in the composer to insert
           a saved prompt.
           {targets.length > 1 ? " Changes apply to every selected machine." : null}
