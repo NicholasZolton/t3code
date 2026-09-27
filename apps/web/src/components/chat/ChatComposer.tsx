@@ -49,6 +49,7 @@ import {
   wouldTextPasteExceedLimit,
 } from "@t3tools/client-runtime/text-paste";
 import { serializeComposerFileLink } from "@t3tools/shared/composerTrigger";
+import { expandSavedPrompt, savedPromptEnvironmentNames } from "@t3tools/shared/savedPrompts";
 import { folderDropTarget, resolveDroppedFolderPath } from "./folderDrop";
 import { createModelSelection, normalizeModelSlug } from "@t3tools/shared/model";
 import { USAGE_LIMITS_COMMAND } from "@t3tools/shared/usageLimits";
@@ -2344,6 +2345,20 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
 
   const composerMenuItems = useMemo<ComposerCommandItem[]>(() => {
     if (!composerTrigger) return [];
+    if (composerTrigger.kind === "saved-prompt") {
+      const query = composerTrigger.query.toLowerCase();
+      return Object.entries(settings.savedPrompts)
+        .filter(([name]) => name.toLowerCase().includes(query))
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([name, body]) => ({
+          id: `saved-prompt:${name}`,
+          type: "saved-prompt" as const,
+          name,
+          body,
+          label: `>${name}`,
+          description: body.replaceAll("\n", " "),
+        }));
+    }
     if (composerTrigger.kind === "path") {
       return workspaceEntries.entries.map((entry) => ({
         id: `path:${entry.kind}:${entry.path}`,
@@ -2497,6 +2512,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     selectedProviderSlashCommands,
     selectedProviderStatus,
     settings.showSkillsInSlashMenu,
+    settings.savedPrompts,
     workspaceEntries.entries,
   ]);
 
@@ -3578,6 +3594,9 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   }, [readComposerSnapshot, resolveComposerTrigger]);
 
   const { onUsageLimitsCommand } = props;
+  const resolvePromptEnvironment = useAtomCommand(serverEnvironment.resolvePromptEnvironment, {
+    reportFailure: false,
+  });
   const onSelectComposerItem = useCallback(
     (item: ComposerCommandItem) => {
       if (composerSelectLockRef.current) return;
@@ -3587,6 +3606,48 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       });
       const { snapshot, trigger } = resolveActiveComposerTrigger();
       if (!trigger) return;
+      if (item.type === "saved-prompt") {
+        if (trigger.kind !== "saved-prompt" || settings.savedPrompts[item.name] !== item.body)
+          return;
+        const expectedText = snapshot.value.slice(trigger.rangeStart, trigger.rangeEnd);
+        void (async () => {
+          try {
+            const clipboard = item.body.includes("{{clipboard}}")
+              ? await navigator.clipboard.readText()
+              : "";
+            const environment =
+              savedPromptEnvironmentNames(item.body).length > 0
+                ? await resolvePromptEnvironment({ environmentId, input: { name: item.name } })
+                : null;
+            if (environment !== null && environment._tag !== "Success") {
+              throw new Error("Could not read the host environment.");
+            }
+            const replacement = expandSavedPrompt(item.body, environment?.value ?? {}, clipboard);
+            const current = resolveActiveComposerTrigger();
+            if (
+              current.trigger?.kind !== "saved-prompt" ||
+              current.snapshot.value !== snapshot.value ||
+              current.trigger.rangeStart !== trigger.rangeStart ||
+              current.trigger.rangeEnd !== trigger.rangeEnd
+            )
+              return;
+            const applied = applyPromptReplacement(
+              trigger.rangeStart,
+              trigger.rangeEnd,
+              replacement,
+              { expectedText },
+            );
+            if (applied) setComposerHighlightedItemId(null);
+          } catch (error) {
+            toastManager.add({
+              type: "error",
+              title: "Could not insert prompt",
+              description: error instanceof Error ? error.message : "Try again.",
+            });
+          }
+        })();
+        return;
+      }
       if (item.type === "path") {
         const replacement = `${serializeComposerFileLink(item.path)} `;
         const replacementRangeEnd = extendReplacementRangeForTrailingSpace(
@@ -3713,6 +3774,9 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       planModeUiEnabled,
       onUsageLimitsCommand,
       resolveActiveComposerTrigger,
+      resolvePromptEnvironment,
+      environmentId,
+      settings.savedPrompts,
     ],
   );
 

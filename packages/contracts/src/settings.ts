@@ -513,6 +513,17 @@ export const UsageModelPriceOverride = Schema.Struct({
 });
 export type UsageModelPriceOverride = typeof UsageModelPriceOverride.Type;
 
+export const SAVED_PROMPT_NAME_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9_-]*$/;
+export const SAVED_PROMPT_NAME_MAX_LENGTH = 64;
+export const SAVED_PROMPT_BODY_MAX_LENGTH = 100_000;
+export const SavedPromptName = Schema.String.check(
+  Schema.isPattern(SAVED_PROMPT_NAME_PATTERN),
+  Schema.isMaxLength(SAVED_PROMPT_NAME_MAX_LENGTH),
+);
+export const SavedPromptBody = Schema.String.check(
+  Schema.isMaxLength(SAVED_PROMPT_BODY_MAX_LENGTH),
+);
+
 const makeBinaryPathSetting = (fallback: string) =>
   TrimmedString.pipe(
     Schema.decodeTo(
@@ -1097,6 +1108,9 @@ export const StorageCleanupSettings = Schema.Struct({
 export type StorageCleanupSettings = typeof StorageCleanupSettings.Type;
 
 export const ServerSettings = Schema.Struct({
+  savedPrompts: Schema.Record(SavedPromptName, SavedPromptBody).pipe(
+    Schema.withDecodingDefault(Effect.succeed({})),
+  ),
   autoCollapseTestAndSnapshotFiles: Schema.Boolean.pipe(
     Schema.withDecodingDefault(Effect.succeed(true)),
   ),
@@ -1468,6 +1482,7 @@ const OpenCodeSettingsPatch = Schema.Struct({
 });
 
 export const ServerSettingsPatch = Schema.Struct({
+  savedPrompts: Schema.optionalKey(Schema.Record(SavedPromptName, Schema.NullOr(SavedPromptBody))),
   autoCollapseTestAndSnapshotFiles: Schema.optionalKey(Schema.Boolean),
   worktreeCleanup: Schema.optionalKey(
     Schema.NullOr(

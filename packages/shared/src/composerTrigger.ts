@@ -3,8 +3,10 @@ export type ComposerTriggerKind =
   | "pull-request"
   | "slash-command"
   | "slash-model"
-  | "skill";
+  | "skill"
+  | "saved-prompt";
 export type ComposerSlashCommand = "model" | "plan" | "default";
+export const SAVED_PROMPT_TRIGGER_PATTERN = /^>([a-zA-Z0-9_-]*)$/;
 
 export interface ComposerTrigger {
   kind: ComposerTriggerKind;
@@ -46,7 +48,7 @@ function isWhitespace(char: string): boolean {
 }
 
 /**
- * Detect an active trigger (@path, $skill, /command) at the cursor position.
+ * Detect an active trigger (@path, $skill, /command, >prompt) at the cursor position.
  *
  * Accepts an optional `isWhitespaceChar` override so callers with inline
  * placeholder characters (e.g. terminal context chips on web) can treat
@@ -100,6 +102,15 @@ export function detectComposerTrigger(
   const tokenStart = tokenIdx + 1;
 
   const token = text.slice(tokenStart, cursor);
+  const promptMatch = SAVED_PROMPT_TRIGGER_PATTERN.exec(token);
+  if (promptMatch) {
+    return {
+      kind: "saved-prompt",
+      query: promptMatch[1] ?? "",
+      rangeStart: tokenStart,
+      rangeEnd: cursor,
+    };
+  }
   const pullRequestMatch = /^#([\p{L}\p{N}][\p{L}\p{N}_-]*)?$/u.exec(token);
   if (pullRequestMatch)
     return {

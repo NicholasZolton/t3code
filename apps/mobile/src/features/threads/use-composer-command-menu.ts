@@ -4,8 +4,11 @@ import type {
   ProviderInteractionMode,
   ServerProvider,
 } from "@t3tools/contracts";
-import { COMPOSER_CONTEXT_MAX_RECORDS } from "@t3tools/contracts";
+import { COMPOSER_CONTEXT_MAX_RECORDS, DEFAULT_SERVER_SETTINGS } from "@t3tools/contracts";
+import { useAtomValue } from "@effect/atom-react";
+import { Atom } from "effect/unstable/reactivity";
 import { Alert } from "react-native";
+import { expandSavedPrompt, savedPromptEnvironmentNames } from "@t3tools/shared/savedPrompts";
 import { formatComposerContextReference } from "@t3tools/shared/composerContextReferences";
 import { pullRequestComposerContext } from "../../lib/composerContext";
 import { uuidv4 } from "../../lib/uuid";
@@ -44,6 +47,7 @@ import type { ComposerCommandItem } from "./ComposerCommandPopover";
 import { matchesSlashSkillQuery } from "./composerSlashSkillSearch";
 
 const WORKSPACE_SNAPSHOT_RETRY_COOLDOWN_MS = 10_000;
+const EMPTY_SETTINGS_ATOM = Atom.make(DEFAULT_SERVER_SETTINGS);
 
 function composerSelectionAtEnd(draftMessage: string): ComposerEditorSelection {
   return { start: draftMessage.length, end: draftMessage.length };
@@ -194,8 +198,13 @@ export function useComposerCommandMenu({
   readonly onUsageLimits?: () => void;
 }) {
   const [selection, setSelection] = useState(() => composerSelectionAtEnd(draftMessage));
+  const selectionRef = useRef(selection);
+  useEffect(() => {
+    selectionRef.current = selection;
+  }, [selection]);
   const previousOwnerKeyRef = useRef(ownerKey);
   const onSelectionChange = useCallback((nextSelection: ComposerEditorSelection) => {
+    selectionRef.current = nextSelection;
     setSelection(nextSelection);
   }, []);
   useEffect(() => {
@@ -233,6 +242,15 @@ export function useComposerCommandMenu({
   const refreshProviders = useAtomCommand(serverEnvironment.refreshProviders, {
     reportFailure: false,
   });
+  const resolvePromptEnvironment = useAtomCommand(serverEnvironment.resolvePromptEnvironment, {
+    reportFailure: false,
+  });
+  const savedPrompts =
+    useAtomValue(
+      environmentId === null
+        ? EMPTY_SETTINGS_ATOM
+        : serverEnvironment.settingsValueAtom(environmentId),
+    )?.savedPrompts ?? DEFAULT_SERVER_SETTINGS.savedPrompts;
   const selectedProviderInstanceId = selectedProviderStatus?.instanceId;
   const hasWorkspaceSnapshot = Boolean(
     projectCwd &&
@@ -310,6 +328,21 @@ export function useComposerCommandMenu({
 
   const items = useMemo<ComposerCommandItem[]>(() => {
     if (!trigger) return [];
+
+    if (trigger.kind === "saved-prompt") {
+      const query = trigger.query.toLowerCase();
+      return Object.entries(savedPrompts)
+        .filter(([name]) => name.toLowerCase().includes(query))
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([name, body]) => ({
+          id: `saved-prompt:${name}`,
+          type: "saved-prompt" as const,
+          name,
+          body,
+          label: `>${name}`,
+          description: body.replaceAll("\n", " "),
+        }));
+    }
 
     if (trigger.kind === "pull-request") {
       return pullRequestSearch.entries.map((entry) => ({
@@ -472,11 +505,56 @@ export function useComposerCommandMenu({
     skills,
     trigger,
     offersUsageLimits,
+    savedPrompts,
   ]);
 
   const onSelect = useCallback(
     (item: ComposerCommandItem) => {
       if (!trigger) return;
+      if (item.type === "saved-prompt") {
+        if (
+          !ownerKey ||
+          !environmentId ||
+          trigger.kind !== "saved-prompt" ||
+          savedPrompts[item.name] !== item.body
+        )
+          return;
+        void (async () => {
+          try {
+            const clipboard = item.body.includes("{{clipboard}}")
+              ? await (await import("expo-clipboard")).getStringAsync()
+              : "";
+            const environment =
+              savedPromptEnvironmentNames(item.body).length > 0
+                ? await resolvePromptEnvironment({ environmentId, input: { name: item.name } })
+                : null;
+            if (environment !== null && environment._tag !== "Success")
+              throw new Error("Could not read the host environment.");
+            const replacement = expandSavedPrompt(item.body, environment?.value ?? {}, clipboard);
+            const current = getComposerDraftSnapshot(ownerKey);
+            if (
+              current.text !== draftMessage ||
+              selectionRef.current.start !== selection.start ||
+              selectionRef.current.end !== selection.end
+            )
+              return;
+            const result = replaceTextRange(
+              draftMessage,
+              trigger.rangeStart,
+              trigger.rangeEnd,
+              replacement,
+            );
+            setSelection({ start: result.cursor, end: result.cursor });
+            onChangeDraftMessage(result.text);
+          } catch (error) {
+            Alert.alert(
+              "Could not insert prompt",
+              error instanceof Error ? error.message : "Try again.",
+            );
+          }
+        })();
+        return;
+      }
       if (item.type === "pull-request") {
         if (
           !ownerKey ||
@@ -546,6 +624,10 @@ export function useComposerCommandMenu({
       onUsageLimits,
       selectedProviderStatus?.showInteractionModeToggle,
       trigger,
+      environmentId,
+      savedPrompts,
+      selection,
+      resolvePromptEnvironment,
     ],
   );
 

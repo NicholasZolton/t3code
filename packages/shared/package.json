@@ -215,6 +215,10 @@
       "types": "./src/composerTrigger.ts",
       "import": "./src/composerTrigger.ts"
     },
+    "./savedPrompts": {
+      "types": "./src/savedPrompts.ts",
+      "import": "./src/savedPrompts.ts"
+    },
     "./composerInlineTokens": {
       "types": "./src/composerInlineTokens.ts",
       "import": "./src/composerInlineTokens.ts"

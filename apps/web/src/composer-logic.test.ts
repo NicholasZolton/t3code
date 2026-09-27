@@ -165,6 +165,15 @@ describe("composerSubmissionIntentForEnter", () => {
 });
 
 describe("detectComposerTrigger", () => {
+  it("finds a prompt shortcut at the cursor", () => {
+    const text = "Check >pr";
+    expect(detectComposerTrigger(text, text.length)).toEqual({
+      kind: "saved-prompt",
+      query: "pr",
+      rangeStart: 6,
+      rangeEnd: 9,
+    });
+  });
   it("detects @path trigger at cursor", () => {
     const text = "Please check @src/com";
     const trigger = detectComposerTrigger(text, text.length);

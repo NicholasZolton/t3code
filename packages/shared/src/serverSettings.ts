@@ -292,6 +292,7 @@ export function applyServerSettingsPatch(
     // Merged per entry below; its `null` removals must not reach deepMerge.
     usageLimitSources: usageLimitSourcesPatch,
     usagePriceOverrides: usagePriceOverridesPatch,
+    savedPrompts: savedPromptsPatch,
     // Entry replacement: deepMerge would keep keys the client meant to clear.
     projectSettingsOverrides: projectSettingsOverridesPatch,
     // Already translated into `projectSettingsOverrides` above; the legacy
@@ -337,8 +338,14 @@ export function applyServerSettingsPatch(
           }
         : undefined;
   const next = deepMerge(current, patchForMerge);
+  const savedPrompts = { ...current.savedPrompts };
+  for (const [name, body] of Object.entries(savedPromptsPatch ?? {})) {
+    if (body === null) delete savedPrompts[name];
+    else savedPrompts[name] = body;
+  }
   const nextWithReplacementsBase = {
     ...next,
+    savedPrompts,
     ...(worktreeCleanupPatch === undefined
       ? {}
       : {
