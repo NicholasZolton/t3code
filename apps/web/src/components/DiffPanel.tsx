@@ -267,7 +267,9 @@ export default function DiffPanel({
   );
   const previousCheckpointRef = selectedCheckpointRange?.fromTurnCount
     ? orderedTurnDiffSummaries.find(
-        (summary) => summary.checkpointTurnCount === selectedCheckpointRange.fromTurnCount,
+        (summary) =>
+          summary.checkpointTurnCount === selectedCheckpointRange.fromTurnCount &&
+          summary.status === "ready",
       )?.checkpointRef
     : undefined;
   const activeCheckpointDiff = useCheckpointDiff(
