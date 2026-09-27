@@ -9,6 +9,7 @@ import {
 
 export const CritOpenInput = Schema.Struct({
   cwd: TrimmedNonEmptyString,
+  portlessPort: Schema.optional(PositiveInt),
   scope: Schema.Union([
     Schema.Struct({ kind: Schema.Literal("working-tree") }),
     Schema.Struct({ kind: Schema.Literal("branch"), baseRef: TrimmedNonEmptyString }),

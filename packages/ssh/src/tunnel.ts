@@ -1795,7 +1795,9 @@ PY`;
         };
         const key = targetConnectionKey(target);
         if (!tunnels.has(key)) return null;
-        const port = yield* portlessPortForThread(key, target, input.cwd);
+        const port =
+          (yield* portlessPortForThread(key, target, input.cwd)) ??
+          (preferredPortlessForward?.key === key ? preferredPortlessForward.port : null);
         preferredPortlessForward = port === null ? null : { key, port };
         if (port !== null) {
           const existing = portlessCandidates.get(key);
