@@ -986,6 +986,7 @@ const WsShellOpenInEditorRpc = Rpc.make(WS_METHODS.shellOpenInEditor, {
 
 const WsShellOpenInCritRpc = Rpc.make(WS_METHODS.shellOpenInCrit, {
   payload: CritOpenInput,
+  success: Schema.NullOr(Schema.String),
   error: Schema.Union([CritOpenError, EnvironmentAuthorizationError]),
 });
 

@@ -594,6 +594,7 @@ describe("ssh tunnel scripts", () => {
   it.effect("forwards Portless when SSH connects and keeps it across thread switches", () => {
     const commands: Array<ReadonlyArray<string>> = [];
     let forwardKills = 0;
+    let portLookups = 0;
     let portlessListening = false;
     const spawner = ChildProcessSpawner.make((command) =>
       Effect.sync(() => {
@@ -614,7 +615,10 @@ describe("ssh tunnel scripts", () => {
         if (args.includes("sh") && args.includes("--")) {
           return makeSuccessfulProcess('{"remotePort":3773}\n');
         }
-        if (args.includes("sh")) return makeSuccessfulProcess("58345\n");
+        if (args.includes("sh")) {
+          portLookups += 1;
+          return makeSuccessfulProcess(portLookups >= 3 ? "" : "58345\n");
+        }
         return makeSuccessfulProcess("\n");
       }),
     );
