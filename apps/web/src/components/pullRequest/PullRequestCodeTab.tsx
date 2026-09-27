@@ -16,6 +16,7 @@ import {
   ChevronsDownUpIcon,
   ChevronsUpDownIcon,
   Columns2Icon,
+  ExternalLinkIcon,
   FolderTreeIcon,
   InfoIcon,
   MessageSquareOffIcon,
@@ -29,6 +30,7 @@ import * as Schema from "effect/Schema";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import { useLocalStorage } from "~/hooks/useLocalStorage";
+import { useOpenInCrit } from "~/hooks/useOpenInCrit";
 import { useClientSettings, useUpdateClientSettings } from "~/hooks/useSettings";
 import { useTheme } from "~/hooks/useTheme";
 import { areAllDiffFilesCollapsed } from "~/lib/diffCollapse";
@@ -353,6 +355,7 @@ function PullRequestCodeTab({
     reportFailure: false,
   });
   const getDiffFileContents = useAtomCommand(pullRequestEnvironment.diffFileContents);
+  const { open: openInCrit, opening: openingCrit } = useOpenInCrit(environmentId);
   const loadDiffFiles = useMemo(
     () =>
       createPullRequestDiffFileContentsLoader(getDiffFileContents, {
@@ -1057,6 +1060,8 @@ function PullRequestCodeTab({
   // to the whole diff and it is not drawn without commits to list, so a scope that outlived them
   // would leave the tab reading one obsolete commit with nothing to press.
   const selectedCommit = orderedCommits.find((entry) => entry.oid === commit);
+  const critProvider =
+    detail.provider === "github" || detail.provider === "gitlab" ? detail.provider : null;
   useEffect(() => {
     if (commit !== null && selectedCommit === undefined) {
       onSelectedCommitChange(null);
@@ -1212,6 +1217,36 @@ function PullRequestCodeTab({
         </PullRequestMetaLine>
       </div>
       <div className="flex shrink-0 items-center gap-1">
+        {critProvider !== null && (commit === null || selectedCommit !== undefined) ? (
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <Button
+                  type="button"
+                  size="icon-sm"
+                  variant="ghost"
+                  aria-label="Open in Crit"
+                  disabled={openingCrit}
+                  onClick={() =>
+                    void openInCrit({
+                      cwd: detail.workspaceRoot,
+                      scope: {
+                        kind: "pull-request",
+                        provider: critProvider,
+                        url: detail.url,
+                        number: detail.number,
+                        ...(selectedCommit ? { commit: selectedCommit.oid } : {}),
+                      },
+                    })
+                  }
+                />
+              }
+            >
+              <ExternalLinkIcon className="size-3.5" />
+            </TooltipTrigger>
+            <TooltipPopup side="top">Open in Crit</TooltipPopup>
+          </Tooltip>
+        ) : null}
         <Tooltip>
           <TooltipTrigger
             render={

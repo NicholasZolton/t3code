@@ -7,7 +7,7 @@ import {
   squashAtomCommandFailure,
 } from "@t3tools/client-runtime/state/runtime";
 import { safeErrorLogAttributes } from "@t3tools/client-runtime/errors";
-import type { ScopedThreadRef, TurnId } from "@t3tools/contracts";
+import type { CritOpenInput, ScopedThreadRef, TurnId } from "@t3tools/contracts";
 import {
   ArrowRightIcon,
   CheckIcon,
@@ -16,6 +16,7 @@ import {
   ChevronsDownUpIcon,
   ChevronsUpDownIcon,
   Columns2Icon,
+  ExternalLinkIcon,
   FolderTreeIcon,
   PilcrowIcon,
   Rows3Icon,
@@ -92,6 +93,7 @@ import { createGitDiffFileContentsLoader } from "../lib/diffFileContents";
 import { useReviewFilePatches } from "./diffs/useReviewFilePatches";
 import { DiffFileLoadingBoundary } from "./diffs/DiffFileLoadingBoundary";
 import { DiffFileStatus } from "./diffs/DiffFileStatus";
+import { useOpenInCrit } from "../hooks/useOpenInCrit";
 
 type DiffThemeType = "light" | "dark";
 const AUTOMATIC_BASE_REF = "__automatic_base_ref__";
@@ -180,6 +182,9 @@ export default function DiffPanel({
     serverConfig?.availableEditors ?? [],
   );
   const getDiffFileContents = useAtomCommand(reviewEnvironment.diffFileContents);
+  const { open: openInCrit, opening: openingCrit } = useOpenInCrit(
+    activeThread?.environmentId ?? null,
+  );
   const gitStatusQuery = useEnvironmentQuery(
     activeThread !== null && activeThread !== undefined && activeCwd != null
       ? vcsEnvironment.status({
@@ -260,6 +265,13 @@ export default function DiffPanel({
         : null,
     [selectedCheckpointTurnCount],
   );
+  const previousCheckpointRef = selectedCheckpointRange?.fromTurnCount
+    ? orderedTurnDiffSummaries.find(
+        (summary) =>
+          summary.checkpointTurnCount === selectedCheckpointRange.fromTurnCount &&
+          summary.status === "ready",
+      )?.checkpointRef
+    : undefined;
   const activeCheckpointDiff = useCheckpointDiff(
     {
       environmentId: activeThread?.environmentId ?? null,
@@ -399,6 +411,37 @@ export default function DiffPanel({
     ? activeCheckpointDiff.isPending
     : branchDiffPreview.isPending;
   const selectedPatchError = selectedTurn ? activeCheckpointDiff.error : branchDiffPreview.error;
+  const canOpenInCrit =
+    isGitRepo &&
+    activeThread != null &&
+    activeCwd != null &&
+    (selectedTurnId !== null
+      ? selectedTurn !== undefined &&
+        selectedCheckpointRange !== null &&
+        (selectedCheckpointRange.fromTurnCount === 0 || previousCheckpointRef !== undefined) &&
+        selectedTurn.status === "ready"
+      : selectedGitScope === "unstaged" || selectedGitSource?.baseRef != null);
+  const handleOpenInCrit = async () => {
+    if (!canOpenInCrit || !activeThread || !activeCwd) return;
+    let scope: CritOpenInput["scope"];
+    if (selectedTurn && selectedCheckpointRange) {
+      scope = {
+        kind: "turn",
+        threadId: activeThread.id,
+        fromTurnCount: selectedCheckpointRange.fromTurnCount,
+        ...(previousCheckpointRef ? { fromRef: previousCheckpointRef } : {}),
+        toRef: selectedTurn.checkpointRef,
+      };
+    } else if (selectedGitScope === "branch" && selectedGitSource?.baseRef) {
+      scope = { kind: "branch", baseRef: selectedGitSource.baseRef };
+    } else {
+      scope = { kind: "working-tree" };
+    }
+    await openInCrit({
+      cwd: selectedTurn ? activeCwd : (branchDiffPreview.data?.cwd ?? activeCwd),
+      scope,
+    });
+  };
   const hasResolvedPatch = typeof selectedPatch === "string";
   const hasNoNetChanges = hasResolvedPatch && selectedPatch.trim().length === 0;
   const lazySource =
@@ -860,6 +903,25 @@ export default function DiffPanel({
         )}
       </div>
       <div className="flex shrink-0 items-center gap-1 [-webkit-app-region:no-drag]">
+        {canOpenInCrit && (
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <Button
+                  type="button"
+                  size="icon-sm"
+                  variant="ghost"
+                  aria-label="Open in Crit"
+                  disabled={openingCrit}
+                  onClick={() => void handleOpenInCrit()}
+                />
+              }
+            >
+              <ExternalLinkIcon className="size-3.5" />
+            </TooltipTrigger>
+            <TooltipPopup side="top">Open in Crit</TooltipPopup>
+          </Tooltip>
+        )}
         {codeViewFiles.length > 0 || (!selectedTurn && selectedGitSource?.files?.length) ? (
           <DiffStatLabel
             additions={diffLineStat.additions}
