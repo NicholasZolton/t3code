@@ -16,6 +16,7 @@ const READY =
   /(?:Started crit daemon at|Connected to crit daemon at) http:\/\/(?:127\.0\.0\.1|localhost):(\d+)/;
 const BROWSER_START_TIMEOUT_MS = 60_000;
 const BROWSER_CHECK_INTERVAL_MS = 2_000;
+const MAX_REVIEW_LIFETIME_MS = 60 * 60 * 1_000;
 const shellQuote = (value: string): string => `'${value.replaceAll("'", "'\\''")}'`;
 
 async function critArgs(input: CritOpenInput): Promise<string[]> {
@@ -72,6 +73,7 @@ export function createCritManager(
     readonly outputDir?: string;
     readonly browserCheckIntervalMs?: number;
     readonly browserDisconnectGraceMs?: number;
+    readonly maxReviewLifetimeMs?: number;
   } = {},
 ) {
   const command = options.command ?? "crit";
@@ -135,6 +137,7 @@ export function createCritManager(
     let stopped = false;
     let timer: ReturnType<typeof setInterval> | undefined;
     let startupTimeout: ReturnType<typeof setTimeout> | undefined;
+    let lifetimeTimeout: ReturnType<typeof setTimeout> | undefined;
     let resolveExit: () => void = () => undefined;
     const exited = new Promise<void>((resolve) => {
       resolveExit = resolve;
@@ -148,6 +151,7 @@ export function createCritManager(
           stopped = true;
           if (timer) clearInterval(timer);
           if (startupTimeout) clearTimeout(startupTimeout);
+          if (lifetimeTimeout) clearTimeout(lifetimeTimeout);
           // Crit's session registry is confined to this launch's HOME, even if
           // its CLI has already exited without stopping the daemon.
           try {
@@ -182,6 +186,10 @@ export function createCritManager(
         child.once("exit", () => fail(stderr.trim() || "Crit exited before opening a review."));
       });
       const started = Date.now();
+      lifetimeTimeout = setTimeout(
+        () => void review.stop().catch(() => undefined),
+        options.maxReviewLifetimeMs ?? MAX_REVIEW_LIFETIME_MS,
+      );
       let connected = false;
       let absentSince: number | null = null;
       let checking = false;
