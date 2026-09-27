@@ -266,6 +266,7 @@ describe("ProviderSessionReaper", () => {
           getThreadMessageExcerpt: () => Effect.die("unused"),
           getThreadDetailSnapshot: () => Effect.die("unused"),
           searchThreads: () => Effect.succeed({ matches: [] }),
+          searchPrompts: () => Effect.succeed({ matches: [], nextOffset: null }),
         }),
       ),
       Layer.provideMerge(NodeServices.layer),

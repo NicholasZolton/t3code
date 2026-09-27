@@ -463,6 +463,7 @@ describe("OrchestrationEngine", () => {
           getThreadMessageExcerpt: () => Effect.die("unused"),
           getThreadDetailSnapshot: () => Effect.succeedNone,
           searchThreads: () => Effect.succeed({ matches: [] }),
+          searchPrompts: () => Effect.succeed({ matches: [], nextOffset: null }),
         }),
       ),
       Layer.provide(

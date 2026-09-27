@@ -203,6 +203,7 @@ it.effect("resolveAutoBootstrapWelcomeTargets returns existing project and threa
         getThreadMessageExcerpt: () => Effect.die("unused"),
         getThreadDetailSnapshot: () => Effect.die("unused"),
         searchThreads: () => Effect.succeed({ matches: [] }),
+        searchPrompts: () => Effect.succeed({ matches: [], nextOffset: null }),
       }),
       Effect.provideService(OrchestrationEngine.OrchestrationEngineService, {
         readEvents: () => Stream.empty,
@@ -337,6 +338,7 @@ it.effect.each([
         getThreadMessageExcerpt: () => Effect.die("unused"),
         getThreadDetailSnapshot: () => Effect.die("unused"),
         searchThreads: () => Effect.succeed({ matches: [] }),
+        searchPrompts: () => Effect.succeed({ matches: [], nextOffset: null }),
       }),
       Effect.provideService(OrchestrationEngine.OrchestrationEngineService, {
         readEvents: () => Stream.empty,
@@ -414,6 +416,7 @@ it.effect(
           getThreadMessageExcerpt: () => Effect.die("unused"),
           getThreadDetailSnapshot: () => Effect.die("unused"),
           searchThreads: () => Effect.succeed({ matches: [] }),
+          searchPrompts: () => Effect.succeed({ matches: [], nextOffset: null }),
         }),
         Effect.provideService(OrchestrationEngine.OrchestrationEngineService, {
           readEvents: () => Stream.empty,
@@ -483,6 +486,7 @@ it.effect("resolveAutoBootstrapWelcomeTargets preserves typed UUID generation fa
         getThreadMessageExcerpt: () => Effect.die("unused"),
         getThreadDetailSnapshot: () => Effect.die("unused"),
         searchThreads: () => Effect.succeed({ matches: [] }),
+        searchPrompts: () => Effect.succeed({ matches: [], nextOffset: null }),
       }),
       Effect.provideService(OrchestrationEngine.OrchestrationEngineService, {
         readEvents: () => Stream.empty,

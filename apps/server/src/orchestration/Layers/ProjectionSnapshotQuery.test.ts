@@ -2538,6 +2538,47 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
         (yield* snapshotQuery.searchThreads({ query: "hidden needle" })).matches,
         [],
       );
+      const recentPrompts = yield* snapshotQuery.searchPrompts({ query: "" });
+      assert.equal(recentPrompts.nextOffset, null);
+      assert.deepStrictEqual(
+        recentPrompts.matches.map((match) => match.messageId),
+        ["message-hidden", "message-user", "message-percent-decoy", "message-percent"],
+      );
+      const fuzzyPrompts = yield* snapshotQuery.searchPrompts({ query: "usr ndl" });
+      assert.deepStrictEqual(
+        fuzzyPrompts.matches.map((match) => match.messageId),
+        ["message-user"],
+      );
+      assert.deepStrictEqual(
+        (yield* snapshotQuery.searchPrompts({ query: "100%" })).matches.map(
+          (match) => match.messageId,
+        ),
+        ["message-percent"],
+      );
+      assert.deepStrictEqual(
+        (yield* snapshotQuery.searchPrompts({ query: "", offset: 2 })).matches.map(
+          (match) => match.messageId,
+        ),
+        ["message-percent-decoy", "message-percent"],
+      );
+      yield* sql`
+        WITH RECURSIVE numbers(value) AS (
+          SELECT 1 UNION ALL SELECT value + 1 FROM numbers WHERE value < 101
+        )
+        INSERT INTO projection_thread_messages (
+          message_id, thread_id, role, text, is_streaming, created_at, updated_at
+        )
+        SELECT
+          'paged-' || value, 'thread-active', 'user', 'paged prompt ' || value, 0,
+          '2026-05-02T00:00:00.000Z', '2026-05-02T00:00:00.000Z'
+        FROM numbers
+      `;
+      const firstPage = yield* snapshotQuery.searchPrompts({ query: "paged prompt" });
+      assert.equal(firstPage.matches.length, 30);
+      assert.equal(firstPage.nextOffset, 30);
+      const lastPage = yield* snapshotQuery.searchPrompts({ query: "paged prompt", offset: 90 });
+      assert.equal(lastPage.matches.length, 11);
+      assert.equal(lastPage.nextOffset, null);
       yield* sql`
         UPDATE projection_threads
         SET deleted_at = '2026-05-01T00:00:20.000Z'
@@ -2545,6 +2586,10 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
       `;
       assert.deepStrictEqual(
         (yield* snapshotQuery.searchThreads({ query: "user needle" })).matches,
+        [],
+      );
+      assert.deepStrictEqual(
+        (yield* snapshotQuery.searchPrompts({ query: "user needle" })).matches,
         [],
       );
     }),

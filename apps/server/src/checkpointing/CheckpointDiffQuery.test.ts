@@ -121,6 +121,7 @@ describe("CheckpointDiffQuery.layer", () => {
             getThreadMessageExcerpt: () => Effect.die("unused"),
             getThreadDetailSnapshot: () => Effect.succeedNone,
             searchThreads: () => Effect.succeed({ matches: [] }),
+            searchPrompts: () => Effect.succeed({ matches: [], nextOffset: null }),
           }),
         ),
       );
@@ -227,6 +228,7 @@ describe("CheckpointDiffQuery.layer", () => {
             getThreadMessageExcerpt: () => Effect.die("unused"),
             getThreadDetailSnapshot: () => Effect.succeedNone,
             searchThreads: () => Effect.succeed({ matches: [] }),
+            searchPrompts: () => Effect.succeed({ matches: [], nextOffset: null }),
           }),
         ),
       );
@@ -323,6 +325,7 @@ describe("CheckpointDiffQuery.layer", () => {
             getThreadMessageExcerpt: () => Effect.die("unused"),
             getThreadDetailSnapshot: () => Effect.succeedNone,
             searchThreads: () => Effect.succeed({ matches: [] }),
+            searchPrompts: () => Effect.succeed({ matches: [], nextOffset: null }),
           }),
         ),
       );
@@ -404,6 +407,7 @@ describe("CheckpointDiffQuery.layer", () => {
             getThreadMessageExcerpt: () => Effect.die("unused"),
             getThreadDetailSnapshot: () => Effect.succeedNone,
             searchThreads: () => Effect.succeed({ matches: [] }),
+            searchPrompts: () => Effect.succeed({ matches: [], nextOffset: null }),
           }),
         ),
       );
@@ -470,6 +474,7 @@ describe("CheckpointDiffQuery.layer", () => {
             getThreadMessageExcerpt: () => Effect.die("unused"),
             getThreadDetailSnapshot: () => Effect.succeedNone,
             searchThreads: () => Effect.succeed({ matches: [] }),
+            searchPrompts: () => Effect.succeed({ matches: [], nextOffset: null }),
           }),
         ),
       );
