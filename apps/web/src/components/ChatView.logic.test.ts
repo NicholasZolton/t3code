@@ -60,6 +60,8 @@ import {
   resolveDraftPromotionNavigationTarget,
   findRecordedWorktreeSetup,
   resolveVisibleWorktreeSetup,
+  shouldSubscribeToWorktreeSetup,
+  worktreeSetupBlocksSend,
   observeProactivePanelUserChoice,
   resolveProactiveTurnDiffAction,
   resolveThreadMetadataUpdateForNextTurn,
@@ -2384,6 +2386,26 @@ describe("worktree setup visibility", () => {
     expect(visible(settledDone, false)).toEqual(settledDone);
     expect(visible(settledDone, true)).toBeNull();
     expect(visible(null, true)).toBeNull();
+  });
+
+  it("recovers a reopened thread whose async setup still has an old running record", () => {
+    const handedOff = {
+      ...base,
+      sequence: 2,
+      stages: [stage("checkout", "done"), stage("setup-script", "running"), stage("agent", "done")],
+    };
+    expect(shouldSubscribeToWorktreeSetup({ live: null, recorded: base, preparing: false })).toBe(
+      true,
+    );
+    expect(worktreeSetupBlocksSend(base, false)).toBe(true);
+    expect(worktreeSetupBlocksSend(base, true)).toBe(false);
+    expect(
+      shouldSubscribeToWorktreeSetup({ live: handedOff, recorded: base, preparing: false }),
+    ).toBe(true);
+    expect(worktreeSetupBlocksSend(handedOff, false)).toBe(false);
+    expect(
+      shouldSubscribeToWorktreeSetup({ live: settledDone, recorded: base, preparing: false }),
+    ).toBe(false);
   });
 
   it("keeps a failed script, a failed setup, and a cancelled setup visible", () => {

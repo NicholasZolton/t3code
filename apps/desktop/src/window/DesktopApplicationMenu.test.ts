@@ -87,6 +87,7 @@ const makeDesktopWindowLayer = (selectedAction: Deferred.Deferred<string>) =>
     dispatchSnapShotEvent: () => Effect.void,
     zoomMain: (direction) =>
       Deferred.succeed(selectedAction, `zoom-${direction}`).pipe(Effect.asVoid),
+    openMainDevTools: Deferred.succeed(selectedAction, "open-main-devtools").pipe(Effect.asVoid),
     syncAppearance: Effect.void,
   } satisfies DesktopWindow.DesktopWindow["Service"]);
 
@@ -243,6 +244,29 @@ describe("DesktopApplicationMenu", () => {
 
       zoomIn.click({} as Electron.MenuItem, {} as Electron.BrowserWindow, {} as KeyboardEvent);
       assert.equal(yield* Deferred.await(selectedAction), "zoom-in");
+    }),
+  );
+
+  it.effect("routes Inspect T3 Window to the main renderer", () =>
+    Effect.gen(function* () {
+      const selectedAction = yield* Deferred.make<string>();
+      const applicationMenuTemplate =
+        yield* Deferred.make<readonly Electron.MenuItemConstructorOptions[]>();
+
+      yield* configureMenu(selectedAction, applicationMenuTemplate);
+
+      const viewMenu = (yield* Deferred.await(applicationMenuTemplate)).find(
+        (item) => item.label === "View",
+      );
+      if (!Array.isArray(viewMenu?.submenu)) {
+        throw new Error("Expected View menu submenu to be an array.");
+      }
+      const inspect = viewMenu.submenu.find((item) => item.label === "Inspect T3 Window");
+      assert.equal(inspect?.accelerator, "Ctrl+Shift+I");
+      if (!inspect?.click) throw new Error("Expected Inspect T3 Window click handler.");
+
+      inspect.click({} as Electron.MenuItem, {} as Electron.BrowserWindow, {} as KeyboardEvent);
+      assert.equal(yield* Deferred.await(selectedAction), "open-main-devtools");
     }),
   );
 });

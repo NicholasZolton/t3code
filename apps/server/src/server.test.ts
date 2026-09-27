@@ -12163,6 +12163,15 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         assert.equal(stageStatus(started, "setup-script"), "running");
         yield* Fiber.join(dispatchFiber);
 
+        const handoff = dispatchedCommands.findLast(
+          (command) =>
+            command.type === "thread.activity.append" && command.activity.kind === "worktree-setup",
+        );
+        assertTrue(handoff?.type === "thread.activity.append");
+        assertTrue(Schema.is(WorktreeSetupSnapshot)(handoff.activity.payload));
+        assert.equal(handoff.activity.payload.phase, "running");
+        assert.equal(stageStatus(handoff.activity.payload, "agent"), "done");
+
         yield* Deferred.succeed(scriptExit, undefined);
         const settled = yield* snapshotWhere((snapshot) => snapshot.phase !== "running");
         assert.equal(settled.phase, "done");

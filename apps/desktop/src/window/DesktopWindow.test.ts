@@ -88,6 +88,7 @@ function makeFakeBrowserWindow() {
     }),
     once: vi.fn<(eventName: string, listener: (...args: readonly unknown[]) => void) => void>(),
     openDevTools: vi.fn(),
+    isDevToolsOpened: vi.fn(() => false),
     reload: vi.fn(),
     replaceMisspelling: vi.fn(),
     send: vi.fn(),
@@ -630,6 +631,24 @@ describe("DesktopWindow", () => {
         assert.deepEqual(fakeWindow.setAutoHideCursor.mock.calls, [[false]]);
         assert.deepEqual(fakeWindow.loadURL.mock.calls[0], ["t3code-dev://app/"]);
         assert.equal(fakeWindow.openDevTools.mock.calls.length, 1);
+      }).pipe(Effect.provide(layer));
+    }),
+  );
+
+  it.effect("opens DevTools for the main window", () =>
+    Effect.gen(function* () {
+      const fakeWindow = makeFakeBrowserWindow();
+      const createCount = yield* Ref.make(0);
+      const mainWindow = yield* Ref.make<Option.Option<Electron.BrowserWindow>>(Option.none());
+      const layer = makeTestLayer({ window: fakeWindow.window, createCount, mainWindow });
+
+      yield* Effect.gen(function* () {
+        const desktopWindow = yield* DesktopWindow.DesktopWindow;
+        yield* desktopWindow.handleBackendReady(new URL("http://127.0.0.1:3773"));
+        fakeWindow.openDevTools.mockClear();
+
+        yield* desktopWindow.openMainDevTools;
+        assert.deepEqual(fakeWindow.openDevTools.mock.calls, [[{ mode: "detach" }]]);
       }).pipe(Effect.provide(layer));
     }),
   );

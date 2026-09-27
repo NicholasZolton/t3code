@@ -153,6 +153,15 @@ export const make = Effect.gen(function* () {
     const zoomClick = (direction: DesktopWindow.MainWindowZoomDirection) => () => {
       runMenuEffect(`zoom-${direction}`, zoomMainWindow(direction));
     };
+    const openMainDevToolsClick = () => {
+      runMenuEffect(
+        "open-main-devtools",
+        Effect.gen(function* () {
+          const desktopWindow = yield* DesktopWindow.DesktopWindow;
+          yield* desktopWindow.openMainDevTools;
+        }),
+      );
+    };
     const template: Electron.MenuItemConstructorOptions[] = [];
 
     if (environment.platform === "darwin") {
@@ -232,7 +241,12 @@ export const make = Effect.gen(function* () {
         submenu: [
           { role: "reload" },
           { role: "forceReload" },
-          { role: "toggleDevTools" },
+          // The built-in toggleDevTools role can inspect a focused embedded preview instead.
+          {
+            label: "Inspect T3 Window",
+            accelerator: environment.platform === "darwin" ? "Alt+Cmd+I" : "Ctrl+Shift+I",
+            click: openMainDevToolsClick,
+          },
           { type: "separator" },
           /*
             Not the zoom roles: those act on the focused webContents, so with

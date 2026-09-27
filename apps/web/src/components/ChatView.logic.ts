@@ -242,6 +242,8 @@ export function shouldReleaseTimelineAnchorForToolActivity(input: {
 export {
   findRecordedWorktreeSetup,
   resolveVisibleWorktreeSetup,
+  shouldSubscribeToWorktreeSetup,
+  worktreeSetupBlocksSend,
 } from "@t3tools/client-runtime/worktree-setup";
 
 export function resolveDraftHeroState(input: {

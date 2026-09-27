@@ -726,6 +726,12 @@ export const makeThreadCommandDispatcher = Effect.fn("makeThreadCommandDispatche
         yield* track(worktreeSetupTracker.markUncancellable(threadId));
         const started = yield* Effect.uninterruptible(dispatchFromClient(finalTurnStartCommand));
         yield* track(worktreeSetupTracker.stageStatus(threadId, "agent", "done"));
+        if (pendingSetupScript) {
+          // An async script can run for the life of the worktree. Persist the
+          // handoff so a reopened thread and startup recovery see the agent as ready.
+          const running = yield* worktreeSetupTracker.get(threadId);
+          if (running) yield* recordWorktreeSetup(running);
+        }
         // An async setup script outlives the handoff: the snapshot stays
         // running so the client keeps its row next to the agent's work,
         // and settles when the script exits. The turn already started, so
