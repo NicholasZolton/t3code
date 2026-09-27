@@ -5,7 +5,7 @@ import {
   clearComposerDraftContent,
 } from "../../state/use-composer-drafts";
 import { useWorktreeSetup } from "./use-worktree-setup";
-import { worktreeSetupAgentStarted } from "@t3tools/client-runtime/worktree-setup";
+import { worktreeSetupBlocksSend } from "@t3tools/client-runtime/worktree-setup";
 import { ScreenHeader } from "../../components/ScreenHeader";
 import { ScreenHeaderButton } from "../../components/ScreenHeaderButton";
 import type { ScreenHeaderAction } from "../../components/ScreenHeader.types";
@@ -836,8 +836,10 @@ function ThreadRouteContent(
         composer.selectedThreadQueuedMessages.length >
       1,
   });
-  const awaitingBootstrapTurn =
-    worktreeSetup?.phase === "running" && !worktreeSetupAgentStarted(worktreeSetup);
+  const awaitingBootstrapTurn = worktreeSetupBlocksSend(
+    worktreeSetup,
+    selectedThreadDetail?.latestTurn?.startedAt != null,
+  );
   const cancelWorktreeSetup = useAtomCommand(vcsEnvironment.cancelWorktreeSetup);
   const handleCancelWorktreeSetup = useCallback(() => {
     if (!selectedThread) return;

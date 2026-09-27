@@ -750,7 +750,9 @@ const decodeWorktreeSetupSnapshot = Schema.decodeUnknownOption(WorktreeSetupSnap
  * A worktree bootstrap records its setup snapshot on the thread while it runs
  * and settles it when it finishes. The bootstrap itself lives only in memory,
  * so a process exit mid-setup leaves a `running` record with nobody to finish
- * it. Before the turn started that also strands the persisted user message, so
+ * it. An async script can also leave a pre-handoff snapshot behind, so the
+ * persisted turn is checked before deciding whether the agent started.
+ * Before the turn started that also strands the persisted user message, so
  * the setup is marked failed and the user is told to send again. After the
  * handoff only an async setup script was still running; its stage is marked
  * failed and the setup settles as done, like any other script failure.
@@ -769,10 +771,12 @@ export const reconcileWorktreeSetups = Effect.gen(function* () {
     if (Option.isNone(snapshot) || snapshot.value.phase !== "running") continue;
     if (recorded.id !== worktreeSetupActivityId(snapshot.value.threadId)) continue;
     const threadId = snapshot.value.threadId;
+    const thread = yield* query.getThreadShellById(threadId);
+    const startedTurnAt = Option.isSome(thread) ? thread.value.latestTurn?.startedAt : null;
 
-    const turnStarted = snapshot.value.stages.some(
-      (stage) => stage.id === "agent" && stage.status === "done",
-    );
+    const turnStarted =
+      snapshot.value.stages.some((stage) => stage.id === "agent" && stage.status === "done") ||
+      startedTurnAt != null;
     const interrupted: WorktreeSetupSnapshot = {
       ...snapshot.value,
       phase: turnStarted ? "done" : "failed",
@@ -780,16 +784,37 @@ export const reconcileWorktreeSetups = Effect.gen(function* () {
       error: turnStarted
         ? null
         : "The server restarted before the worktree setup finished. Send the message again.",
-      stages: snapshot.value.stages.map((stage) =>
-        stage.status === "running" || stage.status === "pending"
+      stages: snapshot.value.stages.map((stage) => {
+        if (turnStarted && stage.id === "agent" && stage.status !== "done") {
+          return {
+            ...stage,
+            status: "done" as const,
+            startedAt: stage.startedAt ?? startedTurnAt ?? interruptedAt,
+            endedAt: stage.endedAt ?? startedTurnAt ?? interruptedAt,
+          };
+        }
+        if (turnStarted && stage.id === "checkout" && stage.status !== "done") {
+          return {
+            ...stage,
+            status:
+              Option.isSome(thread) && thread.value.worktreePath
+                ? ("done" as const)
+                : ("skipped" as const),
+            endedAt: startedTurnAt ?? interruptedAt,
+          };
+        }
+        if (turnStarted && stage.id === "submodules" && stage.status === "pending") {
+          return { ...stage, status: "skipped" as const, endedAt: interruptedAt };
+        }
+        return stage.status === "running" || stage.status === "pending"
           ? {
               ...stage,
-              status: "failed",
+              status: "failed" as const,
               endedAt: interruptedAt,
               detail: "interrupted by a server restart",
             }
-          : stage,
-      ),
+          : stage;
+      }),
       sequence: snapshot.value.sequence + 1,
     };
     yield* orchestrationEngine

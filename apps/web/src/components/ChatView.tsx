@@ -374,11 +374,7 @@ import { ExpandedImageDialog } from "./chat/ExpandedImageDialog";
 import { PullRequestThreadDialog } from "./PullRequestThreadDialog";
 import { MessagesTimeline } from "./chat/MessagesTimeline";
 import type { AssistantCitationRequest } from "./chat/AssistantCitationSource";
-import {
-  latestEditableMessage,
-  resolveTimelineIsAtEnd,
-  worktreeSetupAgentStarted,
-} from "./chat/MessagesTimeline.logic";
+import { latestEditableMessage, resolveTimelineIsAtEnd } from "./chat/MessagesTimeline.logic";
 import { resolveComposerTimelineInset, resolveScrollToEndClearance } from "./composerFooterLayout";
 import { ChatHeader } from "./chat/ChatHeader";
 import { PanelLayoutControls, RightPanelMaximizeControl } from "./chat/PanelLayoutControls";
@@ -466,6 +462,8 @@ import {
   resolveDraftHeroState,
   findRecordedWorktreeSetup,
   resolveVisibleWorktreeSetup,
+  shouldSubscribeToWorktreeSetup,
+  worktreeSetupBlocksSend as worktreeSetupBlocksSendForTurn,
   restorePlanFollowUpComposer,
   isPaintOnlyThreadTimeline,
   peekHeldThreadTimeline,
@@ -3607,9 +3605,13 @@ export default function ChatView(props: ChatViewProps) {
   // stream is keyed by that id alone: no owner bookkeeping, and a remount,
   // reload, or second client picks it up the same way. The subscription is
   // held only while a snapshot can still change.
-  const routeThreadPreparesWorktree =
-    (isPreparingWorktree && activeThread?.id === routeThreadRef.threadId) ||
-    heldWorktreeSetup?.phase === "running";
+  const liveWorktreeSetup =
+    heldWorktreeSetup?.threadId === routeThreadRef.threadId ? heldWorktreeSetup : null;
+  const routeThreadPreparesWorktree = shouldSubscribeToWorktreeSetup({
+    live: liveWorktreeSetup,
+    recorded: recordedWorktreeSetup,
+    preparing: isPreparingWorktree && activeThread?.id === routeThreadRef.threadId,
+  });
   const worktreeSetupQuery = useEnvironmentQuery(
     routeThreadPreparesWorktree
       ? vcsEnvironment.worktreeSetup({
@@ -3625,8 +3627,6 @@ export default function ChatView(props: ChatViewProps) {
   useEffect(() => {
     setHeldWorktreeSetup(null);
   }, [routeThreadKey]);
-  const liveWorktreeSetup =
-    heldWorktreeSetup?.threadId === routeThreadRef.threadId ? heldWorktreeSetup : null;
   const worktreeSetup = resolveVisibleWorktreeSetup({
     live: liveWorktreeSetup,
     recorded: recordedWorktreeSetup,
@@ -3641,7 +3641,7 @@ export default function ChatView(props: ChatViewProps) {
   // snapshot arrives the starting session stands in for it.
   const worktreeSetupBlocksSend =
     worktreeSetup !== null
-      ? worktreeSetup.phase === "running" && !worktreeSetupAgentStarted(worktreeSetup)
+      ? worktreeSetupBlocksSendForTurn(worktreeSetup, activeThread?.latestTurn?.startedAt != null)
       : isServerThread &&
         activeThreadShell?.session?.status === "starting" &&
         activeThreadShell.latestTurn === null;

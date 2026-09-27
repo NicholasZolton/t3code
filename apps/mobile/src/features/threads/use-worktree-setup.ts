@@ -2,6 +2,7 @@ import type { EnvironmentId, ThreadId, WorktreeSetupSnapshot } from "@t3tools/co
 import {
   findRecordedWorktreeSetup,
   resolveVisibleWorktreeSetup,
+  shouldSubscribeToWorktreeSetup,
 } from "@t3tools/client-runtime/worktree-setup";
 import { useEffect, useState } from "react";
 import { useEnvironmentQuery } from "../../state/query";
@@ -22,16 +23,10 @@ export function useWorktreeSetup(input: {
   const recorded = input.threadId
     ? findRecordedWorktreeSetup(input.activities, input.threadId)
     : null;
-  const latest = resolveVisibleWorktreeSetup({
-    live,
-    recorded,
-    turnStarted: false,
-    followUpSent: false,
-  });
   const query = useEnvironmentQuery(
     input.environmentId &&
       input.threadId &&
-      (latest?.phase === "running" || (!latest && input.preparing))
+      shouldSubscribeToWorktreeSetup({ live, recorded, preparing: input.preparing })
       ? vcsEnvironment.worktreeSetup({
           environmentId: input.environmentId,
           input: { threadId: input.threadId },

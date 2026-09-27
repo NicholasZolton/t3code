@@ -10,6 +10,7 @@ import {
 } from "@t3tools/contracts";
 import { assert, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 
@@ -18,6 +19,7 @@ import * as ProjectionSnapshotQuery from "./orchestration/Services/ProjectionSna
 import * as ServerRuntimeStartup from "./serverRuntimeStartup.ts";
 
 const startedAt = "2026-08-20T12:00:00.000Z";
+const decodeSnapshot = Schema.decodeUnknownEffect(WorktreeSetupSnapshot);
 
 const snapshotFor = (
   threadId: ThreadId,
@@ -78,13 +80,22 @@ const recordedSetup = (id: string, phase: WorktreeSetupPhase, agentStatus?: "pen
   };
 };
 
-const run = (activities: ReadonlyArray<ReturnType<typeof recordedSetup>>) =>
+const run = (
+  activities: ReadonlyArray<ReturnType<typeof recordedSetup>>,
+  startedThreadId: ThreadId | null = null,
+) =>
   Effect.gen(function* () {
     const dispatched: Array<OrchestrationCommand> = [];
     yield* ServerRuntimeStartup.reconcileWorktreeSetups.pipe(
       Effect.provideService(ProjectionSnapshotQuery.ProjectionSnapshotQuery, {
         listActivitiesByKind: (kind: string) =>
           Effect.succeed(kind === WORKTREE_SETUP_ACTIVITY_KIND ? activities : []),
+        getThreadShellById: (threadId: ThreadId) =>
+          Effect.succeed(
+            threadId === startedThreadId
+              ? Option.some({ latestTurn: { startedAt }, worktreePath: "/worktree" })
+              : Option.none(),
+          ),
       } as unknown as ProjectionSnapshotQuery.ProjectionSnapshotQuery["Service"]),
       Effect.provideService(OrchestrationEngine.OrchestrationEngineService, {
         readEvents: () => Stream.empty,
@@ -119,9 +130,7 @@ it.effect("marks setups still recorded as running failed after a restart", () =>
     assert.equal(command.threadId, ThreadId.make("thread-running"));
     assert.equal(command.activity.id, worktreeSetupActivityId(ThreadId.make("thread-running")));
     assert.equal(command.activity.tone, "error");
-    const payload = yield* Schema.decodeUnknownEffect(WorktreeSetupSnapshot)(
-      command.activity.payload,
-    );
+    const payload = yield* decodeSnapshot(command.activity.payload);
     assert.equal(payload.phase, "failed");
     assert.isNotNull(payload.endedAt);
     assert.equal(payload.sequence, 5);
@@ -141,9 +150,7 @@ it.effect(
       assert.equal(dispatched.length, 1);
       const command = dispatched[0]!;
       if (command.type !== "thread.activity.append") return assert.fail(command.type);
-      const payload = yield* Schema.decodeUnknownEffect(WorktreeSetupSnapshot)(
-        command.activity.payload,
-      );
+      const payload = yield* decodeSnapshot(command.activity.payload);
       // The turn is live; only the background script was lost. Nothing asks the
       // user to resend, and the setup reads as done with a failed script stage.
       assert.equal(payload.phase, "done");
@@ -153,4 +160,32 @@ it.effect(
         ["done", "failed", "done"],
       );
     }),
+);
+
+it.effect("recovers an early setup snapshot after the agent has already completed a turn", () =>
+  Effect.gen(function* () {
+    const threadId = ThreadId.make("thread-stale");
+    const stale = recordedSetup("thread-stale", "running");
+    const early = {
+      ...stale,
+      payload: {
+        ...stale.payload,
+        stages: stale.payload.stages.map((stage) =>
+          stage.id === "checkout" ? { ...stage, status: "pending" as const } : stage,
+        ),
+      },
+    };
+    const dispatched = yield* run([early], threadId);
+
+    assert.equal(dispatched.length, 1);
+    const command = dispatched[0]!;
+    if (command.type !== "thread.activity.append") return assert.fail(command.type);
+    const payload = yield* decodeSnapshot(command.activity.payload);
+    assert.equal(payload.phase, "done");
+    assert.isNull(payload.error);
+    assert.deepEqual(
+      payload.stages.map((stage) => stage.status),
+      ["done", "failed", "done"],
+    );
+  }),
 );
