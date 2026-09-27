@@ -84,7 +84,6 @@ import {
 import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
 import { useEnvironmentQuery } from "../state/query";
 import { useAtomCommand } from "../state/use-atom-command";
-import { shellEnvironment } from "../state/shell";
 import { serverEnvironment } from "../state/server";
 import { reviewEnvironment } from "../state/review";
 import { vcsEnvironment } from "../state/vcs";
@@ -94,7 +93,7 @@ import { createGitDiffFileContentsLoader } from "../lib/diffFileContents";
 import { useReviewFilePatches } from "./diffs/useReviewFilePatches";
 import { DiffFileLoadingBoundary } from "./diffs/DiffFileLoadingBoundary";
 import { DiffFileStatus } from "./diffs/DiffFileStatus";
-import { toastManager } from "./ui/toast";
+import { useOpenInCrit } from "../hooks/useOpenInCrit";
 
 type DiffThemeType = "light" | "dark";
 const AUTOMATIC_BASE_REF = "__automatic_base_ref__";
@@ -183,8 +182,9 @@ export default function DiffPanel({
     serverConfig?.availableEditors ?? [],
   );
   const getDiffFileContents = useAtomCommand(reviewEnvironment.diffFileContents);
-  const openInCrit = useAtomCommand(shellEnvironment.openInCrit, { reportFailure: false });
-  const [openingCrit, setOpeningCrit] = useState(false);
+  const { open: openInCrit, opening: openingCrit } = useOpenInCrit(
+    activeThread?.environmentId ?? null,
+  );
   const gitStatusQuery = useEnvironmentQuery(
     activeThread !== null && activeThread !== undefined && activeCwd != null
       ? vcsEnvironment.status({
@@ -421,40 +421,24 @@ export default function DiffPanel({
       : selectedGitScope === "unstaged" || selectedGitSource?.baseRef != null);
   const handleOpenInCrit = async () => {
     if (!canOpenInCrit || !activeThread || !activeCwd) return;
-    setOpeningCrit(true);
-    try {
-      let scope: CritOpenInput["scope"];
-      if (selectedTurn && selectedCheckpointRange) {
-        scope = {
-          kind: "turn",
-          threadId: activeThread.id,
-          fromTurnCount: selectedCheckpointRange.fromTurnCount,
-          ...(previousCheckpointRef ? { fromRef: previousCheckpointRef } : {}),
-          toRef: selectedTurn.checkpointRef,
-        };
-      } else if (selectedGitScope === "branch" && selectedGitSource?.baseRef) {
-        scope = { kind: "branch", baseRef: selectedGitSource.baseRef };
-      } else {
-        scope = { kind: "working-tree" };
-      }
-      const result = await openInCrit({
-        environmentId: activeThread.environmentId,
-        input: {
-          cwd: selectedTurn ? activeCwd : (branchDiffPreview.data?.cwd ?? activeCwd),
-          scope,
-        },
-      });
-      if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
-        const error = squashAtomCommandFailure(result);
-        toastManager.add({
-          type: "error",
-          title: "Could not open Crit",
-          description: error instanceof Error ? error.message : String(error),
-        });
-      }
-    } finally {
-      setOpeningCrit(false);
+    let scope: CritOpenInput["scope"];
+    if (selectedTurn && selectedCheckpointRange) {
+      scope = {
+        kind: "turn",
+        threadId: activeThread.id,
+        fromTurnCount: selectedCheckpointRange.fromTurnCount,
+        ...(previousCheckpointRef ? { fromRef: previousCheckpointRef } : {}),
+        toRef: selectedTurn.checkpointRef,
+      };
+    } else if (selectedGitScope === "branch" && selectedGitSource?.baseRef) {
+      scope = { kind: "branch", baseRef: selectedGitSource.baseRef };
+    } else {
+      scope = { kind: "working-tree" };
     }
+    await openInCrit({
+      cwd: selectedTurn ? activeCwd : (branchDiffPreview.data?.cwd ?? activeCwd),
+      scope,
+    });
   };
   const hasResolvedPatch = typeof selectedPatch === "string";
   const hasNoNetChanges = hasResolvedPatch && selectedPatch.trim().length === 0;

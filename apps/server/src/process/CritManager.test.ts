@@ -15,6 +15,14 @@ import { createCritManager } from "./CritManager.ts";
 const decodeArguments = Schema.decodeUnknownSync(
   Schema.fromJsonString(Schema.Array(Schema.String)),
 );
+const decodeEnvironment = Schema.decodeUnknownSync(
+  Schema.fromJsonString(
+    Schema.Struct({
+      ghRepo: Schema.optional(Schema.String),
+      home: Schema.String,
+    }),
+  ),
+);
 const fixtures: Array<() => Promise<void>> = [];
 afterEach(async () => {
   for (const cleanup of fixtures.splice(0).toReversed()) await cleanup();
@@ -101,7 +109,7 @@ it.effect("opens the selected scope and stops only its CLI after the browser dis
   }),
 );
 
-it.effect("maps branch and turn selections to Crit ranges", () =>
+it.effect("maps branch, turn, pull request, and commit selections to Crit scopes", () =>
   Effect.gen(function* () {
     const directory = yield* Effect.promise(() =>
       NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "t3-crit-args-test-")),
@@ -114,6 +122,7 @@ it.effect("maps branch and turn selections to Crit ranges", () =>
         command,
         `#!${process.execPath}\n` +
           `if(!process.argv.includes('stop'))require('node:fs').appendFileSync(require('node:path').join(process.argv[5],'args.jsonl'),JSON.stringify(process.argv.slice(2))+'\\n');\n` +
+          `if(!process.argv.includes('stop'))require('node:fs').appendFileSync(require('node:path').join(process.argv[5],'env.jsonl'),JSON.stringify({ghRepo:process.env.GH_REPO,home:process.env.HOME})+'\\n');\n` +
           `process.stderr.write('Started crit daemon at http://127.0.0.1:1 (session test, PID '+process.pid+')\\n');\n` +
           `if(!process.argv.includes('stop'))setInterval(()=>{},1000);\n` +
           `process.on('SIGTERM',()=>process.exit(0));\n`,
@@ -123,6 +132,10 @@ it.effect("maps branch and turn selections to Crit ranges", () =>
     const manager = createCritManager({ command, outputDir: directory });
     fixtures.push(() => manager.dispose());
     const cwd = process.cwd();
+    const head = NodeChildProcess.execFileSync("git", ["rev-parse", "HEAD"], {
+      cwd,
+      encoding: "utf8",
+    }).trim();
     yield* manager.open({ cwd, scope: { kind: "branch", baseRef: "HEAD" } });
     yield* manager.open({
       cwd,
@@ -143,15 +156,25 @@ it.effect("maps branch and turn selections to Crit ranges", () =>
         toRef: CheckpointRef.make("refs/custom/current"),
       },
     });
+    const githubUrl = "https://github.com/NicholasZolton/t3code/pull/9";
+    yield* manager.open({
+      cwd,
+      scope: { kind: "pull-request", provider: "github", url: githubUrl, number: 9 },
+    });
+    const gitlabUrl = "https://gitlab.example.org/team/app/-/merge_requests/12";
+    yield* manager.open({
+      cwd,
+      scope: { kind: "pull-request", provider: "gitlab", url: gitlabUrl, number: 12 },
+    });
+    yield* manager.open({
+      cwd,
+      scope: { kind: "pull-request", provider: "github", url: githubUrl, number: 9, commit: head },
+    });
     yield* Effect.promise(() => manager.dispose());
     const args = (yield* Effect.promise(() => NodeFSP.readFile(output, "utf8")))
       .trim()
       .split("\n")
       .map((line) => decodeArguments(line));
-    const head = NodeChildProcess.execFileSync("git", ["rev-parse", "HEAD"], {
-      cwd,
-      encoding: "utf8",
-    }).trim();
     const branchArgs = args[0];
     NodeAssert.ok(branchArgs);
     NodeAssert.deepEqual(branchArgs.slice(4), ["--range", `${head}..HEAD`]);
@@ -165,5 +188,90 @@ it.effect("maps branch and turn selections to Crit ranges", () =>
       "--range",
       "refs/custom/previous..refs/custom/current",
     ]);
+    NodeAssert.deepEqual(args[3]?.slice(4), ["--pr", githubUrl]);
+    NodeAssert.deepEqual(args[4]?.slice(4), ["--mr", gitlabUrl, "--remote"]);
+    NodeAssert.deepEqual(args[5]?.slice(4), ["--range", `${head}^..${head}`]);
+    const environments = (yield* Effect.promise(() =>
+      NodeFSP.readFile(NodePath.join(directory, "env.jsonl"), "utf8"),
+    ))
+      .trim()
+      .split("\n")
+      .map((line) => decodeEnvironment(line));
+    NodeAssert.equal(environments[3]?.ghRepo, "github.com/NicholasZolton/t3code");
+    NodeAssert.notEqual(environments[3]?.home, NodeOS.homedir());
+  }),
+);
+
+it.effect("fetches a pull request commit absent from the local checkout", () =>
+  Effect.gen(function* () {
+    const directory = yield* Effect.promise(() =>
+      NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "t3-crit-pr-test-")),
+    );
+    fixtures.push(() => NodeFSP.rm(directory, { recursive: true, force: true }));
+    const git = (cwd: string, ...args: string[]): string =>
+      NodeChildProcess.execFileSync("git", ["-c", "commit.gpgsign=false", ...args], {
+        cwd,
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "pipe"],
+      }).trim();
+    const origin = NodePath.join(directory, "origin.git");
+    const author = NodePath.join(directory, "author");
+    const checkout = NodePath.join(directory, "checkout");
+    git(directory, "init", "--bare", "-b", "main", origin);
+    git(directory, "clone", origin, author);
+    git(
+      author,
+      "-c",
+      "user.name=T3",
+      "-c",
+      "user.email=t3@example.test",
+      "commit",
+      "--allow-empty",
+      "-m",
+      "base",
+    );
+    git(author, "push", "origin", "HEAD:main");
+    git(directory, "clone", origin, checkout);
+    yield* Effect.promise(() => NodeFSP.writeFile(NodePath.join(author, "change.txt"), "change\n"));
+    git(author, "add", "change.txt");
+    git(author, "-c", "user.name=T3", "-c", "user.email=t3@example.test", "commit", "-m", "change");
+    const commit = git(author, "rev-parse", "HEAD");
+    git(author, "push", "origin", "HEAD:refs/pull/9/head");
+    NodeAssert.notEqual(
+      NodeChildProcess.spawnSync("git", ["cat-file", "-e", commit], { cwd: checkout }).status,
+      0,
+    );
+
+    const command = NodePath.join(directory, "crit");
+    yield* Effect.promise(() =>
+      NodeFSP.writeFile(
+        command,
+        `#!${process.execPath}\n` +
+          `if(process.argv.includes('stop'))process.exit(0);\n` +
+          `require('node:fs').writeFileSync(require('node:path').join(process.argv[5],'args.json'),JSON.stringify(process.argv.slice(2)));\n` +
+          `process.stderr.write('Started crit daemon at http://127.0.0.1:1\\n');\n` +
+          `setInterval(()=>{},1000);\n`,
+      ),
+    );
+    yield* Effect.promise(() => NodeFSP.chmod(command, 0o755));
+    const manager = createCritManager({ command, outputDir: directory });
+    fixtures.push(() => manager.dispose());
+    yield* manager.open({
+      cwd: checkout,
+      scope: {
+        kind: "pull-request",
+        provider: "github",
+        url: "https://github.com/example/repo/pull/9",
+        number: 9,
+        commit,
+      },
+    });
+    yield* Effect.promise(() => manager.dispose());
+    NodeAssert.equal(git(checkout, "rev-parse", "HEAD"), git(author, "rev-parse", "HEAD^"));
+    NodeAssert.equal(git(checkout, "cat-file", "-t", commit), "commit");
+    const args = decodeArguments(
+      yield* Effect.promise(() => NodeFSP.readFile(NodePath.join(directory, "args.json"), "utf8")),
+    );
+    NodeAssert.deepEqual(args.slice(4), ["--range", `${commit}^..${commit}`]);
   }),
 );

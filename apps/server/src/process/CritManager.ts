@@ -5,6 +5,7 @@ import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 import * as NodeUtil from "node:util";
 import { CritOpenError, type CritOpenInput } from "@t3tools/contracts";
+import { HostProcessPlatform } from "@t3tools/shared/hostProcess";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -15,6 +16,7 @@ const READY =
   /(?:Started crit daemon at|Connected to crit daemon at) http:\/\/(?:127\.0\.0\.1|localhost):(\d+)/;
 const BROWSER_START_TIMEOUT_MS = 60_000;
 const BROWSER_CHECK_INTERVAL_MS = 2_000;
+const shellQuote = (value: string): string => `'${value.replaceAll("'", "'\\''")}'`;
 
 async function critArgs(input: CritOpenInput): Promise<string[]> {
   switch (input.scope.kind) {
@@ -25,6 +27,28 @@ async function critArgs(input: CritOpenInput): Promise<string[]> {
         cwd: input.cwd,
       });
       return ["--range", `${stdout.trim()}..HEAD`];
+    }
+    case "pull-request": {
+      if (input.scope.commit) {
+        const commit = input.scope.commit;
+        try {
+          await execFile("git", ["cat-file", "-e", `${commit}^{commit}`], { cwd: input.cwd });
+        } catch {
+          const ref =
+            input.scope.provider === "github"
+              ? `refs/pull/${input.scope.number}/head`
+              : `refs/merge-requests/${input.scope.number}/head`;
+          await execFile("git", ["fetch", "--quiet", "--no-tags", "origin", ref], {
+            cwd: input.cwd,
+            timeout: 30_000,
+          });
+          await execFile("git", ["cat-file", "-e", `${commit}^{commit}`], { cwd: input.cwd });
+        }
+        return ["--range", `${commit}^..${commit}`];
+      }
+      return input.scope.provider === "github"
+        ? ["--pr", input.scope.url]
+        : ["--mr", input.scope.url, "--remote"];
     }
     case "turn":
       if (input.scope.fromTurnCount !== 0 && !input.scope.fromRef) {
@@ -52,15 +76,50 @@ export function createCritManager(
 ) {
   const command = options.command ?? "crit";
   const outputDir = options.outputDir ?? NodePath.join(NodeOS.homedir(), ".crit");
+  const isWindows = HostProcessPlatform.defaultValue() === "win32";
   const reviews = new Set<ManagedReview>();
 
   const open = async (input: CritOpenInput): Promise<void> => {
     const args = await critArgs(input);
+    let githubRepository: string | undefined;
+    if (input.scope.kind === "pull-request" && input.scope.provider === "github") {
+      const url = new URL(input.scope.url);
+      const repository = url.pathname.match(/^\/([^/]+)\/([^/]+)\/pull\/(\d+)\/?$/);
+      if (
+        url.protocol !== "https:" ||
+        !repository ||
+        Number(repository[3]) !== input.scope.number
+      ) {
+        throw new Error("Crit needs a GitHub pull request URL for this review.");
+      }
+      githubRepository = `${url.hostname}/${repository[1]}/${repository[2]}`;
+    }
     const root = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "t3-crit-"));
+    const providerBin = NodePath.join(root, "bin");
+    if (input.scope.kind === "pull-request" && !isWindows) {
+      try {
+        await NodeFSP.mkdir(providerBin);
+        // The daemon keeps its own HOME; forge and git CLIs need the environment's normal login.
+        for (const tool of ["gh", "glab", "git"]) {
+          await NodeFSP.writeFile(
+            NodePath.join(providerBin, tool),
+            `#!/bin/sh\nHOME=${shellQuote(NodeOS.homedir())} USERPROFILE=${shellQuote(NodeOS.homedir())} PATH=${shellQuote(process.env.PATH ?? "")} exec ${tool} "$@"\n`,
+            { mode: 0o755 },
+          );
+        }
+      } catch (error) {
+        await NodeFSP.rm(root, { recursive: true, force: true });
+        throw error;
+      }
+    }
     const env = {
       ...process.env,
       HOME: root,
       USERPROFILE: root,
+      ...(input.scope.kind === "pull-request" && !isWindows
+        ? { PATH: `${providerBin}${NodePath.delimiter}${process.env.PATH ?? ""}` }
+        : {}),
+      ...(githubRepository ? { GH_REPO: githubRepository } : {}),
       CRIT_NO_INTEGRATION_CHECK: "1",
       CRIT_NO_UPDATE_CHECK: "1",
     };
