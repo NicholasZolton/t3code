@@ -310,7 +310,8 @@ export interface TimelineDurationMessage {
 export type TimelineLatestTurn = Pick<
   OrchestrationLatestTurn,
   "turnId" | "state" | "startedAt" | "completedAt"
->;
+> &
+  Partial<Pick<OrchestrationLatestTurn, "requestedAt">>;
 
 const LIVE_ACTIVITY_ROW_ID = "live-activity-row";
 
@@ -941,6 +942,7 @@ function buildRevertTurnCountByUserMessageId(input: {
 export function latestEditableMessage(input: {
   timelineEntries: ReadonlyArray<TimelineEntry>;
   turnDiffSummaries: ReadonlyArray<TurnDiffSummary>;
+  latestTurn?: TimelineLatestTurn | null;
 }): { messageId: MessageId; turnCount: number } | null {
   const userEntry = input.timelineEntries.findLast(
     (entry) => entry.kind === "message" && entry.message.role === "user",
@@ -954,6 +956,7 @@ export function latestEditableMessage(input: {
     input.timelineEntries,
     input.turnDiffSummaries,
     byAssistantMessageId,
+    input.latestTurn,
   ).get(userEntry.message.id);
   return turnCount === undefined ? null : { messageId: userEntry.message.id, turnCount };
 }
@@ -962,13 +965,33 @@ function revertTurnCounts(
   timelineEntries: ReadonlyArray<TimelineEntry>,
   turnDiffSummaries: ReadonlyArray<TurnDiffSummary>,
   byAssistantMessageId: ReadonlyMap<MessageId, TurnDiffSummary>,
+  latestTurn?: TimelineLatestTurn | null,
 ): Map<MessageId, number> {
-  return buildRevertTurnCountByUserMessageId({
+  const counts = buildRevertTurnCountByUserMessageId({
     supportsConversationRollback: true,
     timelineEntries,
     turnDiffSummaryByAssistantMessageId: byAssistantMessageId,
     inferredCheckpointTurnCountByTurnId: inferCheckpointTurnCountByTurnId(turnDiffSummaries),
   });
+  if (latestTurn?.state !== "interrupted" || !latestTurn.requestedAt || !latestTurn.completedAt) {
+    return counts;
+  }
+  const checkpoint = turnDiffSummaries.find(
+    (summary) => summary.turnId === latestTurn.turnId && summary.status === "ready",
+  );
+  const lastUser = timelineEntries.findLast(
+    (entry) => entry.kind === "message" && entry.message.role === "user",
+  );
+  if (
+    checkpoint &&
+    lastUser?.kind === "message" &&
+    !counts.has(lastUser.message.id) &&
+    lastUser.message.createdAt >= latestTurn.requestedAt &&
+    lastUser.message.createdAt <= latestTurn.completedAt
+  ) {
+    counts.set(lastUser.message.id, Math.max(0, checkpoint.checkpointTurnCount - 1));
+  }
+  return counts;
 }
 
 export function deriveMessagesTimelineRows(input: {
@@ -999,6 +1022,7 @@ export function deriveMessagesTimelineRows(input: {
         input.timelineEntries,
         input.turnDiffSummaries,
         turnDiffSummaryByAssistantMessageId,
+        input.latestTurn,
       )
     : new Map<MessageId, number>();
   const nextRows: MessagesTimelineRow[] = [];

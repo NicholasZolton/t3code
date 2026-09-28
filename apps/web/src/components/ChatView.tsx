@@ -7245,6 +7245,7 @@ export default function ChatView(props: ChatViewProps) {
       const target = latestEditableMessage({
         timelineEntries: displayedTimeline.entries,
         turnDiffSummaries: activeThread?.checkpoints ?? [],
+        latestTurn: activeLatestTurn,
       });
       if (!target) return;
       event.preventDefault();
@@ -7255,6 +7256,7 @@ export default function ChatView(props: ChatViewProps) {
     return () => window.removeEventListener("keydown", onKeyDown, true);
   }, [
     activeThread?.checkpoints,
+    activeLatestTurn,
     displayedTimeline.entries,
     getShortcutContext,
     isRevertingCheckpoint,

@@ -3295,7 +3295,13 @@ export function makeOpenCodeAdapter(
               promptAdmission.messageObserved = true;
             } else {
               await context.client.session.prompt(
-                { sessionID, id: messageId, text: text ?? "", files: fileParts },
+                {
+                  sessionID,
+                  id: messageId,
+                  text: text ?? "",
+                  files: fileParts,
+                  metadata: { t3CodeTurnId: turnId },
+                },
                 { signal },
               );
             }
@@ -3884,24 +3890,25 @@ export function makeOpenCodeAdapter(
       return messages;
     });
 
+    const toTurnSnapshots = (
+      messages: Awaited<ReturnType<OpenCodeClient["message"]["list"]>>["data"],
+    ): Array<OpenCodeTurnSnapshot> => {
+      const turns: Array<OpenCodeTurnSnapshot> = [];
+      for (const entry of messages) {
+        if (entry.type === "assistant") {
+          turns.push({ id: TurnId.make(entry.id), items: [entry, ...entry.content] });
+        }
+      }
+      return turns;
+    };
+
     const readThread: OpenCodeAdapterShape["readThread"] = Effect.fn("readThread")(
       function* (threadId) {
         const context = yield* ensureSessionContext(sessions, threadId);
         const messages = yield* readMessages(context);
-
-        const turns: Array<OpenCodeTurnSnapshot> = [];
-        for (const entry of messages) {
-          if (entry.type === "assistant") {
-            turns.push({
-              id: TurnId.make(entry.id),
-              items: [entry, ...entry.content],
-            });
-          }
-        }
-
         return {
           threadId,
-          turns,
+          turns: toTurnSnapshots(messages),
         };
       },
     );
@@ -3909,11 +3916,83 @@ export function makeOpenCodeAdapter(
     const rollbackThread: OpenCodeAdapterShape["rollbackThread"] = Effect.fn("rollbackThread")(
       function* (threadId, numTurns) {
         const context = yield* ensureSessionContext(sessions, threadId);
-        const snapshot = yield* readThread(threadId);
-        const targetIndex = Math.max(0, snapshot.turns.length - numTurns);
-        const target = snapshot.turns[targetIndex];
+        const entries = yield* readMessages(context);
+        const snapshot = { threadId, turns: toTurnSnapshots(entries) };
+        const boundaries: Array<(typeof entries)[number] | number> = [];
+        const untaggedUsers: Array<(typeof entries)[number]> = [];
+        const ambiguousTaggedStarts = new Set<string>();
+        // Tagged prompts group steers with their T3 turn; older sessions use
+        // assistant messages and trailing user prompts as rewind boundaries.
+        let taggedTurnId: string | undefined;
+        for (const entry of entries) {
+          if (entry.type === "user") {
+            const turnId = entry.metadata?.t3CodeTurnId;
+            if (typeof turnId === "string") {
+              if (untaggedUsers.length > 0) ambiguousTaggedStarts.add(entry.id);
+              boundaries.push(...untaggedUsers);
+              untaggedUsers.length = 0;
+              if (turnId !== taggedTurnId) boundaries.push(entry);
+              taggedTurnId = turnId;
+            } else {
+              taggedTurnId = undefined;
+              untaggedUsers.push(entry);
+            }
+          } else if (entry.type === "assistant") {
+            if (untaggedUsers.length > 0) {
+              boundaries.push(untaggedUsers[0]!);
+              untaggedUsers.length = 0;
+            } else if (!taggedTurnId) {
+              boundaries.push(entry);
+            }
+          }
+        }
+        boundaries.push(...untaggedUsers);
+        const inbox = yield* runOpenCodeSdk("session.inbox.list", (signal) =>
+          context.client.session.inbox.list({ sessionID: context.openCodeSessionId }, { signal }),
+        ).pipe(Effect.mapError(toRequestError));
+        for (const [index, item] of inbox.entries()) {
+          if (item.type !== "user") continue;
+          const turnId = item.payload.metadata?.t3CodeTurnId;
+          if (typeof turnId !== "string" || turnId !== taggedTurnId) {
+            boundaries.push(index);
+          }
+          taggedTurnId = typeof turnId === "string" ? turnId : undefined;
+        }
+        const targetIndex = Math.max(0, boundaries.length - numTurns);
+        const target = boundaries[targetIndex];
+        if (typeof target === "number") {
+          if (boundaries.slice(0, targetIndex).some((boundary) => typeof boundary === "number")) {
+            return yield* toRequestError(
+              new OpenCodeRuntimeError({
+                operation: "session.inbox.cancel",
+                detail:
+                  "An earlier OpenCode turn is still pending in the inbox and cannot be preserved by rewinding only the latest turn.",
+              }),
+            );
+          }
+          yield* Effect.forEach(
+            inbox.slice(target).filter((item) => item.type === "user"),
+            (item) =>
+              runOpenCodeSdk("session.inbox.cancel", (signal) =>
+                context.client.session.inbox.cancel(
+                  { sessionID: context.openCodeSessionId, inboxID: item.id },
+                  { signal },
+                ),
+              ).pipe(Effect.mapError(toRequestError)),
+            { discard: true },
+          );
+          return snapshot;
+        }
         if (target) {
-          const entries = yield* readMessages(context);
+          if (ambiguousTaggedStarts.has(target.id)) {
+            return yield* toRequestError(
+              new OpenCodeRuntimeError({
+                operation: "session.fork",
+                detail:
+                  "An untagged OpenCode prompt immediately precedes this turn. It may be a native command steer, so the rewind boundary cannot be determined safely.",
+              }),
+            );
+          }
           const targetMessageIndex = entries.findIndex((entry) => entry.id === target.id);
           if (targetMessageIndex < 0) {
             return yield* toRequestError(
@@ -3925,7 +4004,7 @@ export function makeOpenCodeAdapter(
           }
           const firstRemovedMessage =
             entries.slice(0, targetMessageIndex + 1).findLast((entry) => entry.type === "user") ??
-            entries[targetMessageIndex]!;
+            target;
           // Native revert also rewrites workspace files. Fork only the retained
           // conversation so T3 alone decides whether filesystem changes survive.
           const fork = yield* runOpenCodeSdk("session.fork", () =>
@@ -3952,6 +4031,17 @@ export function makeOpenCodeAdapter(
               }),
             );
           }
+          yield* Effect.forEach(
+            inbox.filter((item) => item.type === "user"),
+            (item) =>
+              runOpenCodeSdk("session.inbox.cancel", (signal) =>
+                context.client.session.inbox.cancel(
+                  { sessionID: context.openCodeSessionId, inboxID: item.id },
+                  { signal },
+                ),
+              ).pipe(Effect.mapError(toRequestError)),
+            { discard: true },
+          );
           yield* runOpenCodeSdk("session.update", () =>
             context.client.session.update({
               sessionID: forkedSessionId,
