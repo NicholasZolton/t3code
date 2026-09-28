@@ -6,6 +6,7 @@ import type {
 } from "@t3tools/contracts";
 import { COMPOSER_CONTEXT_MAX_RECORDS, DEFAULT_SERVER_SETTINGS } from "@t3tools/contracts";
 import { useAtomValue } from "@effect/atom-react";
+import { isProviderWorkspaceCatalogStale } from "@t3tools/shared/providerWorkspaceCatalog";
 import { Atom } from "effect/unstable/reactivity";
 import { Alert } from "react-native";
 import {
@@ -263,6 +264,13 @@ export function useComposerCommandMenu({
   const workspaceRefreshKeyRef = useRef<string | null>(null);
   const workspaceRefreshRetryRef = useRef<{ key: string; notBefore: number } | null>(null);
   const hadWorkspaceSnapshotRef = useRef(false);
+
+  const trigger = useMemo(() => {
+    if (!enabled || selection.start !== selection.end) {
+      return null;
+    }
+    return detectComposerTrigger(draftMessage, selection.end);
+  }, [draftMessage, enabled, selection]);
   useEffect(() => {
     if (hadWorkspaceSnapshotRef.current && !hasWorkspaceSnapshot) {
       workspaceRefreshKeyRef.current = null;
@@ -272,13 +280,17 @@ export function useComposerCommandMenu({
   }, [hasWorkspaceSnapshot]);
   useEffect(() => {
     if (!environmentId || !projectCwd || !selectedProviderInstanceId) return;
-    const key = `${environmentId}:${selectedProviderInstanceId}:${projectCwd}`;
-    if (workspaceRefreshKeyRef.current === key) return;
-    if (hasWorkspaceSnapshot) {
-      workspaceRefreshKeyRef.current = key;
-      workspaceRefreshRetryRef.current = null;
+    const snapshot = selectedProviderStatus?.workspaceSnapshots?.find(
+      (candidate) => candidate.cwd === projectCwd,
+    );
+    const isSkillMenuOpen = trigger?.kind === "skill" || trigger?.kind === "slash-command";
+    if (
+      snapshot &&
+      (!isSkillMenuOpen || !isProviderWorkspaceCatalogStale(snapshot.checkedAt, Date.now()))
+    )
       return;
-    }
+    const key = `${environmentId}:${selectedProviderInstanceId}:${projectCwd}:${snapshot?.checkedAt ?? ""}`;
+    if (workspaceRefreshKeyRef.current === key) return;
     const retry = workspaceRefreshRetryRef.current;
     if (retry?.key === key && Date.now() < retry.notBefore) return;
     workspaceRefreshKeyRef.current = key;
@@ -294,30 +306,23 @@ export function useComposerCommandMenu({
       environmentId,
       input: { instanceId: selectedProviderInstanceId, cwd: projectCwd },
     }).then((result) => {
-      const refreshed =
-        result._tag === "Success" &&
-        result.value.providers
-          .find((provider) => provider.instanceId === selectedProviderInstanceId)
-          ?.workspaceSnapshots?.some((snapshot) => snapshot.cwd === projectCwd);
-      if (!refreshed && workspaceRefreshKeyRef.current === key) {
-        retryLater();
-      }
+      const updatedSnapshot =
+        result._tag === "Success"
+          ? result.value.providers
+              .find((provider) => provider.instanceId === selectedProviderInstanceId)
+              ?.workspaceSnapshots?.find((candidate) => candidate.cwd === projectCwd)
+          : undefined;
+      if (!updatedSnapshot || updatedSnapshot.checkedAt === snapshot?.checkedAt) retryLater();
     }, retryLater);
   }, [
-    draftMessage,
     environmentId,
     hasWorkspaceSnapshot,
     projectCwd,
     refreshProviders,
     selectedProviderInstanceId,
+    selectedProviderStatus,
+    trigger,
   ]);
-
-  const trigger = useMemo(() => {
-    if (!enabled || selection.start !== selection.end) {
-      return null;
-    }
-    return detectComposerTrigger(draftMessage, selection.end);
-  }, [draftMessage, enabled, selection]);
   const pathSearch = useComposerPathSearch({
     environmentId,
     cwd: trigger?.kind === "path" ? projectCwd : null,

@@ -1579,6 +1579,10 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
               providers[0]?.workspaceSnapshots?.[0]?.skills,
               scopedProvider.skills,
             );
+            assert.strictEqual(
+              providers[0]?.workspaceSnapshots?.[0]?.checkedAt,
+              DateTime.formatIso(yield* DateTime.now),
+            );
             yield* registry.refreshWorkspaceSnapshot({ instanceId, cwd: "/workspace" });
             assert.strictEqual(yield* Ref.get(snapshotCalls), 2);
 
@@ -1587,14 +1591,37 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
               { name: "new-skill", path: "/workspace/new-skill/SKILL.md", enabled: true },
             ];
             yield* Ref.set(scopedSkills, updatedSkills);
-            yield* registry.invalidateWorkspaceSnapshots(instanceId);
-            assert.strictEqual((yield* registry.getProviders)[0]?.workspaceSnapshots, undefined);
+            yield* TestClock.adjust("29 seconds");
+            yield* registry.refreshWorkspaceSnapshot({ instanceId, cwd: "/workspace" });
+            assert.strictEqual(yield* Ref.get(snapshotCalls), 2);
+            yield* TestClock.adjust("2 seconds");
+            yield* Ref.set(returnPendingSnapshot, true);
+            yield* registry.refreshWorkspaceSnapshot({ instanceId, cwd: "/workspace" });
+            assert.deepStrictEqual(
+              (yield* registry.getProviders)[0]?.workspaceSnapshots?.[0]?.skills,
+              scopedProvider.skills,
+            );
+            yield* Ref.set(returnPendingSnapshot, false);
             yield* registry.refreshWorkspaceSnapshot({ instanceId, cwd: "/workspace" });
             assert.deepStrictEqual(
               (yield* registry.getProviders)[0]?.workspaceSnapshots?.[0]?.skills,
               updatedSkills,
             );
-            assert.strictEqual(yield* Ref.get(snapshotCalls), 3);
+            assert.strictEqual(yield* Ref.get(snapshotCalls), 4);
+
+            const newlyAddedSkills = [
+              ...updatedSkills,
+              { name: "another-skill", path: "/workspace/another-skill/SKILL.md", enabled: true },
+            ];
+            yield* Ref.set(scopedSkills, newlyAddedSkills);
+            yield* registry.invalidateWorkspaceSnapshots(instanceId);
+            assert.strictEqual((yield* registry.getProviders)[0]?.workspaceSnapshots, undefined);
+            yield* registry.refreshWorkspaceSnapshot({ instanceId, cwd: "/workspace" });
+            assert.deepStrictEqual(
+              (yield* registry.getProviders)[0]?.workspaceSnapshots?.[0]?.skills,
+              newlyAddedSkills,
+            );
+            assert.strictEqual(yield* Ref.get(snapshotCalls), 5);
 
             yield* Ref.set(instancesRef, [rebuiltInstance]);
             yield* PubSub.publish(registryChanges, undefined);

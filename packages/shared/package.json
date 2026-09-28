@@ -135,6 +135,10 @@
       "types": "./src/projectSettings.ts",
       "import": "./src/projectSettings.ts"
     },
+    "./providerWorkspaceCatalog": {
+      "types": "./src/providerWorkspaceCatalog.ts",
+      "import": "./src/providerWorkspaceCatalog.ts"
+    },
     "./t3ProjectFile": {
       "types": "./src/t3ProjectFile.ts",
       "import": "./src/t3ProjectFile.ts"
