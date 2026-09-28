@@ -299,6 +299,51 @@ describe("streaming row projection", () => {
     });
   });
 
+  it("offers rewind for a checkpointed interrupted turn without an assistant message", () => {
+    const initial = fixture();
+    const timelineEntries = deriveTimelineEntries(initial.messages.slice(0, -1), [], initial.work);
+    const latestTurn = {
+      turnId: initial.turnId,
+      state: "interrupted" as const,
+      requestedAt: initial.time(5),
+      startedAt: initial.time(5),
+      completedAt: initial.time(9),
+    };
+    const checkpoint: TurnDiffSummary = {
+      turnId: initial.turnId,
+      assistantMessageId: MessageId.make("assistant:placeholder"),
+      checkpointTurnCount: 2,
+      checkpointRef: CheckpointRef.make("refs/t3/checkpoints/interrupted-turn"),
+      status: "ready",
+      files: [],
+      completedAt: initial.time(10),
+    };
+    const input = {
+      timelineEntries,
+      latestTurn,
+      turnDiffSummaries: [checkpoint],
+    };
+    expect(latestEditableMessage(input)).toEqual({
+      messageId: MessageId.make("live-user"),
+      turnCount: 1,
+    });
+    expect(
+      deriveMessagesTimelineRows({
+        ...initial.input,
+        ...input,
+        isWorking: false,
+        supportsConversationRollback: true,
+      }).find((row) => row.kind === "message" && row.message.id === MessageId.make("live-user")),
+    ).toMatchObject({ revertTurnCount: 1 });
+    expect(latestEditableMessage({ ...input, turnDiffSummaries: [] })).toBeNull();
+    expect(
+      latestEditableMessage({
+        ...input,
+        latestTurn: { ...latestTurn, state: "running" },
+      }),
+    ).toBeNull();
+  });
+
   it("owns checkpoint lookups across streaming and equal source snapshots", () => {
     const initial = fixture("Partial");
     let checkpointLookupReads = 0;

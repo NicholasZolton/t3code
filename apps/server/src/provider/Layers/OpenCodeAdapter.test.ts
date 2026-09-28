@@ -54,6 +54,7 @@ type MessageEntry = {
   info: {
     id: string;
     role: "user" | "assistant";
+    metadata?: { t3CodeTurnId: string };
   };
   parts: Array<unknown>;
 };
@@ -98,6 +99,15 @@ const runtimeMock = {
     messageListCalls: [] as Array<{ sessionID: string; order?: "asc" | "desc"; cursor?: string }>,
     forkMessagesBySession: new Map<string, MessageEntry[]>(),
     forkPreservesBoundary: true,
+    inboxItems: [] as Array<
+      | {
+          id: string;
+          type: "user";
+          payload: { metadata?: { t3CodeTurnId: string } };
+        }
+      | { id: string; type: "compaction"; payload: Record<string, never> }
+    >,
+    inboxCancelCalls: [] as string[],
     subscribedEvents: [] as Array<unknown | Promise<unknown>>,
     eventSubscribeObserved: null as (() => void) | null,
     eventStreamError: null as ((cause: unknown) => void) | null,
@@ -168,6 +178,8 @@ const runtimeMock = {
     this.state.messageListCalls.length = 0;
     this.state.forkMessagesBySession.clear();
     this.state.forkPreservesBoundary = true;
+    this.state.inboxItems = [];
+    this.state.inboxCancelCalls.length = 0;
     this.state.subscribedEvents = [];
     this.state.eventSubscribeObserved = null;
     this.state.eventStreamError = null;
@@ -268,9 +280,12 @@ const OpenCodeRuntimeTestDouble: OpenCodeRuntimeShape = {
           const start = input.cursor ? Number(input.cursor) : 0;
           const end = start + (runtimeMock.state.messagePageSize ?? entries.length);
           return {
-            data: entries
-              .slice(start, end)
-              .map((entry) => ({ id: entry.info.id, type: entry.info.role, content: entry.parts })),
+            data: entries.slice(start, end).map((entry) => ({
+              id: entry.info.id,
+              type: entry.info.role,
+              content: entry.parts,
+              ...(entry.info.metadata ? { metadata: entry.info.metadata } : {}),
+            })),
             cursor: { next: end < entries.length ? String(end) : null },
           };
         },
@@ -324,6 +339,15 @@ const OpenCodeRuntimeTestDouble: OpenCodeRuntimeShape = {
           runtimeMock.state.sessionMoveCalls.push({ sessionID, directory });
         },
         wait: async () => undefined,
+        inbox: {
+          list: async () => runtimeMock.state.inboxItems,
+          cancel: async ({ inboxID }: { inboxID: string }) => {
+            runtimeMock.state.inboxCancelCalls.push(inboxID);
+            runtimeMock.state.inboxItems = runtimeMock.state.inboxItems.filter(
+              (item) => item.id !== inboxID,
+            );
+          },
+        },
         instructions: { entry: { put: async () => undefined } },
         fork: async ({ sessionID, before }: { sessionID: string; before?: string }) => {
           const forkedId = `${sessionID}_fork`;
@@ -404,7 +428,17 @@ const OpenCodeRuntimeTestDouble: OpenCodeRuntimeShape = {
               runtimeMock.state.messages;
             const text = "text" in input && typeof input.text === "string" ? input.text : "";
             messages.push({
-              info: { id: input.id, role: "user" },
+              info: {
+                id: input.id,
+                role: "user",
+                ...("metadata" in input &&
+                typeof input.metadata === "object" &&
+                input.metadata !== null &&
+                "t3CodeTurnId" in input.metadata &&
+                typeof input.metadata.t3CodeTurnId === "string"
+                  ? { metadata: { t3CodeTurnId: input.metadata.t3CodeTurnId } }
+                  : {}),
+              },
               parts: [],
             });
             runtimeMock.state.promptEchoEvents.push({
@@ -4253,7 +4287,7 @@ it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
         runtimeMode: "full-access",
       });
 
-      yield* adapter.sendTurn({
+      const turn = yield* adapter.sendTurn({
         threadId: asThreadId("thread-custom-instance"),
         input: "Fix it",
         modelSelection: createModelSelection(
@@ -4275,6 +4309,7 @@ it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
         sessionID: "http://127.0.0.1:9999/session",
         text: "Fix it",
         files: [],
+        metadata: { t3CodeTurnId: turn.turnId },
       });
       NodeAssert.deepEqual(runtimeMock.state.switchModelCalls.at(-1)?.model, {
         providerID: "anthropic",
@@ -4316,7 +4351,7 @@ it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
         ),
       });
 
-      yield* adapter.sendTurn({
+      const turn = yield* adapter.sendTurn({
         threadId,
         input: "Fix it",
       });
@@ -4330,6 +4365,7 @@ it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
         sessionID: "http://127.0.0.1:9999/session",
         text: "Fix it",
         files: [],
+        metadata: { t3CodeTurnId: turn.turnId },
       });
       NodeAssert.deepEqual(runtimeMock.state.switchModelCalls.at(-1)?.model, {
         providerID: "anthropic",
@@ -4404,11 +4440,333 @@ it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
       NodeAssert.deepEqual(runtimeMock.state.forkCalls.at(-1)?.before, "user-2");
       NodeAssert.deepEqual(
         runtimeMock.state.messageListCalls.filter((call) => call.cursor),
+        [{ sessionID: "http://127.0.0.1:9999/session", cursor: "2" }],
+      );
+    }),
+  );
+
+  it.effect("rewinds an interrupted prompt without removing the previous answer", () =>
+    Effect.gen(function* () {
+      const adapter = yield* OpenCodeAdapter;
+      const threadId = asThreadId("thread-rollback-interrupted");
+      yield* adapter.startSession({ threadId, runtimeMode: "full-access" });
+      runtimeMock.state.messages = [
+        { info: { id: "user-1", role: "user" }, parts: [] },
+        { info: { id: "assistant-1", role: "assistant" }, parts: [] },
+      ];
+      const turn = yield* adapter.sendTurn({
+        threadId,
+        input: "Interrupted prompt",
+        modelSelection: createModelSelection(
+          ProviderInstanceId.make("opencode"),
+          "anthropic/claude-sonnet-4-5",
+        ),
+      });
+      const interruptedMessageId = (runtimeMock.state.promptCalls.at(-1) as { id: string }).id;
+      yield* adapter.interruptTurn(threadId, turn.turnId);
+
+      const snapshot = yield* adapter.rollbackThread(threadId, 1);
+      NodeAssert.equal(runtimeMock.state.forkCalls.at(-1)?.before, interruptedMessageId);
+      NodeAssert.deepEqual(
+        snapshot.turns.map((entry) => entry.id),
+        ["assistant-1_fork"],
+      );
+      NodeAssert.deepEqual((yield* adapter.readThread(threadId)).turns, snapshot.turns);
+      NodeAssert.deepEqual(
+        (yield* adapter.listSessions()).find((session) => session.threadId === threadId)
+          ?.resumeCursor,
+        { schemaVersion: 1, sessionId: "http://127.0.0.1:9999/session_fork" },
+      );
+    }),
+  );
+
+  it.effect("rewinds a stopped prompt even when no assistant message exists", () =>
+    Effect.gen(function* () {
+      const adapter = yield* OpenCodeAdapter;
+      const threadId = asThreadId("thread-rollback-user-only");
+      yield* adapter.startSession({ threadId, runtimeMode: "full-access" });
+      runtimeMock.state.messages = [{ info: { id: "user-pending", role: "user" }, parts: [] }];
+
+      const snapshot = yield* adapter.rollbackThread(threadId, 1);
+      NodeAssert.equal(runtimeMock.state.forkCalls.at(-1)?.before, "user-pending");
+      NodeAssert.deepEqual(snapshot.turns, []);
+      NodeAssert.deepEqual((yield* adapter.readThread(threadId)).turns, []);
+    }),
+  );
+
+  it.effect("rewinds only the latest of consecutive user-only prompts", () =>
+    Effect.gen(function* () {
+      const adapter = yield* OpenCodeAdapter;
+      const threadId = asThreadId("thread-rollback-consecutive-stops");
+      yield* adapter.startSession({ threadId, runtimeMode: "full-access" });
+      runtimeMock.state.messages = [
+        { info: { id: "user-stopped-1", role: "user" }, parts: [] },
+        { info: { id: "user-stopped-2", role: "user" }, parts: [] },
+      ];
+
+      yield* adapter.rollbackThread(threadId, 1);
+      NodeAssert.equal(runtimeMock.state.forkCalls.at(-1)?.before, "user-stopped-2");
+      NodeAssert.deepEqual(
+        runtimeMock.state.forkMessagesBySession
+          .get("http://127.0.0.1:9999/session_fork")
+          ?.map((entry) => entry.info.id),
+        ["user-stopped-1_fork"],
+      );
+      yield* adapter.rollbackThread(threadId, 1);
+      NodeAssert.equal(runtimeMock.state.forkCalls.at(-1)?.before, "user-stopped-1_fork");
+    }),
+  );
+
+  it.effect("rewinds a stopped turn including its user-only steer", () =>
+    Effect.gen(function* () {
+      const adapter = yield* OpenCodeAdapter;
+      const threadId = asThreadId("thread-rollback-user-only-steer");
+      yield* adapter.startSession({ threadId, runtimeMode: "full-access" });
+      const modelSelection = createModelSelection(
+        ProviderInstanceId.make("opencode"),
+        "anthropic/claude-sonnet-4-5",
+      );
+      const first = yield* adapter.sendTurn({ threadId, input: "Start", modelSelection });
+      const second = yield* adapter.sendTurn({ threadId, input: "Steer", modelSelection });
+      NodeAssert.equal(second.turnId, first.turnId);
+      NodeAssert.deepEqual(
+        runtimeMock.state.messages.map((entry) => entry.info.metadata?.t3CodeTurnId),
+        [first.turnId, first.turnId],
+      );
+      yield* adapter.interruptTurn(threadId, first.turnId);
+
+      const snapshot = yield* adapter.rollbackThread(threadId, 1);
+      NodeAssert.deepEqual(snapshot.turns, []);
+      NodeAssert.equal(
+        runtimeMock.state.forkCalls.at(-1)?.before,
+        runtimeMock.state.messages[0]?.info.id,
+      );
+      NodeAssert.deepEqual(
+        runtimeMock.state.forkMessagesBySession.get("http://127.0.0.1:9999/session_fork"),
+        [],
+      );
+    }),
+  );
+
+  it.effect("rewinds a steer after an assistant message with the rest of its T3 turn", () =>
+    Effect.gen(function* () {
+      const adapter = yield* OpenCodeAdapter;
+      const threadId = asThreadId("thread-rollback-assistant-steer");
+      yield* adapter.startSession({ threadId, runtimeMode: "full-access" });
+      const modelSelection = createModelSelection(
+        ProviderInstanceId.make("opencode"),
+        "anthropic/claude-sonnet-4-5",
+      );
+      const first = yield* adapter.sendTurn({ threadId, input: "Start", modelSelection });
+      runtimeMock.state.messages.push({
+        info: { id: "assistant-working", role: "assistant" },
+        parts: [],
+      });
+      const second = yield* adapter.sendTurn({ threadId, input: "Steer", modelSelection });
+      NodeAssert.equal(second.turnId, first.turnId);
+      yield* adapter.interruptTurn(threadId, first.turnId);
+
+      yield* adapter.rollbackThread(threadId, 1);
+      NodeAssert.equal(
+        runtimeMock.state.forkCalls.at(-1)?.before,
+        runtimeMock.state.messages[0]?.info.id,
+      );
+      NodeAssert.deepEqual(
+        runtimeMock.state.forkMessagesBySession.get("http://127.0.0.1:9999/session_fork"),
+        [],
+      );
+    }),
+  );
+
+  it.effect("refuses to guess whether a tagged steer belongs to an untagged native command", () =>
+    Effect.gen(function* () {
+      const adapter = yield* OpenCodeAdapter;
+      const threadId = asThreadId("thread-rollback-native-command-steer");
+      yield* adapter.startSession({ threadId, runtimeMode: "full-access" });
+      const modelSelection = createModelSelection(
+        ProviderInstanceId.make("opencode"),
+        "anthropic/claude-sonnet-4-5",
+      );
+      const command = yield* adapter.sendTurn({ threadId, input: "/review", modelSelection });
+      runtimeMock.state.messages.push({
+        info: { id: "command-user", role: "user" },
+        parts: [],
+      });
+      const steer = yield* adapter.sendTurn({ threadId, input: "Steer", modelSelection });
+      NodeAssert.equal(steer.turnId, command.turnId);
+      yield* adapter.interruptTurn(threadId, command.turnId);
+
+      const result = yield* adapter.rollbackThread(threadId, 1).pipe(Effect.exit);
+      NodeAssert.equal(Exit.isFailure(result), true);
+      NodeAssert.deepEqual(runtimeMock.state.forkCalls, []);
+    }),
+  );
+
+  it.effect("rewinds a native command with no steer at its untagged user prompt", () =>
+    Effect.gen(function* () {
+      const adapter = yield* OpenCodeAdapter;
+      const threadId = asThreadId("thread-rollback-native-command");
+      yield* adapter.startSession({ threadId, runtimeMode: "full-access" });
+      runtimeMock.state.messages = [
+        { info: { id: "command-user", role: "user" }, parts: [] },
+        { info: { id: "command-assistant", role: "assistant" }, parts: [] },
+      ];
+
+      yield* adapter.rollbackThread(threadId, 1);
+      NodeAssert.equal(runtimeMock.state.forkCalls.at(-1)?.before, "command-user");
+    }),
+  );
+
+  it.effect("preserves an earlier stopped turn and its steer when rewinding the next turn", () =>
+    Effect.gen(function* () {
+      const adapter = yield* OpenCodeAdapter;
+      const threadId = asThreadId("thread-rollback-consecutive-steers");
+      yield* adapter.startSession({ threadId, runtimeMode: "full-access" });
+      runtimeMock.state.messages = [
+        { info: { id: "user-baseline", role: "user" }, parts: [] },
+        { info: { id: "assistant-baseline", role: "assistant" }, parts: [] },
+      ];
+      const modelSelection = createModelSelection(
+        ProviderInstanceId.make("opencode"),
+        "anthropic/claude-sonnet-4-5",
+      );
+      const first = yield* adapter.sendTurn({ threadId, input: "First", modelSelection });
+      yield* adapter.sendTurn({ threadId, input: "First steer", modelSelection });
+      yield* adapter.interruptTurn(threadId, first.turnId);
+      const second = yield* adapter.sendTurn({ threadId, input: "Second", modelSelection });
+      yield* adapter.interruptTurn(threadId, second.turnId);
+      const firstMessageId = runtimeMock.state.messages[2]?.info.id;
+      const firstSteerId = runtimeMock.state.messages[3]?.info.id;
+      const secondMessageId = runtimeMock.state.messages[4]?.info.id;
+
+      yield* adapter.rollbackThread(threadId, 1);
+      NodeAssert.equal(runtimeMock.state.forkCalls.at(-1)?.before, secondMessageId);
+      NodeAssert.deepEqual(
+        runtimeMock.state.forkMessagesBySession
+          .get("http://127.0.0.1:9999/session_fork")
+          ?.map((entry) => entry.info.id),
         [
-          { sessionID: "http://127.0.0.1:9999/session", cursor: "2" },
-          { sessionID: "http://127.0.0.1:9999/session", cursor: "2" },
+          "user-baseline_fork",
+          "assistant-baseline_fork",
+          `${firstMessageId}_fork`,
+          `${firstSteerId}_fork`,
         ],
       );
+      yield* adapter.rollbackThread(threadId, 1);
+      NodeAssert.equal(runtimeMock.state.forkCalls.at(-1)?.before, `${firstMessageId}_fork`);
+    }),
+  );
+
+  it.effect("cancels an unprojected stopped turn without removing earlier history", () =>
+    Effect.gen(function* () {
+      const adapter = yield* OpenCodeAdapter;
+      const threadId = asThreadId("thread-rollback-inbox-only");
+      yield* adapter.startSession({ threadId, runtimeMode: "full-access" });
+      runtimeMock.state.messages = [
+        { info: { id: "user-earlier", role: "user" }, parts: [] },
+        { info: { id: "assistant-earlier", role: "assistant" }, parts: [] },
+      ];
+      runtimeMock.state.inboxItems = [
+        {
+          id: "queued-start",
+          type: "user",
+          payload: { metadata: { t3CodeTurnId: "unprojected-turn" } },
+        },
+        {
+          id: "queued-steer",
+          type: "user",
+          payload: { metadata: { t3CodeTurnId: "unprojected-turn" } },
+        },
+      ];
+
+      const snapshot = yield* adapter.rollbackThread(threadId, 1);
+      NodeAssert.deepEqual(runtimeMock.state.forkCalls, []);
+      NodeAssert.deepEqual(runtimeMock.state.inboxCancelCalls, ["queued-start", "queued-steer"]);
+      NodeAssert.deepEqual(
+        snapshot.turns.map((turn) => turn.id),
+        ["assistant-earlier"],
+      );
+    }),
+  );
+
+  it.effect("drops a projected turn and its pending steer together", () =>
+    Effect.gen(function* () {
+      const adapter = yield* OpenCodeAdapter;
+      const threadId = asThreadId("thread-rollback-projected-inbox-steer");
+      yield* adapter.startSession({ threadId, runtimeMode: "full-access" });
+      runtimeMock.state.messages = [
+        { info: { id: "user-earlier", role: "user" }, parts: [] },
+        { info: { id: "assistant-earlier", role: "assistant" }, parts: [] },
+        {
+          info: { id: "user-latest", role: "user", metadata: { t3CodeTurnId: "latest" } },
+          parts: [],
+        },
+      ];
+      runtimeMock.state.inboxItems = [
+        { id: "queued-steer", type: "user", payload: { metadata: { t3CodeTurnId: "latest" } } },
+      ];
+
+      yield* adapter.rollbackThread(threadId, 1);
+      NodeAssert.equal(runtimeMock.state.forkCalls.at(-1)?.before, "user-latest");
+      NodeAssert.deepEqual(runtimeMock.state.inboxCancelCalls, ["queued-steer"]);
+      NodeAssert.deepEqual(
+        runtimeMock.state.forkMessagesBySession
+          .get("http://127.0.0.1:9999/session_fork")
+          ?.map((entry) => entry.info.id),
+        ["user-earlier_fork", "assistant-earlier_fork"],
+      );
+    }),
+  );
+
+  it.effect("leaves unrelated non-user inbox work alone when canceling a stopped turn", () =>
+    Effect.gen(function* () {
+      const adapter = yield* OpenCodeAdapter;
+      const threadId = asThreadId("thread-rollback-inbox-with-compaction");
+      yield* adapter.startSession({ threadId, runtimeMode: "full-access" });
+      runtimeMock.state.inboxItems = [
+        { id: "queued-user", type: "user", payload: { metadata: { t3CodeTurnId: "last" } } },
+        { id: "compaction", type: "compaction", payload: {} },
+      ];
+
+      yield* adapter.rollbackThread(threadId, 1);
+      NodeAssert.deepEqual(runtimeMock.state.inboxCancelCalls, ["queued-user"]);
+      NodeAssert.deepEqual(
+        runtimeMock.state.inboxItems.map((item) => item.id),
+        ["compaction"],
+      );
+    }),
+  );
+
+  it.effect("does not claim to preserve an earlier inbox-only turn", () =>
+    Effect.gen(function* () {
+      const adapter = yield* OpenCodeAdapter;
+      const threadId = asThreadId("thread-rollback-two-inbox-turns");
+      yield* adapter.startSession({ threadId, runtimeMode: "full-access" });
+      runtimeMock.state.inboxItems = [
+        { id: "queued-first", type: "user", payload: { metadata: { t3CodeTurnId: "first" } } },
+        { id: "queued-second", type: "user", payload: { metadata: { t3CodeTurnId: "second" } } },
+        {
+          id: "queued-second-steer",
+          type: "user",
+          payload: { metadata: { t3CodeTurnId: "second" } },
+        },
+      ];
+
+      const result = yield* adapter.rollbackThread(threadId, 1).pipe(Effect.exit);
+      NodeAssert.equal(Exit.isFailure(result), true);
+      NodeAssert.deepEqual(runtimeMock.state.inboxCancelCalls, []);
+      NodeAssert.deepEqual(
+        runtimeMock.state.inboxItems.map((item) => item.id),
+        ["queued-first", "queued-second", "queued-second-steer"],
+      );
+      NodeAssert.deepEqual(runtimeMock.state.forkCalls, []);
+
+      yield* adapter.rollbackThread(threadId, 2);
+      NodeAssert.deepEqual(runtimeMock.state.inboxCancelCalls, [
+        "queued-first",
+        "queued-second",
+        "queued-second-steer",
+      ]);
     }),
   );
 
