@@ -49,7 +49,11 @@ import {
   wouldTextPasteExceedLimit,
 } from "@t3tools/client-runtime/text-paste";
 import { serializeComposerFileLink } from "@t3tools/shared/composerTrigger";
-import { expandSavedPrompt, savedPromptEnvironmentNames } from "@t3tools/shared/savedPrompts";
+import {
+  expandSavedPrompt,
+  savedPromptEnvironmentNames,
+  searchSavedPrompts,
+} from "@t3tools/shared/savedPrompts";
 import { folderDropTarget, resolveDroppedFolderPath } from "./folderDrop";
 import { createModelSelection, normalizeModelSlug } from "@t3tools/shared/model";
 import { USAGE_LIMITS_COMMAND } from "@t3tools/shared/usageLimits";
@@ -2346,18 +2350,16 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   const composerMenuItems = useMemo<ComposerCommandItem[]>(() => {
     if (!composerTrigger) return [];
     if (composerTrigger.kind === "saved-prompt") {
-      const query = composerTrigger.query.toLowerCase();
-      return Object.entries(settings.savedPrompts)
-        .filter(([name]) => name.toLowerCase().includes(query))
-        .sort(([a], [b]) => a.localeCompare(b))
-        .map(([name, body]) => ({
+      return searchSavedPrompts(settings.savedPrompts, composerTrigger.query).map(
+        ([name, body]) => ({
           id: `saved-prompt:${name}`,
           type: "saved-prompt" as const,
           name,
           body,
           label: `>${name}`,
           description: body.replaceAll("\n", " "),
-        }));
+        }),
+      );
     }
     if (composerTrigger.kind === "path") {
       return workspaceEntries.entries.map((entry) => ({

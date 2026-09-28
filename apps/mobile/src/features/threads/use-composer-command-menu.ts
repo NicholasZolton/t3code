@@ -8,7 +8,11 @@ import { COMPOSER_CONTEXT_MAX_RECORDS, DEFAULT_SERVER_SETTINGS } from "@t3tools/
 import { useAtomValue } from "@effect/atom-react";
 import { Atom } from "effect/unstable/reactivity";
 import { Alert } from "react-native";
-import { expandSavedPrompt, savedPromptEnvironmentNames } from "@t3tools/shared/savedPrompts";
+import {
+  expandSavedPrompt,
+  savedPromptEnvironmentNames,
+  searchSavedPrompts,
+} from "@t3tools/shared/savedPrompts";
 import { formatComposerContextReference } from "@t3tools/shared/composerContextReferences";
 import { pullRequestComposerContext } from "../../lib/composerContext";
 import { uuidv4 } from "../../lib/uuid";
@@ -330,18 +334,14 @@ export function useComposerCommandMenu({
     if (!trigger) return [];
 
     if (trigger.kind === "saved-prompt") {
-      const query = trigger.query.toLowerCase();
-      return Object.entries(savedPrompts)
-        .filter(([name]) => name.toLowerCase().includes(query))
-        .sort(([a], [b]) => a.localeCompare(b))
-        .map(([name, body]) => ({
-          id: `saved-prompt:${name}`,
-          type: "saved-prompt" as const,
-          name,
-          body,
-          label: `>${name}`,
-          description: body.replaceAll("\n", " "),
-        }));
+      return searchSavedPrompts(savedPrompts, trigger.query).map(([name, body]) => ({
+        id: `saved-prompt:${name}`,
+        type: "saved-prompt" as const,
+        name,
+        body,
+        label: `>${name}`,
+        description: body.replaceAll("\n", " "),
+      }));
     }
 
     if (trigger.kind === "pull-request") {
