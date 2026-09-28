@@ -1591,7 +1591,10 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
               { name: "new-skill", path: "/workspace/new-skill/SKILL.md", enabled: true },
             ];
             yield* Ref.set(scopedSkills, updatedSkills);
-            yield* TestClock.adjust("6 minutes");
+            yield* TestClock.adjust("29 seconds");
+            yield* registry.refreshWorkspaceSnapshot({ instanceId, cwd: "/workspace" });
+            assert.strictEqual(yield* Ref.get(snapshotCalls), 2);
+            yield* TestClock.adjust("2 seconds");
             yield* Ref.set(returnPendingSnapshot, true);
             yield* registry.refreshWorkspaceSnapshot({ instanceId, cwd: "/workspace" });
             assert.deepStrictEqual(
