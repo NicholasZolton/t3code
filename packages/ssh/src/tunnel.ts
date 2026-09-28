@@ -1795,7 +1795,6 @@ PY`;
         };
         const key = targetConnectionKey(target);
         if (!tunnels.has(key)) return null;
-        // Dev servers can use Portless from subdirectories without a process at the worktree root.
         const forwardedPorts = [...portlessForwards.values()].filter(
           (forward) => forward.key === key,
         );
