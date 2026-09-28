@@ -205,7 +205,7 @@ const server = createServer(async (request, response) => {
   response.end("drained");
 });
 server.listen(0, "127.0.0.1", () => {
-  process.stdout.write("server listening on http://127.0.0.1:" + server.address().port + "\\n");
+  process.stdout.write("opencode server listening on http://127.0.0.1:" + server.address().port + "\\n");
 });
 `,
         );

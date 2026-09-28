@@ -181,7 +181,10 @@ const make = Effect.gen(function* () {
         const runtimeMode = projectDefaults.defaultRuntimeMode;
         const worktreeToken = useWorktree ? yield* freshId : null;
         const worktreeBranch = useWorktree
-          ? buildTemporaryWorktreeBranchName(() => worktreeToken!.replaceAll("-", ""))
+          ? buildTemporaryWorktreeBranchName(
+              () => worktreeToken!.replaceAll("-", ""),
+              projectDefaults.worktreeBranchPrefix,
+            )
           : null;
         const command: Extract<OrchestrationCommand, { type: "thread.turn.start" }> = {
           type: "thread.turn.start",

@@ -906,6 +906,10 @@ it.effect("uses the target project's model and permission defaults for a new thr
 it.effect("starts a separate worktree with the same bootstrap sequence as the client", () =>
   Effect.gen(function* () {
     const fixture = yield* makeFixture;
+    yield* Ref.set(fixture.settings, {
+      ...DEFAULT_SERVER_SETTINGS,
+      worktreeBranchPrefix: "myteam",
+    });
     yield* Effect.gen(function* () {
       const started = yield* call("threads_start", { prompt: "Review independently" });
       expect(started.isError).toBeFalsy();
@@ -917,6 +921,7 @@ it.effect("starts a separate worktree with the same bootstrap sequence as the cl
         expect.objectContaining({
           type: "thread.meta.update",
           threadId: created.threadId,
+          branch: expect.stringMatching(/^myteam\/[0-9a-f]{8}$/),
           worktreePath: "/repo-worktree",
         }),
       );

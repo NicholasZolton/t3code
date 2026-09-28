@@ -90,7 +90,7 @@ Join modifiers and a key with `+`, such as `mod+shift+d` or `ctrl+l`.
 ## When conditions
 
 Available context keys are `terminalFocus`, `terminalOpen`, `previewFocus`,
-`previewOpen`, `modelPickerOpen`, `editableFocus`, `composerFocus`, `isWeb`, and
+`previewOpen`, `modelPickerOpen`, `usagePageOpen`, `editableFocus`, `composerFocus`, `isWeb`, and
 `isDesktop`. `editableFocus` is true while a text field, the composer, or another editor has
 the keyboard. `isWeb` is true in a browser tab. `isDesktop` is true in the
 desktop app. `composerFocus` is true while typing in the chat composer.
