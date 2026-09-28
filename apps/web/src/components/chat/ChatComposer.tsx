@@ -982,6 +982,7 @@ import {
   resolveProviderSlashCommandsForCwd,
 } from "@t3tools/client-runtime/providerSkills";
 import { searchProviderSkills } from "../../providerSkillSearch";
+import { isProviderWorkspaceCatalogStale } from "@t3tools/shared/providerWorkspaceCatalog";
 import { useDelayedStatus } from "../../hooks/useDelayedStatus";
 import { useMediaQuery } from "../../hooks/useMediaQuery";
 import { usePanelAnimationSettings } from "../../panelAnimations";
@@ -1965,54 +1966,6 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   const workspaceRefreshKeyRef = useRef<string | null>(null);
   const workspaceRefreshRetryRef = useRef<{ key: string; notBefore: number } | null>(null);
   const hadWorkspaceSnapshotRef = useRef(false);
-  useEffect(() => {
-    const hasWorkspaceSnapshot = Boolean(
-      gitCwd &&
-      selectedProviderStatus?.workspaceSnapshots?.some((snapshot) => snapshot.cwd === gitCwd),
-    );
-    if (hadWorkspaceSnapshotRef.current && !hasWorkspaceSnapshot) {
-      workspaceRefreshKeyRef.current = null;
-      workspaceRefreshRetryRef.current = null;
-    }
-    hadWorkspaceSnapshotRef.current = hasWorkspaceSnapshot;
-  }, [gitCwd, selectedProviderStatus]);
-  useEffect(() => {
-    if (!gitCwd || !selectedProviderEntry) return;
-    const key = `${environmentId}:${selectedProviderEntry.instanceId}:${gitCwd}`;
-    const hasWorkspaceSnapshot = selectedProviderStatus?.workspaceSnapshots?.some(
-      (snapshot) => snapshot.cwd === gitCwd,
-    );
-    if (workspaceRefreshKeyRef.current === key) return;
-    if (hasWorkspaceSnapshot) {
-      workspaceRefreshKeyRef.current = key;
-      workspaceRefreshRetryRef.current = null;
-      return;
-    }
-    const retry = workspaceRefreshRetryRef.current;
-    if (retry?.key === key && Date.now() < retry.notBefore) return;
-    workspaceRefreshKeyRef.current = key;
-    const retryLater = () => {
-      if (workspaceRefreshKeyRef.current !== key) return;
-      workspaceRefreshKeyRef.current = null;
-      workspaceRefreshRetryRef.current = {
-        key,
-        notBefore: Date.now() + WORKSPACE_SNAPSHOT_RETRY_COOLDOWN_MS,
-      };
-    };
-    void refreshProviders({
-      environmentId,
-      input: { instanceId: selectedProviderEntry.instanceId, cwd: gitCwd },
-    }).then((result) => {
-      const hasWorkspaceSnapshot =
-        result._tag === "Success" &&
-        result.value.providers
-          .find((provider) => provider.instanceId === selectedProviderEntry.instanceId)
-          ?.workspaceSnapshots?.some((snapshot) => snapshot.cwd === gitCwd);
-      if (!hasWorkspaceSnapshot && workspaceRefreshKeyRef.current === key) {
-        retryLater();
-      }
-    }, retryLater);
-  }, [environmentId, gitCwd, prompt, refreshProviders, selectedProviderEntry]);
   const selectedProviderModels = useMemo<ReadonlyArray<ServerProvider["models"][number]>>(
     () => selectedProviderEntry?.models ?? [],
     [selectedProviderEntry],
@@ -2112,6 +2065,62 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     dismissTrigger: dismissComposerTrigger,
     resetTrigger: resetComposerTrigger,
   } = useComposerTriggerState(() => detectComposerTrigger(prompt, prompt.length));
+  useEffect(() => {
+    const hasWorkspaceSnapshot = Boolean(
+      gitCwd &&
+      selectedProviderStatus?.workspaceSnapshots?.some((snapshot) => snapshot.cwd === gitCwd),
+    );
+    if (hadWorkspaceSnapshotRef.current && !hasWorkspaceSnapshot) {
+      workspaceRefreshKeyRef.current = null;
+      workspaceRefreshRetryRef.current = null;
+    }
+    hadWorkspaceSnapshotRef.current = hasWorkspaceSnapshot;
+  }, [gitCwd, selectedProviderStatus]);
+  useEffect(() => {
+    if (!gitCwd || !selectedProviderEntry) return;
+    const snapshot = selectedProviderStatus?.workspaceSnapshots?.find(
+      (candidate) => candidate.cwd === gitCwd,
+    );
+    const isSkillMenuOpen =
+      composerTrigger?.kind === "skill" || composerTrigger?.kind === "slash-command";
+    if (
+      snapshot &&
+      (!isSkillMenuOpen || !isProviderWorkspaceCatalogStale(snapshot.checkedAt, Date.now()))
+    )
+      return;
+    const key = `${environmentId}:${selectedProviderEntry.instanceId}:${gitCwd}:${snapshot?.checkedAt ?? ""}`;
+    if (workspaceRefreshKeyRef.current === key) return;
+    const retry = workspaceRefreshRetryRef.current;
+    if (retry?.key === key && Date.now() < retry.notBefore) return;
+    workspaceRefreshKeyRef.current = key;
+    const retryLater = () => {
+      if (workspaceRefreshKeyRef.current !== key) return;
+      workspaceRefreshKeyRef.current = null;
+      workspaceRefreshRetryRef.current = {
+        key,
+        notBefore: Date.now() + WORKSPACE_SNAPSHOT_RETRY_COOLDOWN_MS,
+      };
+    };
+    void refreshProviders({
+      environmentId,
+      input: { instanceId: selectedProviderEntry.instanceId, cwd: gitCwd },
+    }).then((result) => {
+      const updatedSnapshot =
+        result._tag === "Success"
+          ? result.value.providers
+              .find((provider) => provider.instanceId === selectedProviderEntry.instanceId)
+              ?.workspaceSnapshots?.find((candidate) => candidate.cwd === gitCwd)
+          : undefined;
+      if (!updatedSnapshot || updatedSnapshot.checkedAt === snapshot?.checkedAt) retryLater();
+    }, retryLater);
+  }, [
+    composerTrigger,
+    environmentId,
+    gitCwd,
+    refreshProviders,
+    selectedProviderEntry,
+    selectedProviderStatus,
+  ]);
   const [composerHighlightedItemId, setComposerHighlightedItemId] = useState<string | null>(null);
   // Active ArrowUp recall. Cleared on edit and on thread switch.
   const promptHistoryPositionRef = useRef<ComposerPromptHistoryPosition | null>(null);
