@@ -591,7 +591,7 @@ describe("ssh tunnel scripts", () => {
     },
   );
 
-  it.effect("forwards Portless when SSH connects and keeps it across thread switches", () => {
+  it.effect("uses the sole forwarded Portless port when no process has the worktree cwd", () => {
     const commands: Array<ReadonlyArray<string>> = [];
     let forwardKills = 0;
     let portLookups = 0;
@@ -617,7 +617,7 @@ describe("ssh tunnel scripts", () => {
         }
         if (args.includes("sh")) {
           portLookups += 1;
-          return makeSuccessfulProcess(portLookups >= 3 ? "" : "58345\n");
+          return makeSuccessfulProcess(portLookups === 2 ? "58345\n" : "");
         }
         return makeSuccessfulProcess("\n");
       }),
@@ -724,6 +724,7 @@ describe("ssh tunnel scripts", () => {
   it.effect("forwards distinct Portless routes without needing an open thread", () => {
     const forwards: string[] = [];
     const stopped: string[] = [];
+    let portLookups = 0;
     const spawner = ChildProcessSpawner.make((command) =>
       Effect.sync(() => {
         const args = commandArgs(command);
@@ -740,7 +741,10 @@ describe("ssh tunnel scripts", () => {
           );
         if (args.includes("sh") && args.includes("--"))
           return makeSuccessfulProcess('{"remotePort":3773}\n');
-        if (args.includes("sh")) return makeSuccessfulProcess("49329\n");
+        if (args.includes("sh")) {
+          portLookups += 1;
+          return makeSuccessfulProcess(portLookups === 1 ? "" : "49329\n");
+        }
         return makeSuccessfulProcess("\n");
       }),
     );
@@ -766,6 +770,7 @@ describe("ssh tunnel scripts", () => {
         "127.0.0.1:58345:127.0.0.1:58345",
         "127.0.0.1:49329:127.0.0.1:49329",
       ]);
+      assert.equal(yield* manager.syncPortlessForward({ target, cwd: "/project" }), null);
       assert.equal(yield* manager.syncPortlessForward({ target, cwd: "/project" }), 49329);
       assert.deepEqual(stopped, []);
       yield* manager.syncPortlessForward(null);

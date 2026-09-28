@@ -1795,9 +1795,14 @@ PY`;
         };
         const key = targetConnectionKey(target);
         if (!tunnels.has(key)) return null;
+        // Dev servers can use Portless from subdirectories without a process at the worktree root.
+        const forwardedPorts = [...portlessForwards.values()].filter(
+          (forward) => forward.key === key,
+        );
         const port =
           (yield* portlessPortForThread(key, target, input.cwd)) ??
-          (preferredPortlessForward?.key === key ? preferredPortlessForward.port : null);
+          (preferredPortlessForward?.key === key ? preferredPortlessForward.port : null) ??
+          (forwardedPorts.length === 1 ? (forwardedPorts[0]?.port ?? null) : null);
         preferredPortlessForward = port === null ? null : { key, port };
         if (port !== null) {
           const existing = portlessCandidates.get(key);
