@@ -225,6 +225,7 @@ function retainThreadMessagesAfterRevert(
   messages: ReadonlyArray<OrchestrationMessage>,
   retainedTurnIds: ReadonlySet<string>,
   turnCount: number,
+  retainedThrough: string | null,
 ): ReadonlyArray<OrchestrationMessage> {
   const retainedMessageIds = new Set<string>();
   for (const message of messages) {
@@ -250,6 +251,8 @@ function retainThreadMessagesAfterRevert(
         (message) =>
           message.role === "user" &&
           !retainedMessageIds.has(message.id) &&
+          retainedThrough !== null &&
+          compareDateTimeStrings(message.createdAt, retainedThrough) <= 0 &&
           (message.turnId === null || retainedTurnIds.has(message.turnId)),
       )
       .toSorted(
@@ -276,6 +279,8 @@ function retainThreadMessagesAfterRevert(
         (message) =>
           message.role === "assistant" &&
           !retainedMessageIds.has(message.id) &&
+          retainedThrough !== null &&
+          compareDateTimeStrings(message.createdAt, retainedThrough) <= 0 &&
           (message.turnId === null || retainedTurnIds.has(message.turnId)),
       )
       .toSorted(
@@ -1028,6 +1033,7 @@ export function projectEvent(
             thread.messages,
             retainedTurnIds,
             payload.turnCount,
+            checkpoints.at(-1)?.completedAt ?? null,
           ).slice(-MAX_THREAD_MESSAGES);
           const proposedPlans = retainThreadProposedPlansAfterRevert(
             thread.proposedPlans,

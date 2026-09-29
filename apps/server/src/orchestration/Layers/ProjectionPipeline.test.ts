@@ -3762,7 +3762,7 @@ it.layer(BaseTestLayer)("OrchestrationProjectionPipeline", (it) => {
     }),
   );
 
-  it.effect("does not fallback-retain messages whose turnId is removed by revert", () =>
+  it.effect("drops unbound messages after the retained checkpoint", () =>
     Effect.gen(function* () {
       const projectionPipeline = yield* OrchestrationProjectionPipeline;
       const eventStore = yield* OrchestrationEventStore;
@@ -3864,6 +3864,50 @@ it.layer(BaseTestLayer)("OrchestrationProjectionPipeline", (it) => {
       });
 
       yield* appendAndProject({
+        type: "thread.message-sent",
+        eventId: EventId.make("evt-revert-user-keep"),
+        aggregateKind: "thread",
+        aggregateId: ThreadId.make("thread-revert"),
+        occurredAt: "2026-02-26T12:00:02.200Z",
+        commandId: CommandId.make("cmd-revert-user-keep"),
+        causationEventId: null,
+        correlationId: CorrelationId.make("cmd-revert-user-keep"),
+        metadata: {},
+        payload: {
+          threadId: ThreadId.make("thread-revert"),
+          messageId: MessageId.make("user-keep"),
+          role: "user",
+          text: "kept prompt",
+          turnId: null,
+          streaming: false,
+          createdAt: "2026-02-26T12:00:02.200Z",
+          updatedAt: "2026-02-26T12:00:02.200Z",
+        },
+      });
+
+      yield* appendAndProject({
+        type: "thread.turn-diff-completed",
+        eventId: EventId.make("evt-revert-keep-checkpoint"),
+        aggregateKind: "thread",
+        aggregateId: ThreadId.make("thread-revert"),
+        occurredAt: "2026-02-26T12:00:02.500Z",
+        commandId: CommandId.make("cmd-revert-keep-checkpoint"),
+        causationEventId: null,
+        correlationId: CorrelationId.make("cmd-revert-keep-checkpoint"),
+        metadata: {},
+        payload: {
+          threadId: ThreadId.make("thread-revert"),
+          turnId: TurnId.make("turn-keep-2"),
+          checkpointTurnCount: 2,
+          checkpointRef: CheckpointRef.make("refs/t3/checkpoints/thread-revert/turn/2"),
+          status: "ready",
+          files: [],
+          assistantMessageId: null,
+          completedAt: "2026-02-26T12:00:02.500Z",
+        },
+      });
+
+      yield* appendAndProject({
         type: "thread.turn-diff-completed",
         eventId: EventId.make("evt-revert-5"),
         aggregateKind: "thread",
@@ -3876,8 +3920,8 @@ it.layer(BaseTestLayer)("OrchestrationProjectionPipeline", (it) => {
         payload: {
           threadId: ThreadId.make("thread-revert"),
           turnId: TurnId.make("turn-2"),
-          checkpointTurnCount: 2,
-          checkpointRef: CheckpointRef.make("refs/t3/checkpoints/thread-revert/turn/2"),
+          checkpointTurnCount: 3,
+          checkpointRef: CheckpointRef.make("refs/t3/checkpoints/thread-revert/turn/3"),
           status: "ready",
           files: [],
           assistantMessageId: MessageId.make("assistant-remove"),
@@ -3930,6 +3974,28 @@ it.layer(BaseTestLayer)("OrchestrationProjectionPipeline", (it) => {
       });
 
       yield* appendAndProject({
+        type: "thread.message-sent",
+        eventId: EventId.make("evt-revert-user-remove-unbound"),
+        aggregateKind: "thread",
+        aggregateId: ThreadId.make("thread-revert"),
+        occurredAt: "2026-02-26T12:00:03.200Z",
+        commandId: CommandId.make("cmd-revert-user-remove-unbound"),
+        causationEventId: null,
+        correlationId: CorrelationId.make("cmd-revert-user-remove-unbound"),
+        metadata: {},
+        payload: {
+          threadId: ThreadId.make("thread-revert"),
+          messageId: MessageId.make("user-remove-unbound"),
+          role: "user",
+          text: "later prompt",
+          turnId: null,
+          streaming: false,
+          createdAt: "2026-02-26T12:00:03.200Z",
+          updatedAt: "2026-02-26T12:00:03.200Z",
+        },
+      });
+
+      yield* appendAndProject({
         type: "thread.reverted",
         eventId: EventId.make("evt-revert-8"),
         aggregateKind: "thread",
@@ -3941,7 +4007,7 @@ it.layer(BaseTestLayer)("OrchestrationProjectionPipeline", (it) => {
         metadata: {},
         payload: {
           threadId: ThreadId.make("thread-revert"),
-          turnCount: 1,
+          turnCount: 2,
         },
       });
 
@@ -3963,6 +4029,11 @@ it.layer(BaseTestLayer)("OrchestrationProjectionPipeline", (it) => {
           messageId: "assistant-keep",
           turnId: "turn-1",
           role: "assistant",
+        },
+        {
+          messageId: "user-keep",
+          turnId: null,
+          role: "user",
         },
       ]);
     }),
