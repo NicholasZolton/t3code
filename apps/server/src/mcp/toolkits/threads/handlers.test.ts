@@ -55,6 +55,10 @@ const crossProjectSettings: ServerSettings = {
   ...DEFAULT_SERVER_SETTINGS,
   agentThreadAccess: "environment",
 };
+const noThreadAccessSettings: ServerSettings = {
+  ...DEFAULT_SERVER_SETTINGS,
+  agentThreadAccess: "none",
+};
 const decodeMessages = Schema.decodeUnknownEffect(
   Schema.Struct({
     messages: Schema.Array(Schema.Struct({ messageId: MessageId, text: Schema.String })),
@@ -419,6 +423,39 @@ it.effect("lists only the calling project and rejects unauthorized or cross-proj
       expect(fixture.commands).toHaveLength(0);
     }).pipe(Effect.provide(fixture.testLayer));
   }),
+);
+
+it.effect(
+  "denies every thread tool while access is off and restores access for active sessions",
+  () =>
+    Effect.gen(function* () {
+      const fixture = yield* makeFixture;
+      yield* Effect.gen(function* () {
+        yield* Ref.set(fixture.settings, noThreadAccessSettings);
+        const operations = [
+          ["threads_list", {}],
+          ["threads_start", { prompt: "Start a task", worktree: false }],
+          ["threads_read", { threadId: siblingId }],
+          ["threads_send", { threadId: siblingId, prompt: "Follow up" }],
+          ["threads_interrupt", { threadId: siblingId }],
+          ["threads_approve", { threadId: siblingId, requestId: "approval", decision: "accept" }],
+          ["threads_answer", { threadId: siblingId, requestId: "question", answers: {} }],
+          ["threads_wait", { threadId: siblingId, messageId: MessageId.make("message") }],
+        ] as const;
+        for (const [name, args] of operations) {
+          const denied = yield* call(name, args);
+          expect(denied.isError).toBe(true);
+          expect(denied.content).toEqual([
+            { type: "text", text: "Agent thread access is disabled for this environment." },
+          ]);
+        }
+        expect(fixture.commands).toHaveLength(0);
+
+        yield* Ref.set(fixture.settings, DEFAULT_SERVER_SETTINGS);
+        const restored = yield* call("threads_list", {});
+        expect(restored.structuredContent).toMatchObject({ total: 2 });
+      }).pipe(Effect.provide(fixture.testLayer));
+    }),
 );
 
 it.effect("makes other projects available immediately when the environment setting changes", () =>

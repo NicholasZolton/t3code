@@ -1021,7 +1021,7 @@ export const WorktreeDirectory = TrimmedString.check(
   Schema.isPattern(/^(?:$|~(?:[\\/]|$)|[\\/]|[a-zA-Z]:[\\/])/),
 );
 
-export const AgentThreadAccess = Schema.Literals(["project", "environment"]);
+export const AgentThreadAccess = Schema.Literals(["none", "project", "environment"]);
 export type AgentThreadAccess = typeof AgentThreadAccess.Type;
 
 export const PROJECT_SCOPED_SERVER_SETTING_KEYS = [

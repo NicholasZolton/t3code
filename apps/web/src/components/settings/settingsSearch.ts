@@ -330,7 +330,9 @@ export const SETTINGS_SEARCH_ITEMS = [
     id: "agent-thread-access",
     title: "Agent thread access",
     to: "/settings/general",
-    searchTerms: ["agent mcp thread project environment cross project delegation access"],
+    searchTerms: [
+      "agent mcp thread project environment cross project delegation access disable none",
+    ],
   },
   {
     id: "hide-whitespace-changes",

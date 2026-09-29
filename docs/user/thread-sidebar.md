@@ -41,7 +41,8 @@ client.
 Agents can manage threads in their own project by default. In **Settings → General →
 Agent thread access**, choose **All projects in this environment** to let them
 list, start, read, send to, and answer requests in threads in other projects on
-the same server. This setting also applies to agents already running.
+the same server. Choose **No thread access** to prevent agents from using T3 Code
+thread tools in any project. This setting also applies to agents already running.
 On mobile, find it under **Settings → Agent behavior**.
 
 ## Pin and reorder threads
