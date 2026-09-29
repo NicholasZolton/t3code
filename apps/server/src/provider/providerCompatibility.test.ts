@@ -83,6 +83,16 @@ describe("provider compatibility", () => {
     }
   });
 
+  it("matches the OpenCode runtime minimum in the bundled policy", () => {
+    const bundled = ModelManifest.BUNDLED_MODEL_MANIFEST.compatibility;
+    const opencode = ProviderDriverKind.make("opencode");
+    assert.strictEqual(
+      resolveProviderCompatibility(bundled, opencode, "2.0.14")?.status,
+      "supported",
+    );
+    assert.strictEqual(resolveProviderCompatibility(bundled, opencode, "2.0.11")?.status, "broken");
+  });
+
   it("compares Cursor build dates without treating semver prereleases as stable", () => {
     const cursor = ProviderDriverKind.make("cursor");
     const cursorPolicy: ProviderCompatibilityPolicy = {
