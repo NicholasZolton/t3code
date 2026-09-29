@@ -226,8 +226,10 @@ function retainThreadMessagesAfterRevert(
   retainedTurnIds: ReadonlySet<string>,
   turnCount: number,
   retainedThrough: string | null,
+  discardedMessageIds: ReadonlyArray<string> | undefined,
 ): ReadonlyArray<OrchestrationMessage> {
   const retainedMessageIds = new Set<string>();
+  const discarded = discardedMessageIds === undefined ? null : new Set(discardedMessageIds);
   for (const message of messages) {
     if (message.role === "system" || isImportedAgentSessionMessageId(message.id)) {
       retainedMessageIds.add(message.id);
@@ -251,8 +253,10 @@ function retainThreadMessagesAfterRevert(
         (message) =>
           message.role === "user" &&
           !retainedMessageIds.has(message.id) &&
-          retainedThrough !== null &&
-          compareDateTimeStrings(message.createdAt, retainedThrough) <= 0 &&
+          (discarded !== null
+            ? !discarded.has(message.id)
+            : retainedThrough !== null &&
+              compareDateTimeStrings(message.createdAt, retainedThrough) <= 0) &&
           (message.turnId === null || retainedTurnIds.has(message.turnId)),
       )
       .toSorted(
@@ -279,8 +283,10 @@ function retainThreadMessagesAfterRevert(
         (message) =>
           message.role === "assistant" &&
           !retainedMessageIds.has(message.id) &&
-          retainedThrough !== null &&
-          compareDateTimeStrings(message.createdAt, retainedThrough) <= 0 &&
+          (discarded !== null
+            ? !discarded.has(message.id)
+            : retainedThrough !== null &&
+              compareDateTimeStrings(message.createdAt, retainedThrough) <= 0) &&
           (message.turnId === null || retainedTurnIds.has(message.turnId)),
       )
       .toSorted(
@@ -1034,6 +1040,7 @@ export function projectEvent(
             retainedTurnIds,
             payload.turnCount,
             checkpoints.at(-1)?.completedAt ?? null,
+            payload.discardedMessageIds,
           ).slice(-MAX_THREAD_MESSAGES);
           const proposedPlans = retainThreadProposedPlansAfterRevert(
             thread.proposedPlans,

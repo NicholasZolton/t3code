@@ -703,7 +703,7 @@ describe("orchestration projector", () => {
     expect(message?.updatedAt).toBe(completeAt);
   });
 
-  it("prunes reverted turn messages from in-memory thread snapshot", async () => {
+  it("prunes reverted messages by event order despite client clock skew", async () => {
     const createdAt = "2026-02-23T10:00:00.000Z";
     const model = createEmptyReadModel(createdAt);
 
@@ -750,8 +750,8 @@ describe("orchestration projector", () => {
           text: "First edit",
           turnId: null,
           streaming: false,
-          createdAt: "2026-02-23T10:00:01.000Z",
-          updatedAt: "2026-02-23T10:00:01.000Z",
+          createdAt: "2030-02-23T10:00:01.000Z",
+          updatedAt: "2030-02-23T10:00:01.000Z",
         },
       }),
       makeEvent({
@@ -824,8 +824,8 @@ describe("orchestration projector", () => {
           text: "Second edit",
           turnId: null,
           streaming: false,
-          createdAt: "2026-02-23T10:00:03.000Z",
-          updatedAt: "2026-02-23T10:00:03.000Z",
+          createdAt: "2000-02-23T10:00:03.000Z",
+          updatedAt: "2000-02-23T10:00:03.000Z",
         },
       }),
       makeEvent({
@@ -894,6 +894,7 @@ describe("orchestration projector", () => {
         payload: {
           threadId: "thread-1",
           turnCount: 1,
+          discardedMessageIds: ["user-msg-2"],
         },
       }),
     ];

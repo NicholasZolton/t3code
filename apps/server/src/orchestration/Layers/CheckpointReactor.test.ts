@@ -407,6 +407,7 @@ describe("CheckpointReactor", () => {
       Layer.provideMerge(WorkspacePaths.layer),
       Layer.provideMerge(VcsProcess.layer),
       Layer.provideMerge(ServerConfigLayer),
+      Layer.provideMerge(SqlitePersistenceMemory),
       Layer.provideMerge(NodeServices.layer),
     );
 
@@ -2085,6 +2086,84 @@ describe("CheckpointReactor", () => {
       }
     },
   );
+
+  it("discards prompts by event order across clock skew and a missing checkpoint count", async () => {
+    const harness = await createHarness({
+      providerName: ProviderDriverKind.make("claudeAgent"),
+    });
+    const threadId = ThreadId.make("thread-1");
+    const createdAt = "2026-01-01T00:00:00.000Z";
+
+    await Effect.runPromise(
+      harness.engine.dispatch({
+        type: "thread.session.set",
+        commandId: CommandId.make("cmd-session-skew"),
+        threadId,
+        session: {
+          threadId,
+          status: "ready",
+          providerName: "claudeAgent",
+          runtimeMode: "approval-required",
+          activeTurnId: null,
+          lastError: null,
+          updatedAt: createdAt,
+        },
+        createdAt,
+      }),
+    );
+
+    const appendPrompt = (messageId: string, timestamp: string) =>
+      harness.engine.dispatch({
+        type: "thread.message.user.append",
+        commandId: CommandId.make(`cmd-${messageId}`),
+        threadId,
+        message: { messageId: MessageId.make(messageId), text: messageId, attachments: [] },
+        createdAt: timestamp,
+      });
+    const addCheckpoint = (count: number) =>
+      harness.engine.dispatch({
+        type: "thread.turn.diff.complete",
+        commandId: CommandId.make(`cmd-checkpoint-${count}`),
+        threadId,
+        turnId: asTurnId(`turn-${count}`),
+        completedAt: createdAt,
+        checkpointRef: CheckpointRef.make(`provider-diff:thread-1:turn-${count}`),
+        status: "missing",
+        files: [],
+        checkpointTurnCount: count,
+        createdAt,
+      });
+
+    await Effect.runPromise(appendPrompt("prompt-kept", "2030-01-01T00:00:00.000Z"));
+    await Effect.runPromise(addCheckpoint(1));
+    await Effect.runPromise(appendPrompt("prompt-discarded", "2000-01-01T00:00:00.000Z"));
+    await Effect.runPromise(addCheckpoint(3));
+    await Effect.runPromise(
+      harness.engine.dispatch({
+        type: "thread.conversation.revert",
+        commandId: CommandId.make("cmd-revert-skew"),
+        threadId,
+        turnCount: 2,
+        createdAt,
+      }),
+    );
+    await harness.drain();
+
+    const events = await Effect.runPromise(
+      Stream.runCollect(harness.engine.readEvents(0)).pipe(
+        Effect.map((chunk) => Array.from(chunk)),
+      ),
+    );
+    const reverted = events.find((event) => event.type === "thread.reverted");
+    expect(reverted?.payload).toEqual({
+      threadId,
+      turnCount: 2,
+      discardedMessageIds: [MessageId.make("prompt-discarded")],
+    });
+    const thread = (await harness.readModel()).threads.find((entry) => entry.id === threadId);
+    expect(thread?.messages.map((message) => message.id)).toEqual(["prompt-kept"]);
+    expect(thread?.checkpoints.map((checkpoint) => checkpoint.checkpointTurnCount)).toEqual([1]);
+  });
 
   it("executes provider revert and emits thread.reverted for claude sessions", async () => {
     const harness = await createHarness({ providerName: ProviderDriverKind.make("claudeAgent") });
