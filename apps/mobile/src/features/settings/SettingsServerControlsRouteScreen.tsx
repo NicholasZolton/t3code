@@ -129,6 +129,11 @@ const THREAD_ACCESS_CHOICES: ReadonlyArray<{
   readonly description: string;
 }> = [
   {
+    mode: "none",
+    label: "No thread access",
+    description: "Agents cannot use T3 Code thread tools.",
+  },
+  {
     mode: "project",
     label: "Current project",
     description: "Agents can manage threads in their own project.",

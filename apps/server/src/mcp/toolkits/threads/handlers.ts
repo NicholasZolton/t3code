@@ -58,6 +58,10 @@ const make = Effect.gen(function* () {
 
   const requireSource = Effect.fn("ThreadsToolkit.requireSource")(function* () {
     const scope = yield* McpInvocationContext.requireMcpCapability("threads");
+    const settings = yield* serverSettings.getSettings.pipe(Effect.mapError(describeError));
+    if (settings.agentThreadAccess === "none") {
+      return yield* fail("Agent thread access is disabled for this environment.");
+    }
     const source = yield* snapshots
       .getThreadShellById(scope.threadId)
       .pipe(Effect.mapError(describeError));

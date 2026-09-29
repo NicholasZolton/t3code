@@ -186,6 +186,7 @@ const RESPONSE_STREAMING_MODE_LABELS: Record<ResponseStreamingMode, string> = {
 };
 
 const AGENT_THREAD_ACCESS_LABELS: Record<AgentThreadAccess, string> = {
+  none: "No thread access",
   project: "Current project",
   environment: "All projects in this environment",
 };
@@ -2464,7 +2465,7 @@ export function GeneralSettingsPanel() {
           serverScoped
           settingKeys={["agentThreadAccess"]}
           {...searchableSetting("agent-thread-access")}
-          description="Choose which projects agents can manage with T3 Code thread tools. Applies to active agent sessions."
+          description="Choose whether agents can manage threads with T3 Code thread tools, and in which projects. Applies to active agent sessions."
           mixed={mixedAgentThreadAccess}
           resetAction={
             scope.kind !== "project" &&
@@ -2482,7 +2483,7 @@ export function GeneralSettingsPanel() {
             <Select
               value={mixedAgentThreadAccess ? null : settings.agentThreadAccess}
               onValueChange={(value) => {
-                if (value === "project" || value === "environment") {
+                if (value === "none" || value === "project" || value === "environment") {
                   updateSettings({ agentThreadAccess: value });
                 }
               }}
@@ -2495,6 +2496,7 @@ export function GeneralSettingsPanel() {
                 </SelectValue>
               </SelectTrigger>
               <SelectPopup align="end" alignItemWithTrigger={false}>
+                <SelectItem value="none">{AGENT_THREAD_ACCESS_LABELS.none}</SelectItem>
                 <SelectItem value="project">{AGENT_THREAD_ACCESS_LABELS.project}</SelectItem>
                 <SelectItem value="environment">
                   {AGENT_THREAD_ACCESS_LABELS.environment}

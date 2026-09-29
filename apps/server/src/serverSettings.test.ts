@@ -269,20 +269,22 @@ it.layer(NodeServices.layer)("server settings", (it) => {
     }).pipe(Effect.provide(makeServerSettingsLayer())),
   );
 
-  it.effect(
-    "defaults agent thread access to the current project and saves environment-wide access",
-    () =>
-      Effect.gen(function* () {
-        const serverSettings = yield* ServerSettingsModule.ServerSettingsService;
-        assert.equal((yield* serverSettings.getSettings).agentThreadAccess, "project");
+  it.effect("defaults agent thread access to the current project and saves all access modes", () =>
+    Effect.gen(function* () {
+      const serverSettings = yield* ServerSettingsModule.ServerSettingsService;
+      assert.equal((yield* serverSettings.getSettings).agentThreadAccess, "project");
 
-        const patch = yield* decodeSettingsPatch({ agentThreadAccess: "environment" });
-        yield* serverSettings.updateSettings(patch);
-        assert.equal((yield* serverSettings.getSettings).agentThreadAccess, "environment");
+      const patch = yield* decodeSettingsPatch({ agentThreadAccess: "environment" });
+      yield* serverSettings.updateSettings(patch);
+      assert.equal((yield* serverSettings.getSettings).agentThreadAccess, "environment");
 
-        yield* serverSettings.updateSettings({ agentThreadAccess: "project" });
-        assert.equal((yield* serverSettings.getSettings).agentThreadAccess, "project");
-      }).pipe(Effect.provide(makeServerSettingsLayer())),
+      yield* serverSettings.updateSettings({ agentThreadAccess: "project" });
+      assert.equal((yield* serverSettings.getSettings).agentThreadAccess, "project");
+
+      const disabled = yield* decodeSettingsPatch({ agentThreadAccess: "none" });
+      yield* serverSettings.updateSettings(disabled);
+      assert.equal((yield* serverSettings.getSettings).agentThreadAccess, "none");
+    }).pipe(Effect.provide(makeServerSettingsLayer())),
   );
 
   it.effect("buffers changes after a subscription is acquired but before it is consumed", () =>
