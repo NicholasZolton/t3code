@@ -19,6 +19,7 @@ import {
   type ModelManifestData,
   encodeManifestCache,
 } from "./ModelManifest.ts";
+import { resolveProviderCompatibility } from "./providerCompatibility.ts";
 
 /**
  * Test policy: this file covers manifest machinery, not manifest contents.
@@ -585,6 +586,57 @@ it.effect("caches valid compatibility policies and keeps them after a malformed 
                 }
               : remote,
           ),
+      }),
+    ),
+  );
+});
+
+it.live("uses local OpenCode v2 compatibility after remote refresh and cache reload", () => {
+  const opencode = ProviderDriverKind.make("opencode");
+  const remote: ModelManifestData = {
+    ...REMOTE_MANIFEST,
+    compatibility: [
+      {
+        driver: opencode,
+        t3CodeRange: ">=0.0.42",
+        recommendedVersion: "1.14.19",
+        ranges: [
+          { range: ">=2.0.0", status: "broken" },
+          { range: "=1.14.19", status: "supported" },
+        ],
+      },
+      {
+        driver: CODEX,
+        t3CodeRange: ">=0.0.42",
+        ranges: [{ range: ">=0.0.0", status: "supported" }],
+      },
+    ],
+  };
+  const assertLocalCompatibility = (manifest: ModelManifestData): void => {
+    const advisory =
+      resolveProviderCompatibility(manifest.compatibility, opencode, "2.0.14") ??
+      resolveProviderCompatibility(BUNDLED_MODEL_MANIFEST.compatibility, opencode, "2.0.14");
+    assert.isDefined(advisory);
+    assert.strictEqual(advisory.status, "supported");
+    assert.isNull(advisory.message);
+    assert.strictEqual(manifest.compatibility?.length, 1);
+    assert.strictEqual(
+      resolveProviderCompatibility(manifest.compatibility, CODEX, "0.1.0")?.status,
+      "supported",
+    );
+  };
+
+  return Effect.gen(function* () {
+    const service = yield* make;
+    assertLocalCompatibility(yield* service.refresh);
+    const rebooted = yield* make;
+    assertLocalCompatibility(yield* rebooted.current);
+  }).pipe(
+    Effect.scoped,
+    Effect.provide(
+      serviceLayers({
+        prefix: "model-manifest-opencode-compatibility-test",
+        response: () => Response.json(remote),
       }),
     ),
   );

@@ -140,6 +140,15 @@ const decodeManifest = Schema.decodeUnknownEffect(ModelManifestSchema);
 export const BUNDLED_MODEL_MANIFEST: ModelManifestData =
   Schema.decodeUnknownSync(ModelManifestSchema)(bundledManifestJson);
 
+/** The fork supports OpenCode v2; upstream's remote v1-only advisory must not replace it. */
+function keepLocalOpenCodeCompatibility(manifest: ModelManifestData): ModelManifestData {
+  if (!manifest.compatibility?.some((policy) => policy.driver === "opencode")) return manifest;
+  return {
+    ...manifest,
+    compatibility: manifest.compatibility.filter((policy) => policy.driver !== "opencode"),
+  };
+}
+
 /** Epoch millis of the manifest's `updatedAt`, or 0 when absent or unparsable. */
 function manifestUpdatedAtMs(manifest: ModelManifestData): number {
   if (manifest.updatedAt === undefined) return 0;
@@ -369,7 +378,7 @@ export const make = Effect.gen(function* () {
       if (manifestUpdatedAtMs(BUNDLED_MODEL_MANIFEST) > manifestUpdatedAtMs(fromDisk.manifest)) {
         return;
       }
-      manifest = fromDisk.manifest;
+      manifest = keepLocalOpenCodeCompatibility(fromDisk.manifest);
       fetchedAtMs = fromDisk.fetchedAtMs;
     }),
   );
@@ -404,7 +413,7 @@ export const make = Effect.gen(function* () {
     );
     if (fetched === null) return manifest;
 
-    manifest = fetched;
+    manifest = keepLocalOpenCodeCompatibility(fetched);
     fetchedAtMs = now;
     yield* encodeManifestCache({ fetchedAtMs: now, manifest: fetched }).pipe(
       Effect.flatMap((serialized) => fileSystem.writeFileString(cachePath, serialized)),
