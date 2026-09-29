@@ -20,6 +20,7 @@ import * as Path from "effect/Path";
 import * as Option from "effect/Option";
 import type * as PlatformError from "effect/PlatformError";
 import * as Stream from "effect/Stream";
+import * as SqlClient from "effect/unstable/sql/SqlClient";
 import { makeDrainableWorker } from "@t3tools/shared/DrainableWorker";
 import { isTemporaryWorktreeBranch, WORKTREE_BRANCH_PREFIX } from "@t3tools/shared/git";
 
@@ -41,6 +42,7 @@ import { VcsStatusBroadcaster } from "../../vcs/VcsStatusBroadcaster.ts";
 import * as WorkspaceEntries from "../../workspace/WorkspaceEntries.ts";
 import * as PullRequestService from "../../pullRequest/PullRequestService.ts";
 import { ServerSettingsService } from "../../serverSettings.ts";
+import { toPersistenceSqlError, type ProjectionRepositoryError } from "../../persistence/Errors.ts";
 
 const nowIso = Effect.map(DateTime.now, DateTime.formatIso);
 
@@ -95,6 +97,7 @@ const make = Effect.gen(function* () {
   const vcsStatusBroadcaster = yield* VcsStatusBroadcaster;
   const pullRequests = yield* PullRequestService.PullRequestService;
   const settingsService = yield* ServerSettingsService;
+  const sql = yield* SqlClient.SqlClient;
   const queuedEntryRefreshes = new Set<string>();
   const entryRefreshWorker = yield* makeDrainableWorker((cwd: string) =>
     Effect.sync(() => queuedEntryRefreshes.delete(cwd)).pipe(
@@ -813,6 +816,36 @@ const make = Effect.gen(function* () {
 
     yield* providerService.assertConversationRollbackSupported(event.payload.threadId);
 
+    // Client message timestamps may be skewed; use persisted event order to mark removed prompts.
+    const boundaryRows =
+      event.payload.turnCount === 0
+        ? [{ sequence: 0 }]
+        : yield* sql<{ readonly sequence: number }>`
+            SELECT sequence
+            FROM orchestration_events
+            WHERE aggregate_kind = 'thread'
+              AND stream_id = ${event.payload.threadId}
+              AND event_type = 'thread.turn-diff-completed'
+              AND sequence < ${event.sequence}
+              AND json_extract(payload_json, '$.checkpointTurnCount') <= ${event.payload.turnCount}
+            ORDER BY json_extract(payload_json, '$.checkpointTurnCount') DESC, sequence DESC
+            LIMIT 1
+          `.pipe(Effect.mapError(toPersistenceSqlError("CheckpointReactor.revert:boundary")));
+    const boundarySequence = boundaryRows[0]?.sequence ?? 0;
+    const discardedMessages = yield* sql<{ readonly messageId: string }>`
+      SELECT json_extract(payload_json, '$.messageId') AS "messageId"
+      FROM orchestration_events
+      WHERE aggregate_kind = 'thread'
+        AND stream_id = ${event.payload.threadId}
+        AND sequence < ${event.sequence}
+        AND event_type = 'thread.message-sent'
+      GROUP BY json_extract(payload_json, '$.messageId')
+      HAVING MIN(sequence) > ${boundarySequence}
+        AND MAX(CASE WHEN json_extract(payload_json, '$.turnId') IS NULL
+          AND json_extract(payload_json, '$.role') IN ('user', 'assistant')
+          THEN 1 ELSE 0 END) = 1
+    `.pipe(Effect.mapError(toPersistenceSqlError("CheckpointReactor.revert:messages")));
+
     if (event.payload.restoreFiles !== false) {
       if (!checkpointCwd) {
         yield* appendRevertFailureActivity({
@@ -900,6 +933,7 @@ const make = Effect.gen(function* () {
         commandId: yield* serverCommandId("checkpoint-revert-complete"),
         threadId: event.payload.threadId,
         turnCount: event.payload.turnCount,
+        discardedMessageIds: discardedMessages.map((row) => MessageId.make(row.messageId)),
         createdAt: now,
       })
       .pipe(
@@ -1008,7 +1042,10 @@ const make = Effect.gen(function* () {
     input: ReactorInput,
   ): Effect.Effect<
     void,
-    CheckpointStoreError | OrchestrationDispatchError | PlatformError.PlatformError,
+    | CheckpointStoreError
+    | OrchestrationDispatchError
+    | ProjectionRepositoryError
+    | PlatformError.PlatformError,
     never
   > =>
     input.source === "domain" ? processDomainEvent(input.event) : processRuntimeEvent(input.event);

@@ -208,15 +208,18 @@ function retainProjectionMessagesAfterRevert(
   messages: ReadonlyArray<ProjectionThreadMessage>,
   turns: ReadonlyArray<ProjectionTurn>,
   turnCount: number,
+  discardedMessageIds: ReadonlyArray<string> | undefined,
 ): ReadonlyArray<ProjectionThreadMessage> {
   const retainedMessageIds = new Set<string>();
   const retainedTurnIds = new Set<string>();
+  const discarded = discardedMessageIds === undefined ? null : new Set(discardedMessageIds);
   const keptTurns = turns.filter(
     (turn) =>
       turn.turnId !== null &&
       turn.checkpointTurnCount !== null &&
       turn.checkpointTurnCount <= turnCount,
   );
+  const retainedThrough = keptTurns.at(-1)?.completedAt ?? null;
   for (const turn of keptTurns) {
     if (turn.turnId !== null) {
       retainedTurnIds.add(turn.turnId);
@@ -252,6 +255,10 @@ function retainProjectionMessagesAfterRevert(
         (message) =>
           message.role === "user" &&
           !retainedMessageIds.has(message.messageId) &&
+          (discarded !== null
+            ? !discarded.has(message.messageId)
+            : retainedThrough !== null &&
+              compareDateTimeStrings(message.createdAt, retainedThrough) <= 0) &&
           (message.turnId === null || retainedTurnIds.has(message.turnId)),
       )
       .toSorted(
@@ -278,6 +285,10 @@ function retainProjectionMessagesAfterRevert(
         (message) =>
           message.role === "assistant" &&
           !retainedMessageIds.has(message.messageId) &&
+          (discarded !== null
+            ? !discarded.has(message.messageId)
+            : retainedThrough !== null &&
+              compareDateTimeStrings(message.createdAt, retainedThrough) <= 0) &&
           (message.turnId === null || retainedTurnIds.has(message.turnId)),
       )
       .toSorted(
@@ -1212,6 +1223,7 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
             existingRows,
             existingTurns,
             event.payload.turnCount,
+            event.payload.discardedMessageIds,
           );
           if (keptRows.length === existingRows.length) {
             return;

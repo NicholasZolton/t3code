@@ -703,7 +703,7 @@ describe("orchestration projector", () => {
     expect(message?.updatedAt).toBe(completeAt);
   });
 
-  it("prunes reverted turn messages from in-memory thread snapshot", async () => {
+  it("prunes reverted messages by event order despite client clock skew", async () => {
     const createdAt = "2026-02-23T10:00:00.000Z";
     const model = createEmptyReadModel(createdAt);
 
@@ -750,8 +750,8 @@ describe("orchestration projector", () => {
           text: "First edit",
           turnId: null,
           streaming: false,
-          createdAt: "2026-02-23T10:00:01.000Z",
-          updatedAt: "2026-02-23T10:00:01.000Z",
+          createdAt: "2030-02-23T10:00:01.000Z",
+          updatedAt: "2030-02-23T10:00:01.000Z",
         },
       }),
       makeEvent({
@@ -824,8 +824,8 @@ describe("orchestration projector", () => {
           text: "Second edit",
           turnId: null,
           streaming: false,
-          createdAt: "2026-02-23T10:00:03.000Z",
-          updatedAt: "2026-02-23T10:00:03.000Z",
+          createdAt: "2000-02-23T10:00:03.000Z",
+          updatedAt: "2000-02-23T10:00:03.000Z",
         },
       }),
       makeEvent({
@@ -894,6 +894,7 @@ describe("orchestration projector", () => {
         payload: {
           threadId: "thread-1",
           turnCount: 1,
+          discardedMessageIds: ["user-msg-2"],
         },
       }),
     ];
@@ -918,7 +919,7 @@ describe("orchestration projector", () => {
     expect(thread?.latestTurn?.turnId).toBe("turn-1");
   });
 
-  it("does not fallback-retain messages tied to removed turn IDs", async () => {
+  it("removes later unbound prompts even when retained checkpoints outnumber user prompts", async () => {
     const createdAt = "2026-02-26T12:00:00.000Z";
     const model = createEmptyReadModel(createdAt);
 
@@ -989,6 +990,42 @@ describe("orchestration projector", () => {
       }),
       makeEvent({
         sequence: 4,
+        type: "thread.message-sent",
+        aggregateKind: "thread",
+        aggregateId: "thread-revert",
+        occurredAt: "2026-02-26T12:00:01.200Z",
+        commandId: "cmd-user-keep",
+        payload: {
+          threadId: "thread-revert",
+          messageId: "user-keep",
+          role: "user",
+          text: "kept prompt",
+          turnId: null,
+          streaming: false,
+          createdAt: "2026-02-26T12:00:01.200Z",
+          updatedAt: "2026-02-26T12:00:01.200Z",
+        },
+      }),
+      makeEvent({
+        sequence: 5,
+        type: "thread.turn-diff-completed",
+        aggregateKind: "thread",
+        aggregateId: "thread-revert",
+        occurredAt: "2026-02-26T12:00:01.500Z",
+        commandId: "cmd-turn-keep-2",
+        payload: {
+          threadId: "thread-revert",
+          turnId: "turn-keep-2",
+          checkpointTurnCount: 2,
+          checkpointRef: "refs/t3/checkpoints/thread-revert/turn/2",
+          status: "ready",
+          files: [],
+          assistantMessageId: null,
+          completedAt: "2026-02-26T12:00:01.500Z",
+        },
+      }),
+      makeEvent({
+        sequence: 6,
         type: "thread.turn-diff-completed",
         aggregateKind: "thread",
         aggregateId: "thread-revert",
@@ -997,8 +1034,8 @@ describe("orchestration projector", () => {
         payload: {
           threadId: "thread-revert",
           turnId: "turn-2",
-          checkpointTurnCount: 2,
-          checkpointRef: "refs/t3/checkpoints/thread-revert/turn/2",
+          checkpointTurnCount: 3,
+          checkpointRef: "refs/t3/checkpoints/thread-revert/turn/3",
           status: "ready",
           files: [],
           assistantMessageId: "assistant-remove",
@@ -1006,7 +1043,7 @@ describe("orchestration projector", () => {
         },
       }),
       makeEvent({
-        sequence: 5,
+        sequence: 7,
         type: "thread.message-sent",
         aggregateKind: "thread",
         aggregateId: "thread-revert",
@@ -1024,7 +1061,7 @@ describe("orchestration projector", () => {
         },
       }),
       makeEvent({
-        sequence: 6,
+        sequence: 8,
         type: "thread.message-sent",
         aggregateKind: "thread",
         aggregateId: "thread-revert",
@@ -1042,7 +1079,25 @@ describe("orchestration projector", () => {
         },
       }),
       makeEvent({
-        sequence: 7,
+        sequence: 9,
+        type: "thread.message-sent",
+        aggregateKind: "thread",
+        aggregateId: "thread-revert",
+        occurredAt: "2026-02-26T12:00:02.200Z",
+        commandId: "cmd-user-remove-unbound",
+        payload: {
+          threadId: "thread-revert",
+          messageId: "user-remove-unbound",
+          role: "user",
+          text: "later prompt",
+          turnId: null,
+          streaming: false,
+          createdAt: "2026-02-26T12:00:02.200Z",
+          updatedAt: "2026-02-26T12:00:02.200Z",
+        },
+      }),
+      makeEvent({
+        sequence: 10,
         type: "thread.reverted",
         aggregateKind: "thread",
         aggregateId: "thread-revert",
@@ -1050,7 +1105,7 @@ describe("orchestration projector", () => {
         commandId: "cmd-revert",
         payload: {
           threadId: "thread-revert",
-          turnCount: 1,
+          turnCount: 2,
         },
       }),
     ];
@@ -1068,7 +1123,10 @@ describe("orchestration projector", () => {
         role: message.role,
         turnId: message.turnId,
       })),
-    ).toEqual([{ id: "assistant-keep", role: "assistant", turnId: "turn-1" }]);
+    ).toEqual([
+      { id: "assistant-keep", role: "assistant", turnId: "turn-1" },
+      { id: "user-keep", role: "user", turnId: null },
+    ]);
   });
 
   it("caps message and checkpoint retention for long-lived threads", async () => {

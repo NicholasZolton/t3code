@@ -1609,6 +1609,7 @@ const ThreadRevertCompleteCommand = Schema.Struct({
   commandId: CommandId,
   threadId: ThreadId,
   turnCount: NonNegativeInt,
+  discardedMessageIds: Schema.optional(Schema.Array(MessageId)),
   createdAt: IsoDateTime,
 });
 
@@ -1972,6 +1973,7 @@ export const ThreadCheckpointRevertRequestedPayload = Schema.Struct({
 export const ThreadRevertedPayload = Schema.Struct({
   threadId: ThreadId,
   turnCount: NonNegativeInt,
+  discardedMessageIds: Schema.optional(Schema.Array(MessageId)),
 });
 
 export const ThreadSessionStopRequestedPayload = Schema.Struct({
