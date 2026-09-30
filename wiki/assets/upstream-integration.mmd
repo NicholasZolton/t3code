@@ -10,7 +10,10 @@ flowchart LR
     candidate["Upstream d15210cd3d<br/>Included in unmerged<br/>candidate a8df093eb6"]
     latest["Reviewed upstream tip<br/>0fcd5f9061"]
     fork["Reviewed fork main<br/>dfd23dbec7<br/>Baseline still 6530de0339"]
+    integrated["Current branch merge<br/>d8353ce56e<br/>All 81 commits included<br/>Awaiting fork main"]
 
     baseline -->|53 missing commits| candidate
     candidate -->|28 further missing commits| latest
     baseline -->|Fork-only changes| fork
+    latest -->|Full upstream merge| integrated
+    fork -->|Preserved fork behavior| integrated

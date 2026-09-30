@@ -1,22 +1,23 @@
 ---
 type: Integration Record
 title: Upstream integration
-description: Last upstream integration that reached fork main, the unmerged candidate, and the remaining gap.
+description: Completed main integration, the current branch's full upstream merge, and the gap still awaiting main.
 tags: [upstream, fork, integration]
 status: stable
 generated:
   by: opencode/gpt-6.1-sol
-  at: 2026-09-30T02:53:04Z
+  at: 2026-09-30T05:44:39Z
 verified:
   - by: opencode/gpt-6.1-sol
-    at: 2026-09-30T02:53:04Z
+    at: 2026-09-30T05:44:39Z
 snapshot:
-  at: 2026-09-30T02:53:04Z
+  at: 2026-09-30T05:44:39Z
   fork_main: dfd23dbec7bfe9f06d2f7e9583fda857f5b7b02f
   upstream_main: 0fcd5f90611451cca842689faea53b5450c022da
   shared_baseline: 6530de0339d2ca49957d0039133c49e3a08557f7
   last_main_integration: bd57816184c5b0e2db6110310c3655857eb817f1
   unmerged_candidate: a8df093eb69c1c6bc5f923e46b77f0a2d5f498b1
+  current_branch_integration: d8353ce56ec9a72b3ef8be931dffb3bc6401469a
 sources:
   - id: main-integration
     resource: https://github.com/NicholasZolton/t3code/commit/bd57816184c5b0e2db6110310c3655857eb817f1
@@ -34,18 +35,25 @@ sources:
     resource: "Local Git object a8df093eb69c1c6bc5f923e46b77f0a2d5f498b1 on NicholasZolton/audit-fork-upstream-differences"
     title: Unmerged upstream integration candidate and its parents
   - id: git-history
-    resource: "Fetched origin/main and upstream/main ancestry and commit ranges in this repository at 2026-09-30T02:53:04Z"
+    resource: "Ancestry and commit ranges against fetched origin/main, upstream/main, and local integration d8353ce56ec9a72b3ef8be931dffb3bc6401469a, checked at 2026-09-30T05:44:39Z"
     title: Git ancestry and commit-count inspection
+  - id: current-branch-integration
+    resource: "Local Git object d8353ce56ec9a72b3ef8be931dffb3bc6401469a on NicholasZolton/review-upstream-changes"
+    title: Full upstream merge awaiting integration into fork main
+  - id: ssh-deployment
+    resource: ../scripts/deploy-ssh-runtime.sh
+    title: Fork SSH runtime deployment and release handoff
 ---
 
 # Upstream integration
 
 **The last upstream integration that reached fork `main` was September 25,
 2026 at 19:39:18 −07:00** (September 26 at 02:39:18 UTC). The September 27
-integration candidate did not reach `main`. At this snapshot, **81 upstream
-commits are missing from fork `main`**.[^main-integration][^git-history]
+integration candidate did not reach `main`. **The current branch now includes
+all 81 missing upstream commits**, through `0fcd5f9061`, in merge `d8353ce56e`.
+That merge has not reached fork `main`, where the 81-commit gap still exists.[^main-integration][^git-history][^current-branch-integration]
 
-This is a revision-pinned snapshot, observed September 30, 2026 at 02:53:04 UTC
+This is a revision-pinned snapshot, observed September 30, 2026 at 05:44:39 UTC
 (September 29 in Pacific time). Refresh it after the next upstream review or
 integration using the [maintenance guidance](maintenance.md).
 
@@ -82,17 +90,28 @@ Between that original divergence point and the reviewed upstream tip are **158
 upstream commits: 77 incorporated, 81 missing**. This describes Git ancestry,
 not the GitHub repository's creation date.[^git-history]
 
-## The missing gap
+## Current branch integration
 
-![Completed upstream baseline, unmerged candidate, and missing ranges](assets/upstream-integration.svg)
+`d8353ce56e` merges upstream `0fcd5f9061` into the fork based on main
+`dfd23dbec7`, after wiki initialization `3182e44df5`. It preserves the native
+OpenCode v2 adapter and compatibility policy, account switching and quota
+weighting, reusable prompts, Vim editing, rewind behavior, and SSH/Portless
+and Crit integrations. The merge is local on
+`NicholasZolton/review-upstream-changes`; the upstream ancestry gap on that
+branch is **zero**. Advance the completed-main boundary only once this merge
+reaches fork `main`.[^current-branch-integration][^git-history]
+
+## The gap still awaiting main
+
+![Completed main baseline, earlier candidate, and current full branch integration](assets/upstream-integration.svg)
 
 [Mermaid source](assets/upstream-integration.mmd)
 
-| Upstream range                       | Commits missing from fork main | Integration status                                   |
-| ------------------------------------ | -----------------------------: | ---------------------------------------------------- |
-| `6530de0339..d15210cd3d`             |                         **53** | Included only in the unmerged candidate `a8df093eb6` |
-| `d15210cd3d..0fcd5f9061`             |                         **28** | Newer than that candidate                            |
-| Entire gap: `6530de0339..0fcd5f9061` |                         **81** | Missing from reviewed fork main                      |
+| Upstream range                       | Commits missing from fork main | Integration status                                             |
+| ------------------------------------ | -----------------------------: | -------------------------------------------------------------- |
+| `6530de0339..d15210cd3d`             |                         **53** | Covered by earlier candidate `a8df093eb6` and current merge    |
+| `d15210cd3d..0fcd5f9061`             |                         **28** | Included in current branch merge, newer than earlier candidate |
+| Entire gap: `6530de0339..0fcd5f9061` |                         **81** | Included in current branch merge `d8353ce56e`; awaiting main   |
 
 The candidate `a8df093eb6` was created September 27, 2026 at 20:51:45 −07:00
 (September 28 at 03:51:45 UTC). Its parents are fork `af25cb3127` and upstream
@@ -111,13 +130,24 @@ is the authoritative inventory.
 
 ## Compatibility exception to retain
 
-Upstream [#14198](https://github.com/pingdotgg/t3code/pull/14198) marks OpenCode
-v2 incompatible. This fork has native v2 integration and deliberately removed
+Upstream at `0fcd5f9061` still marks OpenCode v2 incompatible, following
+[#14198](https://github.com/pingdotgg/t3code/pull/14198). This fork has native v2 integration and deliberately removed
 that advisory in [fork #18](https://github.com/NicholasZolton/t3code/pull/18).
 Keep that distinction visible during integration; a newer upstream manifest
 does not establish incompatibility for this fork. The fork's
 [`ModelManifest.ts`](https://github.com/NicholasZolton/t3code/blob/dfd23dbec7bfe9f06d2f7e9583fda857f5b7b02f/apps/server/src/provider/ModelManifest.ts)
 also filters the upstream OpenCode advisory from remotely fetched metadata.
+The current branch retains both protections while taking upstream's
+interrupted-send cleanup and more tolerant readiness-line matching.
+
+## SSH runtime release handoff
+
+The [SSH deployment helper](../scripts/deploy-ssh-runtime.sh) accepts an optional previous runtime version for a
+release handoff, for example `bash scripts/deploy-ssh-runtime.sh <host>
+<project-directory> 0.0.42` when installing 0.0.44. It updates only the managed
+launcher whose process uses that exact installed runtime, preserves the
+previous archive, and restores the launcher if startup fails. Coordinate the
+restart with active remote turns.[^ssh-deployment]
 
 ## Rechecking the boundary
 
@@ -130,6 +160,9 @@ git rev-parse origin/main upstream/main
 git merge-base origin/main upstream/main
 git merge-base --is-ancestor bd57816184 origin/main
 git merge-base --is-ancestor a8df093eb6 origin/main
+git merge-base --is-ancestor d8353ce56e origin/main
+git merge-base --is-ancestor upstream/main HEAD
+git rev-list --count HEAD..upstream/main
 git rev-list --count origin/main..upstream/main
 git rev-list --count origin/main..d15210cd3d
 git rev-list --count d15210cd3d..upstream/main
@@ -146,3 +179,7 @@ unmerged candidate builds or preserves behavior.
 [^git-history]: Local Git ancestry checks and commit counts against the pinned main revisions.
 
 [^unmerged-candidate]: Local-only candidate commit, parents, and reachability from fork main.
+
+[^current-branch-integration]: Local merge commit, its parents, preserved fork code, and reachability from the branch and fork main.
+
+[^ssh-deployment]: The fork's deployment helper, including release handoff and startup rollback.

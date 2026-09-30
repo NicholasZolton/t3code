@@ -8,7 +8,7 @@ Repository-local knowledge about maintaining this fork with a small upstream dif
 
 ## Upstream
 
-- [Upstream integration](upstream-integration.md) - Last upstream integration that reached fork main, the unmerged candidate, and the remaining gap.
+- [Upstream integration](upstream-integration.md) - Completed main integration, the current full upstream merge, and the gap still awaiting main.
 
 ## Maintaining this bundle
 
