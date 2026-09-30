@@ -69,7 +69,6 @@ export function resolveOpenCodeServerPassword(
   return environment.OPENCODE_PASSWORD ?? environment.OPENCODE_SERVER_PASSWORD;
 }
 
-const OPENCODE_SERVER_READY_PREFIX = "server listening";
 const DEFAULT_OPENCODE_SERVER_TIMEOUT_MS = 30_000;
 const DEFAULT_HOSTNAME = "127.0.0.1";
 const OPENCODE_SERVER_STARTUP_MAX_OUTPUT_CHARS = 64 * 1024;
@@ -255,20 +254,15 @@ function parseServerUrlFromOutput(output: string): {
   // resolving with a truncated URL.
   const lines = output.split("\n");
   for (const line of lines.slice(0, -1)) {
-    if (!line.startsWith(OPENCODE_SERVER_READY_PREFIX)) {
-      continue;
-    }
-    const match = line.match(/on\s+(https?:\/\/[^\s]+)/);
+    const match = line.match(/server listening on\s+(https?:\/\/[^\s]+)/i);
     if (match?.[1]) {
       return { url: match[1], terminated: true };
     }
   }
   const trailing = lines[lines.length - 1] ?? "";
-  if (trailing.startsWith(OPENCODE_SERVER_READY_PREFIX)) {
-    const match = trailing.match(/on\s+(https?:\/\/[^\s]+)/);
-    if (match?.[1]) {
-      return { url: match[1], terminated: false };
-    }
+  const match = trailing.match(/server listening on\s+(https?:\/\/[^\s]+)/i);
+  if (match?.[1]) {
+    return { url: match[1], terminated: false };
   }
   return null;
 }
