@@ -394,6 +394,7 @@ interface OpenCodeSessionContext {
   readonly requestRelationRetries: Map<string, OpenCodeRequestRelationRetry>;
   readonly pendingPermissions: Map<string, PermissionRequest>;
   readonly pendingQuestions: Map<string, OpenCodeForm>;
+  readonly persistedPendingQuestionIds: Set<string>;
   readonly toolNamesById: Map<string, string>;
   readonly toolInputsById: Map<string, Record<string, unknown>>;
   readonly taskStartedIds: Set<string>;
@@ -452,6 +453,10 @@ interface OpenCodeTurnTokenUsageAccumulator {
   reasoningTokens: number;
   complete: boolean;
   hasSubagents: boolean;
+}
+
+function pendingOpenCodeQuestionIds(context: OpenCodeSessionContext): ReadonlyArray<string> {
+  return [...new Set([...context.pendingQuestions.keys(), ...context.persistedPendingQuestionIds])];
 }
 
 function makeOpenCodeTurnTokenUsageAccumulator(
@@ -1804,6 +1809,7 @@ export function makeOpenCodeAdapter(
 
       const request = context.pendingQuestions.get(requestId);
       context.pendingQuestions.delete(requestId);
+      context.persistedPendingQuestionIds.delete(requestId);
       const answers =
         event.type === "form.replied" && request
           ? Object.fromEntries(
@@ -1833,7 +1839,7 @@ export function makeOpenCodeAdapter(
     const closePendingOpenCodeRequests = Effect.fn("closePendingOpenCodeRequests")(function* (
       context: OpenCodeSessionContext,
       permissions: ReadonlyArray<PermissionRequest>,
-      questions: ReadonlyArray<OpenCodeForm>,
+      questionIds: ReadonlyArray<string>,
       raw: unknown,
     ) {
       for (const request of permissions) {
@@ -1854,18 +1860,23 @@ export function makeOpenCodeAdapter(
           payload: { requestType: mapPermissionToRequestType(request.action) },
         });
       }
-      for (const request of questions) {
-        if (!context.pendingQuestions.has(request.id)) continue;
-        yield* resolvePendingOpenCodeRequest(context, request.id);
+      for (const requestId of questionIds) {
+        if (
+          !context.pendingQuestions.has(requestId) &&
+          !context.persistedPendingQuestionIds.has(requestId)
+        )
+          continue;
+        yield* resolvePendingOpenCodeRequest(context, requestId);
         const base = yield* buildEventBase({
           threadId: context.session.threadId,
           turnId: context.activeTurnId,
-          requestId: request.id,
+          requestId,
           raw,
         });
-        if (context.emittedTerminalRequestIds.has(request.id)) continue;
-        context.pendingQuestions.delete(request.id);
-        context.emittedTerminalRequestIds.add(request.id);
+        context.persistedPendingQuestionIds.delete(requestId);
+        if (context.emittedTerminalRequestIds.has(requestId)) continue;
+        context.pendingQuestions.delete(requestId);
+        context.emittedTerminalRequestIds.add(requestId);
         emitUnsafe({ ...base, type: "user-input.resolved", payload: { answers: {} } });
       }
     });
@@ -1885,7 +1896,7 @@ export function makeOpenCodeAdapter(
       yield* closePendingOpenCodeRequests(
         context,
         [...context.pendingPermissions.values()],
-        [...context.pendingQuestions.values()],
+        pendingOpenCodeQuestionIds(context),
         raw,
       );
     });
@@ -1980,7 +1991,7 @@ export function makeOpenCodeAdapter(
         while (context.pendingRequestRecovery === recovery) {
           // Only requests pending before the snapshot can be closed by it.
           const priorPermissions = [...context.pendingPermissions.values()];
-          const priorQuestions = [...context.pendingQuestions.values()];
+          const priorQuestionIds = pendingOpenCodeQuestionIds(context);
           const responses = yield* Effect.all(
             {
               permissions: runOpenCodeSdk("permission.list", (signal) =>
@@ -2047,7 +2058,7 @@ export function makeOpenCodeAdapter(
           yield* closePendingOpenCodeRequests(
             context,
             priorPermissions.filter((request) => !permissionIds.has(request.id)),
-            priorQuestions.filter((request) => !questionIds.has(request.id)),
+            priorQuestionIds.filter((requestId) => !questionIds.has(requestId)),
             { type: "pending-requests.recovered" },
           );
           yield* Effect.forEach(
@@ -3020,6 +3031,7 @@ export function makeOpenCodeAdapter(
           requestRelationRetries: new Map(),
           pendingPermissions: new Map(),
           pendingQuestions: new Map(),
+          persistedPendingQuestionIds: new Set(input.pendingUserInputRequestIds),
           toolNamesById: new Map(),
           toolInputsById: new Map(),
           lastParentEventSequence: 0,
@@ -3074,7 +3086,7 @@ export function makeOpenCodeAdapter(
           return yield* Effect.failCause(connectionExit.cause);
         }
         yield* awaitOpenCodeContextReady(context);
-        if (!started.created) {
+        if (!started.created || context.persistedPendingQuestionIds.size > 0) {
           yield* schedulePendingRequestRecovery(context);
         }
 

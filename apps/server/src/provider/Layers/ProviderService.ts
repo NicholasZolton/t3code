@@ -40,6 +40,7 @@ import { HostProcessPlatform } from "@t3tools/shared/hostProcess";
 import { causeErrorTag } from "@t3tools/shared/observability";
 import { getModelSelectionStringOptionValue } from "@t3tools/shared/model";
 import { resolveProjectSettings } from "@t3tools/shared/projectSettings";
+import { derivePendingRequests } from "@t3tools/shared/pendingRequests";
 import * as DateTime from "effect/DateTime";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
@@ -86,6 +87,7 @@ import * as McpProviderSession from "../../mcp/McpProviderSession.ts";
 import * as McpSessionRegistry from "../../mcp/McpSessionRegistry.ts";
 import * as ServerSettings from "../../serverSettings.ts";
 import * as ProjectionSnapshotQuery from "../../orchestration/Services/ProjectionSnapshotQuery.ts";
+import { ProjectionThreadActivityRepository } from "../../persistence/Services/ProjectionThreadActivities.ts";
 import * as VcsDriverRegistry from "../../vcs/VcsDriverRegistry.ts";
 const isModelSelection = Schema.is(ModelSelection);
 const encodePromptJson = Schema.encodeSync(Schema.fromJsonString(Schema.Unknown));
@@ -493,6 +495,28 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
   const projectionQuery = yield* Effect.serviceOption(
     ProjectionSnapshotQuery.ProjectionSnapshotQuery,
   );
+  const activityRepository = yield* Effect.serviceOption(ProjectionThreadActivityRepository);
+  const readPendingUserInputRequestIds = Effect.fnUntraced(function* (
+    threadId: ThreadId,
+    provider: ProviderDriverKind,
+  ) {
+    if (provider !== "opencode" || Option.isNone(activityRepository)) return [];
+    const activities = yield* activityRepository.value
+      .listUserInputLifecycleByThreadId({ threadId })
+      .pipe(
+        Effect.catchCause((cause) =>
+          Effect.logWarning("provider pending question recovery could not read saved requests", {
+            threadId,
+            cause,
+          }).pipe(Effect.as([])),
+        ),
+      );
+    return derivePendingRequests(
+      activities.map(({ activityId, ...activity }) => ({ ...activity, id: activityId })),
+    )
+      .userInputs.filter((request) => !request.dismissible)
+      .map((request) => request.requestId);
+  });
   const resolveAgentContextHint = Effect.fnUntraced(function* (threadId: ThreadId, cwd?: string) {
     let settings = yield* serverSettings.getSettings.pipe(Effect.orDie);
     if (Option.isSome(projectionQuery)) {
@@ -1319,6 +1343,10 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
         .startSession({
           threadId: input.binding.threadId,
           agentContextHint: resolveAgentContextHint(input.binding.threadId, persistedCwd),
+          pendingUserInputRequestIds: yield* readPendingUserInputRequestIds(
+            input.binding.threadId,
+            input.binding.provider,
+          ),
           provider: input.binding.provider,
           providerInstanceId: bindingInstanceId,
           ...(persistedCwd ? { cwd: persistedCwd } : {}),
@@ -1551,6 +1579,10 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
           .startSession({
             ...input,
             agentContextHint: resolveAgentContextHint(threadId, effectiveCwd),
+            pendingUserInputRequestIds: yield* readPendingUserInputRequestIds(
+              threadId,
+              resolvedProvider,
+            ),
             providerInstanceId: resolvedInstanceId,
             ...(effectiveCwd !== undefined ? { cwd: effectiveCwd } : {}),
             ...(effectiveResumeCursor !== undefined ? { resumeCursor: effectiveResumeCursor } : {}),

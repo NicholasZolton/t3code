@@ -54,6 +54,7 @@ import * as ModelManifest from "./provider/ModelManifest.ts";
 import * as ResetCreditCoordinator from "./provider/Layers/resetCreditCoordinator.ts";
 import * as ProviderEventLoggers from "./provider/Layers/ProviderEventLoggers.ts";
 import { ProviderServiceLive } from "./provider/Layers/ProviderService.ts";
+import { ProjectionThreadActivityRepositoryLive } from "./persistence/Layers/ProjectionThreadActivities.ts";
 import { ProviderAuthServiceLive } from "./provider/Layers/ProviderAuthService.ts";
 import { CodexInstallation } from "./provider/CodexInstallation.ts";
 import { AntigravityInstallation } from "./provider/AntigravityInstallation.ts";
@@ -295,6 +296,7 @@ const VcsDriverRegistryLayerLive = VcsDriverRegistry.layer.pipe(
 );
 
 const ProviderLayerLive = ProviderServiceLive.pipe(
+  Layer.provide(ProjectionThreadActivityRepositoryLive),
   Layer.provide(ProviderAdapterRegistryLive),
   Layer.provide(VcsDriverRegistryLayerLive),
   Layer.provideMerge(ProviderSessionDirectoryLayerLive),
