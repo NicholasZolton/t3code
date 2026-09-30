@@ -8,7 +8,7 @@ Repository-local knowledge about maintaining this fork with a small upstream dif
 
 ## Upstream
 
-- [Upstream integration](upstream-integration.md) - Completed main integration, the current full upstream merge, and the gap still awaiting main.
+- [Upstream integration](upstream-integration.md) - Completed integration into fork main, reviewed upstream boundary, and compatibility exceptions.
 
 ## Maintaining this bundle
 
