@@ -68,6 +68,8 @@ export type ProviderSessionStartInput = typeof ProviderSessionStartInput.Type;
 
 export const ProviderSendTurnInput = Schema.Struct({
   threadId: ThreadId,
+  /** Server-resolved context; null clears the hint on existing and resumed sessions. */
+  vcsAgentHint: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
   /** Internal recovery signal. Allows an empty turn only for adapters that
       explicitly support promptless continuation. */
   continuation: Schema.optional(Schema.Boolean),

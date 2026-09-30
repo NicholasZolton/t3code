@@ -6,10 +6,12 @@ tags: [upstream, fork, integration]
 status: stable
 generated:
   by: opencode/gpt-6.1-sol
-  at: 2026-09-30T05:57:39Z
+  at: 2026-09-30T06:08:45Z
 verified:
   - by: opencode/gpt-6.1-sol
     at: 2026-09-30T05:57:39Z
+  - by: opencode/gpt-6.1-sol
+    at: 2026-09-30T06:08:45Z
 snapshot:
   at: 2026-09-30T05:57:39Z
   fork_main: 3da3d19cc2d522afc521fcb99afd3bb1f7a0d209
@@ -45,6 +47,12 @@ sources:
   - id: ssh-deployment
     resource: ../scripts/deploy-ssh-runtime.sh
     title: Fork SSH runtime deployment and release handoff
+  - id: upstream-jujutsu
+    resource: https://github.com/pingdotgg/t3code/pull/13816
+    title: Upstream Jujutsu support selectively ported into the fork
+  - id: fork-jujutsu
+    resource: https://github.com/NicholasZolton/t3code/commit/10f6b88380011b466e0be0355b76874e41db43a2
+    title: Fork Jujutsu port with durable mixed-backend workspace recovery
 ---
 
 # Upstream integration
@@ -109,6 +117,19 @@ also filters the upstream OpenCode advisory from remote metadata. PR #21
 retains both protections while taking upstream's interrupted-send cleanup
 and more tolerant readiness-line matching.[^main-integration]
 
+## Jujutsu migration boundary
+
+The fork selectively ports [upstream #13816](https://github.com/pingdotgg/t3code/pull/13816)
+with additional recovery safeguards. New isolated threads inherit the project's backend;
+existing Git worktrees remain Git, including after cleanup and recreation. Ownership is
+recorded in shared Git config rather than a new thread field. A colocated main checkout
+and Jujutsu 0.42.0 or newer are required on each server host.[^upstream-jujutsu][^fork-jujutsu]
+
+Preserve this mixed-backend boundary during future syncs. The
+[architecture notes](../docs/internals/jujutsu.md) explain checkpoint preservation and
+explicit ref synchronization; the [user guide](../docs/user/source-control.md#jujutsu-repositories)
+covers enabling Jujutsu and disabling VCS agent hints globally or per project.
+
 ## SSH runtime release handoff
 
 The [SSH deployment helper](../scripts/deploy-ssh-runtime.sh) accepts an optional
@@ -150,3 +171,7 @@ git log --reverse --oneline origin/main..upstream/main
 [^git-history]: Ancestry checks and commit counts against the pinned revisions.
 
 [^ssh-deployment]: Deployment helper's release handoff and startup rollback.
+
+[^upstream-jujutsu]: Original upstream support, used as the selective-port source.
+
+[^fork-jujutsu]: Durable backend ownership, recovery behavior, and supported Jujutsu baseline.

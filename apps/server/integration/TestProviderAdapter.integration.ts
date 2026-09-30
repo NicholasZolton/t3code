@@ -9,6 +9,7 @@ import {
   ThreadId,
   TurnId,
   ProviderDriverKind,
+  type ProviderSendTurnInput,
 } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Queue from "effect/Queue";
@@ -177,6 +178,7 @@ function normalizeFixtureEvent(rawEvent: Record<string, unknown>): ProviderRunti
 }
 
 export interface TestProviderAdapterHarness {
+  readonly getSendTurnInputs: () => ReadonlyArray<ProviderSendTurnInput>;
   readonly adapter: ProviderAdapterShape<ProviderAdapterError>;
   readonly provider: ProviderDriverKind;
   readonly queueTurnResponse: (
@@ -230,6 +232,7 @@ export const makeTestProviderAdapterHarness = (options?: MakeTestProviderAdapter
     let eventCount = 0;
     const sessions = new Map<ThreadId, SessionState>();
     const queuedResponsesForNextSession: TestTurnResponse[] = [];
+    const sendTurnInputs: ProviderSendTurnInput[] = [];
     const interruptCallsBySession = new Map<ThreadId, Array<TurnId | undefined>>();
     const approvalResponsesBySession = new Map<
       ThreadId,
@@ -290,6 +293,7 @@ export const makeTestProviderAdapterHarness = (options?: MakeTestProviderAdapter
 
     const sendTurn: ProviderAdapterShape<ProviderAdapterError>["sendTurn"] = (input) =>
       Effect.gen(function* () {
+        sendTurnInputs.push(input);
         const state = sessions.get(input.threadId);
         if (!state) {
           return yield* missingSessionEffect(provider, input.threadId);
@@ -560,6 +564,7 @@ export const makeTestProviderAdapterHarness = (options?: MakeTestProviderAdapter
       queueTurnResponse,
       queueTurnResponseForNextSession,
       getStartCount,
+      getSendTurnInputs: () => [...sendTurnInputs],
       getRollbackCalls,
       getInterruptCalls,
       listActiveSessionIds,

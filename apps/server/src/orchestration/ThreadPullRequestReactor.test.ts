@@ -29,7 +29,8 @@ import * as Stream from "effect/Stream";
 import { TestClock } from "effect/testing";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
 
-import { GitManager, type GitBranchPullRequest } from "../git/GitManager.ts";
+import type { GitBranchPullRequest } from "../git/GitManager.ts";
+import { GitWorkflowService } from "../git/GitWorkflowService.ts";
 import { SqlitePersistenceMemory } from "../persistence/Layers/Sqlite.ts";
 import { PullRequestService } from "../pullRequest/PullRequestService.ts";
 import { RepositoryIdentityResolver } from "../project/RepositoryIdentityResolver.ts";
@@ -138,7 +139,7 @@ const project = {
 
 const makeHarness = Effect.fn("makeThreadPullRequestHarness")(function* (options: {
   readonly threads: ReadonlyArray<OrchestrationThreadShell>;
-  readonly branchPullRequest?: GitManager["Service"]["branchPullRequest"];
+  readonly branchPullRequest?: GitWorkflowService["Service"]["branchPullRequest"];
   readonly summary?: PullRequestService["Service"]["summary"];
   readonly existingWorktrees?: ReadonlyArray<string>;
   readonly project?: OrchestrationProjectShell;
@@ -186,7 +187,7 @@ const makeHarness = Effect.fn("makeThreadPullRequestHarness")(function* (options
           ),
         ),
     }),
-    Layer.mock(GitManager)({
+    Layer.mock(GitWorkflowService)({
       branchPullRequest: (input, readOptions) =>
         Ref.update(branchCalls, (calls) => [
           ...calls,

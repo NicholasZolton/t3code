@@ -75,7 +75,10 @@ export interface ProviderAdapterShape<TError> {
    * Start a provider-backed session.
    */
   readonly startSession: (
-    input: ProviderSessionStartInput,
+    input: ProviderSessionStartInput & {
+      /** Re-read ephemeral context when the harness regenerates it without starting a turn. */
+      readonly agentContextHint?: Effect.Effect<string | null>;
+    },
   ) => Effect.Effect<ProviderSession, TError>;
 
   /**

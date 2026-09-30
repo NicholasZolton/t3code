@@ -13,6 +13,7 @@ import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
+import * as Deferred from "effect/Deferred";
 import * as Equal from "effect/Equal";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
@@ -25,7 +26,7 @@ import * as Stream from "effect/Stream";
 
 import * as ServerConfig from "./config.ts";
 import { resolveWorktreesRoot } from "./pathExpansion.ts";
-import * as GitManager from "./git/GitManager.ts";
+import * as GitWorkflowService from "./git/GitWorkflowService.ts";
 import * as ProjectionSnapshotQuery from "./orchestration/Services/ProjectionSnapshotQuery.ts";
 import * as OrchestrationEngine from "./orchestration/Services/OrchestrationEngine.ts";
 import * as ThreadDeletionReactor from "./orchestration/Services/ThreadDeletionReactor.ts";
@@ -34,7 +35,6 @@ import { threadHasQueuedTurnStart } from "./orchestration/ThreadSettlementPolicy
 import { forkParked } from "./serverActivation.ts";
 import * as Settings from "./serverSettings.ts";
 import * as TerminalManager from "./terminal/Manager.ts";
-import * as GitVcsDriver from "./vcs/GitVcsDriver.ts";
 import { withWorkspaceLease } from "./workspace/workspaceLease.ts";
 
 export class StorageCleanup extends Context.Service<
@@ -113,8 +113,7 @@ export const make = Effect.gen(function* () {
   const engine = yield* OrchestrationEngine.OrchestrationEngineService;
   const threadDeletion = yield* ThreadDeletionReactor.ThreadDeletionReactor;
   const providers = yield* ProviderService.ProviderService;
-  const git = yield* GitVcsDriver.GitVcsDriver;
-  const gitManager = yield* GitManager.GitManager;
+  const vcs = yield* GitWorkflowService.GitWorkflowService;
   const terminals = yield* TerminalManager.TerminalManager;
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
@@ -202,7 +201,7 @@ export const make = Effect.gen(function* () {
       yield* threadDeletion.drainThrough(snapshotSequence);
     }
     const snapshot = yield* readThreads();
-    const refreshedDefaultRefs = new Map<string, Set<string>>();
+    const refreshedDefaultRefs = new Set<string>();
     const groups = Map.groupBy(
       snapshot.threads.filter((thread) => thread.worktreePath !== null),
       (thread) => path.resolve(thread.worktreePath!),
@@ -233,25 +232,12 @@ export const make = Effect.gen(function* () {
           return;
         if ((yield* fs.realPath(worktreePath)) !== worktreePath) return;
         if (yield* containsProjectRoot(worktreePath, [project, ...snapshot.projects])) return;
-        // A linked worktree has a .git file. Never remove a main checkout.
-        if ((yield* fs.stat(path.join(worktreePath, ".git"))).type !== "File") return;
-        const status = yield* git.statusDetailsLocal(worktreePath);
-        if (!status.isRepo || status.branch !== thread.branch || status.hasWorkingTreeChanges)
-          return;
-        const head = yield* git.resolveCommit({ cwd: worktreePath, revision: "HEAD" });
-        const ignored = yield* git.execute({
-          operation: "StorageCleanup.ignoredFiles",
-          cwd: worktreePath,
-          args: ["ls-files", "--others", "--ignored", "--exclude-standard", "--directory", "-z"],
-          maxOutputBytes: 64 * 1024,
-        });
-        // Ignored files can contain secrets or local datasets. Dependency installs
-        // are reproducible; every other ignored path prevents automatic removal.
+        const status = yield* vcs.inspectWorkspaceForCleanup(worktreePath);
         if (
-          ignored.stdoutTruncated ||
-          ignored.stdout
-            .split("\0")
-            .some((entry) => entry !== "" && !/(^|\/)node_modules\/$/.test(entry))
+          !status.isSecondary ||
+          status.refName !== thread.branch ||
+          status.hasWorkingTreeChanges ||
+          status.hasUnpreservedFiles
         )
           return;
         const old =
@@ -260,35 +246,19 @@ export const make = Effect.gen(function* () {
           storageCleanupActivityAt(thread) < now - settings.worktreeAfterDays * DAY_MS;
         let eligible = deleted || old;
         if (!eligible && (settings.worktreeUnchanged || settings.worktreeOnMerge)) {
-          const repositoryCwd = path.resolve(project.workspaceRoot);
-          const remote = yield* git.resolvePrimaryRemoteName(repositoryCwd);
-          const branch = yield* git.resolveDefaultBranchName(repositoryCwd, remote);
-          if (branch === null) return;
-          const defaultRef = `refs/remotes/${remote}/${branch}`;
-          const refreshed = refreshedDefaultRefs.get(repositoryCwd) ?? new Set<string>();
-          if (!refreshed.has(defaultRef)) {
-            yield* git.fetchRemoteTrackingBranch({
-              cwd: repositoryCwd,
-              remoteName: remote,
-              remoteBranch: branch,
-            });
-            refreshed.add(defaultRef);
-            refreshedDefaultRefs.set(repositoryCwd, refreshed);
-          }
-          const base = yield* git.resolveCommit({
+          const base = yield* vcs.workspaceIntegrationBase({
             cwd: worktreePath,
-            revision: defaultRef,
+            refresh: !refreshedDefaultRefs.has(project.workspaceRoot),
           });
-          const ancestor = yield* git.execute({
-            operation: "StorageCleanup.integratedBranch",
-            cwd: worktreePath,
-            args: ["merge-base", "--is-ancestor", head.commitSha, base.commitSha],
-            allowNonZeroExit: true,
-          });
-          if (ancestor.exitCode !== 0) return;
+          refreshedDefaultRefs.add(project.workspaceRoot);
+          if (
+            base === null ||
+            !(yield* vcs.isRevisionAncestor({ cwd: worktreePath, from: status.revision, to: base }))
+          )
+            return;
           eligible = settings.worktreeUnchanged;
           if (!eligible && settings.worktreeOnMerge && thread.branch !== null) {
-            const pullRequest = yield* gitManager.branchPullRequest(
+            const pullRequest = yield* vcs.branchPullRequest(
               { cwd: worktreePath, branch: thread.branch },
               { refresh: true },
             );
@@ -332,29 +302,13 @@ export const make = Effect.gen(function* () {
           storageCleanupActivityAt(latest[0]!) !== storageCleanupActivityAt(thread)
         )
           return;
-        const finalStatus = yield* git.statusDetailsLocal(worktreePath);
+        const finalStatus = yield* vcs.inspectWorkspaceForCleanup(worktreePath);
         if (
-          !finalStatus.isRepo ||
-          finalStatus.branch !== thread.branch ||
-          finalStatus.hasWorkingTreeChanges
-        )
-          return;
-        if (
-          (yield* git.resolveCommit({ cwd: worktreePath, revision: "HEAD" })).commitSha !==
-          head.commitSha
-        )
-          return;
-        const finalIgnored = yield* git.execute({
-          operation: "StorageCleanup.ignoredFiles",
-          cwd: worktreePath,
-          args: ["ls-files", "--others", "--ignored", "--exclude-standard", "--directory", "-z"],
-          maxOutputBytes: 64 * 1024,
-        });
-        if (
-          finalIgnored.stdoutTruncated ||
-          finalIgnored.stdout
-            .split("\0")
-            .some((entry) => entry !== "" && !/(^|\/)node_modules\/$/.test(entry))
+          !finalStatus.isSecondary ||
+          finalStatus.refName !== thread.branch ||
+          finalStatus.hasWorkingTreeChanges ||
+          finalStatus.hasUnpreservedFiles ||
+          finalStatus.revision !== status.revision
         )
           return;
         const current = resolveWorktreeCleanup(
@@ -368,8 +322,8 @@ export const make = Effect.gen(function* () {
           )
         )
           return;
-        yield* git.removeWorktree({ cwd: project.workspaceRoot, path: worktreePath, force: false });
-        yield* gitManager.invalidateStatus(project.workspaceRoot);
+        yield* vcs.removeWorktree({ cwd: project.workspaceRoot, path: worktreePath, force: false });
+        yield* vcs.invalidateStatus(project.workspaceRoot);
         // Preserve branch and path: ProviderCommandReactor recreates the checkout
         // from that branch when the thread is resumed.
         yield* Effect.logInfo("storage cleanup removed worktree", { threadId: thread.id });
@@ -441,6 +395,7 @@ export const make = Effect.gen(function* () {
       ),
     ),
   );
+  const initialSweepEnqueued = yield* Deferred.make<void>();
 
   const start = Effect.fn("StorageCleanup.start")(function* () {
     const unsubscribe = yield* terminals.subscribeMetadata((event) =>
@@ -462,13 +417,12 @@ export const make = Effect.gen(function* () {
     const events = yield* engine.subscribeDomainEvents;
     let lastSettings = yield* settingsService.getSettings.pipe(Effect.orDie);
     yield* forkParked(
-      worker
-        .enqueue(undefined)
-        .pipe(
-          Effect.andThen(worker.drain),
-          Effect.repeat(Schedule.spaced("1 hour")),
-          Effect.asVoid,
-        ),
+      worker.enqueue(undefined).pipe(
+        Effect.tap(() => Deferred.succeed(initialSweepEnqueued, undefined)),
+        Effect.andThen(worker.drain),
+        Effect.repeat(Schedule.spaced("1 hour")),
+        Effect.asVoid,
+      ),
     );
     yield* forkParked(
       Stream.runForEach(changes, (settings) => {
@@ -491,7 +445,10 @@ export const make = Effect.gen(function* () {
       ),
     );
   });
-  return { start, drain: worker.drain } satisfies StorageCleanup["Service"];
+  return {
+    start,
+    drain: Deferred.await(initialSweepEnqueued).pipe(Effect.andThen(worker.drain)),
+  } satisfies StorageCleanup["Service"];
 });
 
 export const layer = Layer.effect(StorageCleanup, make);

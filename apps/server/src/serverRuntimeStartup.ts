@@ -49,7 +49,7 @@ import * as ProviderSessionDirectory from "./provider/Services/ProviderSessionDi
 import * as ProviderSessionReaper from "./provider/Services/ProviderSessionReaper.ts";
 import { forkParked } from "./serverActivation.ts";
 import * as ServiceLauncherClient from "./cloud/serviceLauncherClient.ts";
-import * as GitVcsDriver from "./vcs/GitVcsDriver.ts";
+import * as GitWorkflowService from "./git/GitWorkflowService.ts";
 import {
   formatHeadlessServeOutput,
   formatHostForUrl,
@@ -863,7 +863,7 @@ export const autoPullProjects = Effect.fn("autoPullProjects")(function* (
   projects: ReadonlyArray<OrchestrationProjectShell>,
   settings: ServerSettingsValue = DEFAULT_SERVER_SETTINGS,
 ) {
-  const git = yield* GitVcsDriver.GitVcsDriver;
+  const git = yield* GitWorkflowService.GitWorkflowService;
   const workspaceRoots = [
     ...new Set(
       projects
@@ -876,10 +876,10 @@ export const autoPullProjects = Effect.fn("autoPullProjects")(function* (
     workspaceRoots,
     (cwd) =>
       Effect.gen(function* () {
-        const status = yield* git.statusDetails(cwd);
+        const status = yield* git.status({ cwd });
         if (
           !status.isRepo ||
-          !status.isDefaultBranch ||
+          !status.isDefaultRef ||
           !status.hasUpstream ||
           status.hasWorkingTreeChanges ||
           status.aheadCount > 0
@@ -888,7 +888,7 @@ export const autoPullProjects = Effect.fn("autoPullProjects")(function* (
             cwd,
             reason: !status.isRepo
               ? "not-a-repository"
-              : !status.isDefaultBranch
+              : !status.isDefaultRef
                 ? "not-on-default-branch"
                 : !status.hasUpstream
                   ? "no-upstream"

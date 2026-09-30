@@ -43,6 +43,7 @@ import * as ProjectionSnapshotQuery from "../orchestration/Services/ProjectionSn
 import { ProviderCommandReactor } from "../orchestration/Services/ProviderCommandReactor.ts";
 import { ProviderSessionDirectoryLive } from "../provider/Layers/ProviderSessionDirectory.ts";
 import { makeProviderServiceLive } from "../provider/Layers/ProviderService.ts";
+import * as VcsDriverRegistry from "../vcs/VcsDriverRegistry.ts";
 import {
   NoOpProviderEventLoggers,
   ProviderEventLoggers,
@@ -891,6 +892,9 @@ it.layer(integrationLayer)("AgentSessionImporter integration", (it) => {
             .pipe(Effect.tap(() => Deferred.succeed(turnSent, undefined))),
         );
         const providerLayer = makeProviderServiceLive().pipe(
+          Layer.provide(
+            Layer.mock(VcsDriverRegistry.VcsDriverRegistry)({ detect: () => Effect.succeed(null) }),
+          ),
           Layer.provide(
             Layer.succeed(
               ProviderAdapterRegistry,

@@ -32,7 +32,7 @@ import * as Stream from "effect/Stream";
 import { TestClock } from "effect/testing";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
 
-import { GitManager, type GitBranchPullRequest } from "../git/GitManager.ts";
+import type { GitBranchPullRequest } from "../git/GitManager.ts";
 import { SqlitePersistenceMemory } from "../persistence/Layers/Sqlite.ts";
 import { RepositoryIdentityResolver } from "../project/RepositoryIdentityResolver.ts";
 import {
@@ -56,12 +56,11 @@ import * as ThreadPlanProgress from "./ThreadPlanProgress.ts";
 import * as ThreadSettlementReactor from "./ThreadSettlementReactor.ts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as Path from "effect/Path";
-import { ChildProcessSpawner } from "effect/unstable/process";
 import { ServerConfig } from "../config.ts";
 import * as StorageCleanup from "../storageCleanup.ts";
 import { withWorkspaceLease } from "../workspace/workspaceLease.ts";
 import { TerminalManager } from "../terminal/Manager.ts";
-import { GitVcsDriver } from "../vcs/GitVcsDriver.ts";
+import { GitWorkflowService } from "../git/GitWorkflowService.ts";
 import { ThreadDeletionReactor } from "./Services/ThreadDeletionReactor.ts";
 import { ProviderService } from "../provider/Services/ProviderService.ts";
 
@@ -181,7 +180,7 @@ interface HarnessOptions {
   /** Serve full sweep reads from this instead of `snapshot`. */
   readonly getShellSnapshot?: ProjectionSnapshotQueryShape["getShellSnapshot"];
   readonly settings?: ServerSettings;
-  readonly branchPullRequest?: GitManager["Service"]["branchPullRequest"];
+  readonly branchPullRequest?: GitWorkflowService["Service"]["branchPullRequest"];
   readonly pullRequestSummary?: PullRequestService["Service"]["summary"];
   readonly existingWorktreePaths?: ReadonlyArray<string>;
   readonly onDispatch?: (
@@ -222,7 +221,10 @@ const makeHarness = Effect.fn("makeThreadSettlementHarness")(function* (options:
       return next;
     });
 
-  const branchPullRequest: GitManager["Service"]["branchPullRequest"] = (input, readOptions) =>
+  const branchPullRequest: GitWorkflowService["Service"]["branchPullRequest"] = (
+    input,
+    readOptions,
+  ) =>
     Ref.update(branchCalls, (calls) => [...calls, input]).pipe(
       Effect.andThen(options.branchPullRequest?.(input, readOptions) ?? Effect.succeed(null)),
     );
@@ -290,7 +292,7 @@ const makeHarness = Effect.fn("makeThreadSettlementHarness")(function* (options:
           ),
         ),
     }),
-    Layer.mock(GitManager)({
+    Layer.mock(GitWorkflowService)({
       branchPullRequest,
       invalidateStatus: (cwd) => Ref.update(invalidatedCwds, (cwds) => [...cwds, cwd]),
     }),
@@ -1810,15 +1812,6 @@ describe("storage cleanup", () => {
                       ),
                     ),
                 }),
-                Layer.mock(GitManager)({
-                  invalidateStatus: () => Effect.void,
-                  branchPullRequest: (_input, options) => {
-                    assert.strictEqual(options?.refresh, true);
-                    return Effect.succeed(
-                      makeBranchPullRequest(protection === "unmerged" ? "open" : "merged"),
-                    );
-                  },
-                }),
                 Layer.mock(OrchestrationEngineService)({
                   subscribeDomainEvents: PubSub.subscribe(domainEvents).pipe(
                     Effect.map((subscription) => Stream.fromSubscription(subscription)),
@@ -1850,63 +1843,40 @@ describe("storage cleanup", () => {
                         : [],
                     ),
                 }),
-                Layer.mock(GitVcsDriver)({
-                  resolvePrimaryRemoteName: () => Effect.succeed("origin"),
-                  resolveDefaultBranchName: () => Effect.succeed("main"),
-                  fetchRemoteTrackingBranch: (input) =>
+                Layer.mock(GitWorkflowService)({
+                  workspaceIntegrationBase: ({ refresh }) =>
                     Effect.sync(() => {
-                      assert.deepStrictEqual(input, {
-                        cwd: config.baseDir,
-                        remoteName: "origin",
-                        remoteBranch: "main",
-                      });
-                      defaultRefFetched = true;
-                      fetches++;
+                      if (refresh) {
+                        defaultRefFetched = true;
+                        fetches++;
+                      }
+                      return (defaultRefFetched ? "b" : "d").repeat(40);
                     }),
-                  resolveCommit: ({ revision }) =>
-                    Effect.sync(() => {
-                      if (revision !== "HEAD")
-                        return { commitSha: (defaultRefFetched ? "b" : "d").repeat(40) };
+                  isRevisionAncestor: ({ to }) =>
+                    Effect.succeed(protection !== "diverged" && to === "b".repeat(40)),
+                  branchPullRequest: () =>
+                    Effect.succeed(
+                      makeBranchPullRequest(protection === "unmerged" ? "open" : "merged"),
+                    ),
+                  invalidateStatus: () => Effect.void,
+                  inspectWorkspaceForCleanup: (cwd) =>
+                    Effect.gen(function* () {
                       headReads++;
+                      const marker = yield* fs.stat(path.join(cwd, ".git")).pipe(Effect.orDie);
                       return {
-                        commitSha:
+                        isSecondary: marker.type === "File",
+                        refName: cwd === secondWorktreePath ? "feature-two" : "feature",
+                        revision:
                           protection === "head-moved" && headReads > 1
                             ? "c".repeat(40)
                             : "a".repeat(40),
+                        hasWorkingTreeChanges:
+                          protection === "dirty" || protection === "deleted-dirty",
+                        hasUnpreservedFiles:
+                          protection === "ignored" ||
+                          protection === "deleted-ignored" ||
+                          protection === "ignored-directory",
                       };
-                    }),
-                  statusDetailsLocal: (cwd) =>
-                    Effect.succeed({
-                      isRepo: true,
-                      hasOriginRemote: false,
-                      isDefaultBranch: false,
-                      branch: cwd === secondWorktreePath ? "feature-two" : "feature",
-                      upstreamRef: null,
-                      hasWorkingTreeChanges:
-                        protection === "dirty" || protection === "deleted-dirty",
-                      workingTree: { files: [], insertions: 0, deletions: 0 },
-                      hasUpstream: false,
-                      aheadCount: 0,
-                      behindCount: 0,
-                      aheadOfDefaultCount: 0,
-                    }),
-                  execute: (input) =>
-                    Effect.succeed({
-                      exitCode: ChildProcessSpawner.ExitCode(
-                        input.operation === "StorageCleanup.integratedBranch" &&
-                          (protection === "diverged" || input.args.at(-1) !== "b".repeat(40))
-                          ? 1
-                          : 0,
-                      ),
-                      stdout:
-                        protection === "ignored" || protection === "deleted-ignored"
-                          ? ".env\0"
-                          : protection === "ignored-directory"
-                            ? ".cache/\0"
-                            : "",
-                      stderr: "",
-                      stdoutTruncated: false,
-                      stderrTruncated: false,
                     }).pipe(
                       Effect.tap(() =>
                         (protection.startsWith("policy-") ||
@@ -2027,9 +1997,15 @@ describe("storage cleanup", () => {
           assert.strictEqual(yield* fs.exists(activeLog), true);
         }).pipe(
           Effect.provide(
-            ServerConfig.layerTest(process.cwd(), { prefix: "t3-storage-cleanup-" }).pipe(
-              Layer.provideMerge(NodeServices.layer),
-            ),
+            Layer.unwrap(
+              Effect.gen(function* () {
+                const fs = yield* FileSystem.FileSystem;
+                const directory = yield* fs.makeTempDirectoryScoped({
+                  prefix: "t3-storage-cleanup-",
+                });
+                return ServerConfig.layerTest(process.cwd(), yield* fs.realPath(directory));
+              }),
+            ).pipe(Layer.provideMerge(NodeServices.layer)),
           ),
           Effect.scoped,
         ),

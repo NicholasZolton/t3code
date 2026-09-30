@@ -19,7 +19,7 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 
 import type { CheckpointStoreError } from "./Errors.ts";
-import type { VcsCheckpointOps } from "../vcs/VcsDriver.ts";
+import type { VcsCheckpointOps, CheckpointCaptureResult } from "../vcs/VcsDriver.ts";
 import * as VcsDriverRegistry from "../vcs/VcsDriverRegistry.ts";
 
 export interface CaptureCheckpointInput {
@@ -51,8 +51,8 @@ export interface DeleteCheckpointRefsInput {
 export class CheckpointStore extends Context.Service<
   CheckpointStore,
   {
-    /** Check whether cwd is inside a Git worktree. */
-    readonly isGitRepository: (cwd: string) => Effect.Effect<boolean, CheckpointStoreError>;
+    /** Whether this workspace's VCS driver can capture and restore checkpoints here. */
+    readonly supportsCheckpoints: (cwd: string) => Effect.Effect<boolean, CheckpointStoreError>;
 
     /**
      * Capture a checkpoint commit and store it at the provided checkpoint ref.
@@ -61,7 +61,7 @@ export class CheckpointStore extends Context.Service<
      */
     readonly captureCheckpoint: (
       input: CaptureCheckpointInput,
-    ) => Effect.Effect<void, CheckpointStoreError>;
+    ) => Effect.Effect<CheckpointCaptureResult, CheckpointStoreError>;
 
     /** Check whether a checkpoint ref exists. */
     readonly hasCheckpointRef: (
@@ -117,10 +117,16 @@ export const make = Effect.gen(function* () {
     return handle.driver.checkpoints satisfies VcsCheckpointOps;
   });
 
-  const isGitRepository: CheckpointStore["Service"]["isGitRepository"] = (cwd) =>
-    vcsRegistry
-      .detect({ cwd, requestedKind: "git" })
-      .pipe(Effect.map((repository) => repository !== null));
+  const supportsCheckpoints: CheckpointStore["Service"]["supportsCheckpoints"] = Effect.fn(
+    "CheckpointStore.supportsCheckpoints",
+  )(function* (cwd: string) {
+    const handle = yield* vcsRegistry.detect({ cwd });
+    if (!handle?.driver.checkpoints) {
+      return false;
+    }
+    const usable = handle.driver.checkpointsUsable;
+    return usable ? yield* usable(cwd) : true;
+  });
 
   const captureCheckpoint: CheckpointStore["Service"]["captureCheckpoint"] = Effect.fn(
     "captureCheckpoint",
@@ -161,7 +167,7 @@ export const make = Effect.gen(function* () {
   });
 
   return CheckpointStore.of({
-    isGitRepository,
+    supportsCheckpoints,
     captureCheckpoint,
     hasCheckpointRef,
     restoreCheckpoint,

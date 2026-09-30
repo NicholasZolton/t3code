@@ -21,16 +21,16 @@ import * as OrchestrationEngine from "./orchestration/Services/OrchestrationEngi
 import * as ProjectionSnapshotQuery from "./orchestration/Services/ProjectionSnapshotQuery.ts";
 import * as ServerRuntimeStartup from "./serverRuntimeStartup.ts";
 import * as ServerSettings from "./serverSettings.ts";
-import * as GitVcsDriver from "./vcs/GitVcsDriver.ts";
+import * as GitWorkflowService from "./git/GitWorkflowService.ts";
 
 it.effect("automatic pull only updates enabled, behind, clean default-branch checkouts", () =>
   Effect.gen(function* () {
     const pulled: string[] = [];
     const git = {
-      statusDetails: (cwd: string) =>
+      status: ({ cwd }: { readonly cwd: string }) =>
         Effect.succeed({
           isRepo: true,
-          isDefaultBranch: cwd !== "/feature",
+          isDefaultRef: cwd !== "/feature",
           hasUpstream: true,
           hasWorkingTreeChanges: cwd === "/dirty",
           aheadCount: cwd === "/ahead" ? 1 : 0,
@@ -45,7 +45,7 @@ it.effect("automatic pull only updates enabled, behind, clean default-branch che
             upstreamRef: "origin/main",
           };
         }),
-    } as unknown as GitVcsDriver.GitVcsDriver["Service"];
+    } as unknown as GitWorkflowService.GitWorkflowService["Service"];
     const project = (workspaceRoot: string) =>
       ({ id: ProjectId.make(workspaceRoot), workspaceRoot }) as never;
     const overrides = (entries: Record<string, boolean>) => ({
@@ -75,7 +75,7 @@ it.effect("automatic pull only updates enabled, behind, clean default-branch che
         "/feature": true,
         "/disabled": false,
       }),
-    ).pipe(Effect.provideService(GitVcsDriver.GitVcsDriver, git));
+    ).pipe(Effect.provideService(GitWorkflowService.GitWorkflowService, git));
 
     assert.deepStrictEqual(pulled, ["/clean"]);
 
@@ -83,7 +83,7 @@ it.effect("automatic pull only updates enabled, behind, clean default-branch che
     yield* ServerRuntimeStartup.autoPullProjects(
       [project("/inherited"), project("/opted-out"), project("/dirty")],
       { ...overrides({ "/opted-out": false }), defaultAutoPull: true },
-    ).pipe(Effect.provideService(GitVcsDriver.GitVcsDriver, git));
+    ).pipe(Effect.provideService(GitWorkflowService.GitWorkflowService, git));
     assert.deepStrictEqual(pulled, ["/inherited"]);
   }),
 );

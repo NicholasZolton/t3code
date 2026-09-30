@@ -1,6 +1,6 @@
 import type { ProviderInteractionMode } from "@t3tools/contracts";
 import type { V2TurnStartParams__AdditionalContextEntry } from "effect-codex-app-server/schema";
-import { buildRuntimeInstructions } from "./RuntimeInstructions.ts";
+import { buildRuntimeInstructions, buildVcsAgentContext } from "./RuntimeInstructions.ts";
 
 const T3_CODE_BROWSER_TOOL_INSTRUCTIONS = `## T3 Code collaborative browser
 
@@ -185,6 +185,7 @@ In Default mode, strongly prefer making reasonable assumptions and executing the
 </collaboration_mode>`;
 
 export interface CodexRuntimeInfo {
+  readonly vcsAgentHint?: string | null | undefined;
   readonly model: string;
   readonly modelName?: string | undefined;
   readonly reasoningEffort: string;
@@ -220,8 +221,22 @@ export function buildCodexAdditionalContext(
   return {
     t3_code_runtime: {
       kind: "application",
-      value: buildRuntimeInstructions({ harness: "Codex", ...runtime }),
+      value: buildRuntimeInstructions({
+        harness: "Codex",
+        model: runtime.model,
+        modelName: runtime.modelName,
+        reasoningEffort: runtime.reasoningEffort,
+      }),
     },
     ...(tools ? { t3_code_tools: { kind: "application", value: tools } } : {}),
+    ...codexVcsContext(runtime.vcsAgentHint),
   };
+}
+
+export function codexVcsContext(
+  hint: string | null | undefined,
+): Record<string, V2TurnStartParams__AdditionalContextEntry> {
+  return hint
+    ? { t3_vcs_context: { kind: "application", value: buildVcsAgentContext(hint).trim() } }
+    : {};
 }

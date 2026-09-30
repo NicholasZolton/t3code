@@ -43,6 +43,7 @@ import { expandHomePath } from "../../pathExpansion.ts";
 import {
   buildCodexAdditionalContext,
   buildCodexDeveloperInstructions,
+  codexVcsContext,
   type T3CodeToolAvailability,
 } from "../CodexDeveloperInstructions.ts";
 const decodeV2TurnStartResponse = Schema.decodeUnknownEffect(EffectCodexSchema.V2TurnStartResponse);
@@ -171,6 +172,7 @@ type CodexThreadItem =
   EffectCodexSchema.V2ThreadReadResponse["thread"]["turns"][number]["items"][number];
 
 export interface CodexSessionRuntimeOptions {
+  readonly agentContextHint?: Effect.Effect<string | null>;
   readonly threadId: ThreadId;
   readonly providerInstanceId?: ProviderInstanceId;
   readonly binaryPath: string;
@@ -190,6 +192,7 @@ export interface CodexSessionRuntimeOptions {
 }
 
 export interface CodexSessionRuntimeSendTurnInput {
+  readonly vcsAgentHint?: string | null | undefined;
   readonly input?: string;
   readonly attachments?: ReadonlyArray<{
     readonly type: "localImage";
@@ -587,6 +590,7 @@ function runtimeModeToTurnSandboxPolicy(
 }
 
 function buildCodexTurnInstructions(input: {
+  readonly vcsAgentHint?: string | null | undefined;
   readonly interactionMode?: ProviderInteractionMode;
   readonly model?: string;
   readonly modelName?: string;
@@ -608,7 +612,7 @@ function buildCodexTurnInstructions(input: {
       },
     },
     additionalContext: buildCodexAdditionalContext(
-      { model, modelName: input.modelName, reasoningEffort },
+      { model, modelName: input.modelName, reasoningEffort, vcsAgentHint: input.vcsAgentHint },
       input.browserToolsAvailable ?? true,
     ),
   };
@@ -619,6 +623,7 @@ const SKILL_MENTION_PATTERN =
   /(^|\s)\p{Sc}(?![0-9][0-9_]*(?:[kKmMbBtT]|[eE][0-9]+)?(?:\s|$))(?=[a-zA-Z0-9:_-]*[a-zA-Z])([a-zA-Z0-9][a-zA-Z0-9:_-]*)(?=\s|$)/gu;
 
 export function buildTurnStartParams(input: {
+  readonly vcsAgentHint?: string | null | undefined;
   readonly threadId: string;
   readonly runtimeMode: RuntimeMode;
   readonly prompt?: string;
@@ -651,6 +656,7 @@ export function buildTurnStartParams(input: {
 
   const config = runtimeModeToThreadConfig(input.runtimeMode);
   const turnInstructions = buildCodexTurnInstructions({
+    vcsAgentHint: input.vcsAgentHint,
     ...(input.interactionMode ? { interactionMode: input.interactionMode } : {}),
     ...(input.model ? { model: input.model } : {}),
     ...(input.modelName ? { modelName: input.modelName } : {}),
@@ -1882,8 +1888,13 @@ export const makeCodexSessionRuntime = (
      */
     const restoreAdditionalContext = (threadId: string) =>
       Effect.gen(function* () {
-        const context = yield* Ref.get(lastAdditionalContextRef);
-        if (!context) return;
+        const previous = yield* Ref.get(lastAdditionalContextRef);
+        if (!previous) return;
+        const stableContext = { ...previous };
+        delete stableContext.t3_vcs_context;
+        const context = options.agentContextHint
+          ? { ...stableContext, ...codexVcsContext(yield* options.agentContextHint) }
+          : previous;
         yield* client.request("thread/inject_items", {
           threadId,
           items: Object.entries(context).map(([key, entry]) => ({
@@ -2565,6 +2576,7 @@ export const makeCodexSessionRuntime = (
           const models = options.models ? yield* options.models : [];
           const modelName = models.find((model) => model.slug === normalizedModel)?.name;
           const params = yield* buildTurnStartParams({
+            vcsAgentHint: input.vcsAgentHint,
             threadId: providerThreadId,
             runtimeMode: options.runtimeMode,
             ...(input.input ? { prompt: input.input } : {}),

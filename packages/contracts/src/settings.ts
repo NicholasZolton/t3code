@@ -1052,6 +1052,7 @@ export const PROJECT_SCOPED_SERVER_SETTING_KEYS = [
   "defaultThreadEnvMode",
   "newWorktreesStartFromOrigin",
   "worktreeSubmodules",
+  "enableVcsAgentHints",
   "defaultAutoPull",
   "defaultProjectScripts",
   "enableAgentBrowserAccess",
@@ -1080,6 +1081,7 @@ export const ProjectSettingsOverrides = Schema.Struct({
   defaultThreadEnvMode: Schema.optionalKey(ThreadEnvMode),
   newWorktreesStartFromOrigin: Schema.optionalKey(Schema.Boolean),
   worktreeSubmodules: ForwardCompatibleOptional(WorktreeSubmodules),
+  enableVcsAgentHints: Schema.optionalKey(Schema.Boolean),
   defaultAutoPull: Schema.optionalKey(Schema.Boolean),
   defaultProjectScripts: Schema.optionalKey(Schema.Array(ProjectScript)),
   enableAgentBrowserAccess: Schema.optionalKey(Schema.Boolean),
@@ -1271,6 +1273,7 @@ export const ServerSettings = Schema.Struct({
   ),
   worktreeDirectory: WorktreeDirectory.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
   worktreeProjectFolders: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+  enableVcsAgentHints: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
   worktreeBranchPrefix: WorktreeBranchPrefix.pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_WORKTREE_BRANCH_PREFIX)),
   ),
@@ -1585,6 +1588,7 @@ export const ServerSettingsPatch = Schema.Struct({
   worktreeProjectFolders: Schema.optionalKey(Schema.Boolean),
   worktreeBranchPrefix: Schema.optionalKey(WorktreeBranchPrefix),
   worktreeSubmodules: Schema.optionalKey(Schema.NullOr(WorktreeSubmodules)),
+  enableVcsAgentHints: Schema.optionalKey(Schema.Boolean),
   addProjectBaseDirectory: Schema.optionalKey(TrimmedString),
   textGenerationModelSelection: Schema.optionalKey(ModelSelectionPatch),
   sourceControlWritingStyle: Schema.optionalKey(

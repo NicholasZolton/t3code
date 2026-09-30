@@ -2527,6 +2527,10 @@ const makeWsRpcLayer = (
                   },
                 })
                 .pipe(
+                  Effect.provideService(
+                    ProjectionSnapshotQuery.ProjectionSnapshotQuery,
+                    projectionSnapshotQuery,
+                  ),
                   Effect.matchCauseEffect({
                     onFailure: (cause) => Queue.failCause(queue, cause),
                     onSuccess: (result) =>

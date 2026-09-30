@@ -183,6 +183,32 @@ const make = Effect.gen(function* () {
       ),
     );
 
+  const reportCaptureExclusions = Effect.fn("CheckpointReactor.reportCaptureExclusions")(function* (
+    input: {
+      readonly threadId: ThreadId;
+      readonly turnId: TurnId | null;
+      readonly createdAt: string;
+    },
+    exclusions: ReadonlyArray<string>,
+  ) {
+    if (exclusions.length === 0) return;
+    yield* orchestrationEngine.dispatch({
+      type: "thread.activity.append",
+      commandId: yield* serverCommandId("checkpoint-exclusions"),
+      threadId: input.threadId,
+      activity: {
+        id: yield* serverEventId,
+        tone: "error",
+        kind: "checkpoint.capture.excluded",
+        summary: "Some files are outside this checkpoint and will not be rewound",
+        payload: { detail: exclusions.join("\n"), exclusions },
+        turnId: input.turnId,
+        createdAt: input.createdAt,
+      },
+      createdAt: input.createdAt,
+    });
+  });
+
   const resolveSessionRuntimeForThread = Effect.fn("resolveSessionRuntimeForThread")(function* (
     threadId: ThreadId,
   ): Effect.fn.Return<Option.Option<{ readonly threadId: ThreadId; readonly cwd: string }>> {
@@ -238,7 +264,7 @@ const make = Effect.gen(function* () {
     if (!cwd) {
       return undefined;
     }
-    if (!(yield* checkpointStore.isGitRepository(cwd))) {
+    if (!(yield* checkpointStore.supportsCheckpoints(cwd))) {
       return undefined;
     }
     return cwd;
@@ -287,10 +313,14 @@ const make = Effect.gen(function* () {
       });
     }
 
-    yield* checkpointStore.captureCheckpoint({
+    const capture = yield* checkpointStore.captureCheckpoint({
       cwd: input.cwd,
       checkpointRef: targetCheckpointRef,
     });
+    yield* reportCaptureExclusions(
+      { threadId: input.threadId, turnId: input.turnId, createdAt: input.createdAt },
+      capture.exclusions,
+    );
 
     // Refresh the workspace entry index so the @-mention file picker
     // reflects files created or deleted during this turn.
@@ -499,10 +529,14 @@ const make = Effect.gen(function* () {
         return;
       }
 
-      yield* checkpointStore.captureCheckpoint({
+      const capture = yield* checkpointStore.captureCheckpoint({
         cwd: checkpointCwd,
         checkpointRef: baselineCheckpointRef,
       });
+      yield* reportCaptureExclusions(
+        { threadId: thread.id, turnId, createdAt: event.createdAt },
+        capture.exclusions,
+      );
       yield* receiptBus.publish({
         type: "checkpoint.baseline.captured",
         threadId: thread.id,
@@ -714,10 +748,14 @@ const make = Effect.gen(function* () {
       return;
     }
 
-    yield* checkpointStore.captureCheckpoint({
+    const capture = yield* checkpointStore.captureCheckpoint({
       cwd: checkpointCwd,
       checkpointRef: baselineCheckpointRef,
     });
+    yield* reportCaptureExclusions(
+      { threadId, turnId: null, createdAt: event.occurredAt },
+      capture.exclusions,
+    );
     yield* receiptBus.publish({
       type: "checkpoint.baseline.captured",
       threadId,
