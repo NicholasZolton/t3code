@@ -22,6 +22,7 @@ import type { FormDetail, OpenCodeEvent, PermissionRequest } from "@opencode/cli
 
 import {
   ApprovalRequestId,
+  EventId,
   OpenCodeSettings,
   ProviderDriverKind,
   ProviderInstanceId,
@@ -44,6 +45,16 @@ import {
 } from "./OpenCodeAdapter.ts";
 import { symlinksSupported } from "@t3tools/shared/testing/symlinks";
 import type { EventNdjsonLogger } from "./EventNdjsonLogger.ts";
+import { ProjectionThreadActivityRepository } from "../../persistence/Services/ProjectionThreadActivities.ts";
+import { ProjectionThreadActivityRepositoryLive } from "../../persistence/Layers/ProjectionThreadActivities.ts";
+import { SqlitePersistenceMemory } from "../../persistence/Layers/Sqlite.ts";
+import { AnalyticsService } from "../../telemetry/AnalyticsService.ts";
+import { VcsDriverRegistry } from "../../vcs/VcsDriverRegistry.ts";
+import { ProviderAdapterRegistry } from "../Services/ProviderAdapterRegistry.ts";
+import { ProviderService } from "../Services/ProviderService.ts";
+import { makeAdapterRegistryMock } from "../testUtils/providerAdapterRegistryMock.ts";
+import { makeProviderServiceLive } from "./ProviderService.ts";
+import { NoOpProviderEventLoggers, ProviderEventLoggers } from "./ProviderEventLoggers.ts";
 
 // Test-local service tag so the rest of the file can keep using `yield* OpenCodeAdapter`.
 class OpenCodeAdapter extends Context.Service<OpenCodeAdapter, OpenCodeAdapterShape>()(
@@ -2699,6 +2710,158 @@ it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
         { requestID: "que_existing", answers: [["workspace"]] },
       ]);
     }),
+  );
+
+  it.effect(
+    "resolves saved questions missing from OpenCode while preserving live child questions",
+    () =>
+      Effect.gen(function* () {
+        const adapter = yield* OpenCodeAdapter;
+        const threadId = asThreadId("thread-saved-question-recovery");
+        const live = formRequest("que_live", "ses_child");
+        runtimeMock.state.sessionParentById.set(live.sessionID, "ses_parent");
+        runtimeMock.state.pendingQuestions = [live];
+
+        const requestsFiber = yield* adapter.streamEvents.pipe(
+          Stream.filter(
+            (event) =>
+              event.threadId === threadId &&
+              (event.type === "user-input.requested" || event.type === "user-input.resolved"),
+          ),
+          Stream.take(2),
+          Stream.runCollect,
+          Effect.forkChild,
+        );
+        yield* adapter.startSession({
+          provider: ProviderDriverKind.make("opencode"),
+          threadId,
+          runtimeMode: "approval-required",
+          resumeCursor: { schemaVersion: 1, sessionId: "ses_parent" },
+          pendingUserInputRequestIds: [
+            ApprovalRequestId.make("que_orphaned"),
+            ApprovalRequestId.make(live.id),
+          ],
+        });
+
+        const requests = yield* Fiber.join(requestsFiber);
+        NodeAssert.deepEqual(requests.map((event) => [event.type, event.requestId]).sort(), [
+          ["user-input.requested", live.id],
+          ["user-input.resolved", "que_orphaned"],
+        ]);
+        yield* adapter.respondToUserInput(threadId, ApprovalRequestId.make(live.id), {
+          scope: "Workspace",
+        });
+        NodeAssert.deepEqual(runtimeMock.state.questionReplyCalls, [
+          { requestID: live.id, answers: [["workspace"]] },
+        ]);
+      }),
+  );
+
+  it.effect(
+    "reconciles persisted native questions through ProviderService while retaining async questions",
+    () =>
+      Effect.gen(function* () {
+        const adapter = yield* OpenCodeAdapter;
+        const threadId = asThreadId("thread-persisted-question-service-recovery");
+        const activityLayer = ProjectionThreadActivityRepositoryLive.pipe(
+          Layer.provideMerge(SqlitePersistenceMemory),
+        );
+        const serviceLayer = makeProviderServiceLive().pipe(
+          Layer.provideMerge(activityLayer),
+          Layer.provide(AnalyticsService.layerTest),
+          Layer.provide(Layer.succeed(ProviderEventLoggers, NoOpProviderEventLoggers)),
+          Layer.provide(
+            Layer.succeed(
+              ProviderAdapterRegistry,
+              makeAdapterRegistryMock({ [ProviderDriverKind.make("opencode")]: adapter }),
+            ),
+          ),
+          Layer.provide(Layer.mock(VcsDriverRegistry)({ detect: () => Effect.succeed(null) })),
+        );
+        yield* Effect.gen(function* () {
+          const activities = yield* ProjectionThreadActivityRepository;
+          for (const [requestId, responseMode] of [
+            ["async-question", "message"],
+            ["orphaned-native-question", undefined],
+          ] as const) {
+            yield* activities.upsert({
+              activityId: EventId.make(`requested:${requestId}`),
+              threadId,
+              turnId: null,
+              tone: "approval",
+              kind: "user-input.requested",
+              summary: "User input requested",
+              payload: {
+                requestId,
+                ...(responseMode ? { responseMode } : {}),
+                questions: [
+                  {
+                    id: "scope",
+                    header: "Scope",
+                    question: "Which scope?",
+                    options: [{ label: "Workspace", description: "Use this workspace." }],
+                  },
+                ],
+              },
+              createdAt: "2026-01-01T00:00:00.000Z",
+            });
+          }
+          const provider = yield* ProviderService;
+          const resolvedFiber = yield* provider.streamEvents.pipe(
+            Stream.filter(
+              (event) => event.threadId === threadId && event.type === "user-input.resolved",
+            ),
+            Stream.runHead,
+            Effect.forkChild,
+          );
+          yield* provider.startSession(threadId, {
+            threadId,
+            providerInstanceId: ProviderInstanceId.make("opencode"),
+            runtimeMode: "approval-required",
+            resumeCursor: { schemaVersion: 1, sessionId: "ses_parent" },
+          });
+          const resolved = Option.getOrThrow(yield* Fiber.join(resolvedFiber));
+          NodeAssert.equal(resolved.requestId, "orphaned-native-question");
+        }).pipe(Effect.provide(serviceLayer));
+      }),
+  );
+
+  it.effect(
+    "retains saved questions through a failed recovery snapshot and resolves them on retry",
+    () =>
+      Effect.gen(function* () {
+        const adapter = yield* OpenCodeAdapter;
+        const threadId = asThreadId("thread-saved-question-recovery-retry");
+        const requestId = ApprovalRequestId.make("que_orphaned_after_restart");
+        runtimeMock.state.permissionListImplementation = async () => {
+          if (runtimeMock.state.permissionListCalls === 1) throw new Error("Disconnected");
+          return [];
+        };
+        const warningFiber = yield* adapter.streamEvents.pipe(
+          Stream.filter((event) => event.threadId === threadId && event.type === "runtime.warning"),
+          Stream.runHead,
+          Effect.forkChild,
+        );
+        const resolvedFiber = yield* adapter.streamEvents.pipe(
+          Stream.filter(
+            (event) => event.threadId === threadId && event.type === "user-input.resolved",
+          ),
+          Stream.runHead,
+          Effect.forkChild,
+        );
+        yield* adapter.startSession({
+          provider: ProviderDriverKind.make("opencode"),
+          threadId,
+          runtimeMode: "approval-required",
+          resumeCursor: { schemaVersion: 1, sessionId: "ses_parent" },
+          pendingUserInputRequestIds: [requestId],
+        });
+        yield* Fiber.join(warningFiber);
+        NodeAssert.equal(resolvedFiber.pollUnsafe(), undefined);
+        yield* advanceTestClock(250);
+        const resolved = Option.getOrThrow(yield* Fiber.join(resolvedFiber));
+        NodeAssert.equal(resolved.requestId, requestId);
+      }),
   );
 
   it.effect("routes a native form.created event through its nested form session id", () =>

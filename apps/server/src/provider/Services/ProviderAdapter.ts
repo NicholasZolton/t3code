@@ -78,6 +78,8 @@ export interface ProviderAdapterShape<TError> {
     input: ProviderSessionStartInput & {
       /** Re-read ephemeral context when the harness regenerates it without starting a turn. */
       readonly agentContextHint?: Effect.Effect<string | null>;
+      /** Native questions persisted before this adapter's in-memory session was lost. */
+      readonly pendingUserInputRequestIds?: ReadonlyArray<ApprovalRequestId>;
     },
   ) => Effect.Effect<ProviderSession, TError>;
 
