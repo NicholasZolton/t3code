@@ -53,7 +53,7 @@ const PAGE_TITLES: Record<SettingsPage, string> = {
 
 const PAGE_PROJECT_KEYS: Record<SettingsPage, readonly ProjectScopedServerSettingKey[]> = {
   "new-threads": ["defaultThreadEnvMode", "worktreeSubmodules", "defaultRuntimeMode"],
-  "source-control": ["defaultAutoPull", "newWorktreesStartFromOrigin"],
+  "source-control": ["defaultAutoPull", "newWorktreesStartFromOrigin", "enableVcsAgentHints"],
   "agent-behavior": ["responseStreamingMode", "enableAgentBrowserAccess"],
   maintenance: ["continueThreadsAfterServerUpdate"],
 };
@@ -386,6 +386,14 @@ function ServerSettingsDetail(props: { readonly page: SettingsPage }) {
                       value={uniform("newWorktreesStartFromOrigin")}
                       disabled={disabledFor("newWorktreesStartFromOrigin")}
                       onValueChange={(value) => write({ newWorktreesStartFromOrigin: value })}
+                    />
+                    <FanoutSwitchRow
+                      icon="text.bubble"
+                      label="VCS agent hints"
+                      subtitle="Give agents a version-control hint on each turn, including resumed threads."
+                      value={uniform("enableVcsAgentHints")}
+                      disabled={disabledFor("enableVcsAgentHints")}
+                      onValueChange={(value) => write({ enableVcsAgentHints: value })}
                     />
                     <WorktreeSettingField
                       label="Worktree directory"

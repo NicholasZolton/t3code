@@ -93,7 +93,7 @@ import { resolveClaudeSdkExecutablePath } from "../Drivers/ClaudeExecutable.ts";
 import { claudeSignedOutMessage, makeClaudeEnvironment } from "../Drivers/ClaudeHome.ts";
 import { planClaudeSkillDispatch } from "../Drivers/ClaudeSkillDispatch.ts";
 import { discoverClaudeSkills } from "../Drivers/ClaudeSkills.ts";
-import { buildRuntimeInstructions } from "../RuntimeInstructions.ts";
+import { buildRuntimeInstructions, buildVcsAgentContext } from "../RuntimeInstructions.ts";
 import {
   BUNDLED_CLAUDE_MODEL_CATALOG,
   type ClaudeModelCatalog,
@@ -1606,6 +1606,8 @@ const buildUserMessageEffect = Effect.fn("buildUserMessageEffect")(function* (
 ) {
   const text = buildPromptText(input, dependencies.boundInstanceId, dependencies.modelCatalog);
   const sdkContent: Array<Record<string, unknown>> = [];
+  const vcsContext = buildVcsAgentContext(input.vcsAgentHint);
+  if (vcsContext) sdkContent.push({ type: "text", text: vcsContext.trim() });
 
   // Claude Code expands a skill only from the LAST text block, and only when
   // `/name` is its first character. A `$skill` chip anywhere in the prompt is

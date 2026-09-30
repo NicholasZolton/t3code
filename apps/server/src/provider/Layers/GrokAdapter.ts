@@ -1644,6 +1644,7 @@ export function makeGrokAdapter(grokSettings: GrokSettings, options?: GrokAdapte
                   ? undefined
                   : buildRuntimeInstructions({
                       harness: "Grok",
+                      vcsAgentHint: input.vcsAgentHint,
                       model: displayModel,
                       reasoningEffort: normalizeGrokReasoningEffort(requestedTurnReasoningEffort),
                     });

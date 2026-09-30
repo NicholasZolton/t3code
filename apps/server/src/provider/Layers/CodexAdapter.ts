@@ -2280,6 +2280,7 @@ export const makeCodexAdapter = Effect.fn("makeCodexAdapter")(function* (
           providerInstanceId: boundInstanceId,
           cwd: input.cwd ?? process.cwd(),
           binaryPath: codexConfig.binaryPath,
+          ...(input.agentContextHint ? { agentContextHint: input.agentContextHint } : {}),
           ...(options?.models ? { models: options.models } : {}),
           launchArgs: resolveCodexLaunchArgs(codexConfig.launchArgs, options?.environment),
           ...(options?.environment ? { environment: options.environment } : {}),
@@ -2541,6 +2542,7 @@ export const makeCodexAdapter = Effect.fn("makeCodexAdapter")(function* (
         : undefined;
     return yield* session.runtime
       .sendTurn({
+        ...(input.vcsAgentHint !== undefined ? { vcsAgentHint: input.vcsAgentHint } : {}),
         ...(input.input !== undefined ? { input: input.input } : {}),
         ...(input.modelSelection?.instanceId === boundInstanceId
           ? { model: input.modelSelection.model }

@@ -38,6 +38,7 @@ import {
   splitNullSeparatedGitStdoutPaths,
 } from "./GitVcsDriverCore.ts";
 import * as VcsDriver from "./VcsDriver.ts";
+import { chunkPathsForCheckIgnore } from "./VcsPathCodecs.ts";
 import * as VcsProcess from "./VcsProcess.ts";
 
 export interface ExecuteGitInput {
@@ -394,7 +395,6 @@ export class GitVcsDriver extends Context.Service<
 const WORKSPACE_FILES_MAX_OUTPUT_BYTES = 16 * 1024 * 1024;
 const CHECKPOINT_RECOVERY_MAX_CANDIDATES = 64;
 const CHECKPOINT_RECOVERY_TIMEOUT = "5 seconds";
-const GIT_CHECK_IGNORE_MAX_STDIN_BYTES = 256 * 1024;
 const CHECKPOINT_DIFF_MAX_OUTPUT_BYTES = 10_000_000;
 const WORKSPACE_GIT_HARDENED_CONFIG_ARGS = [
   "-c",
@@ -411,36 +411,6 @@ const nowFreshness = Effect.fn("GitVcsDriver.nowFreshness")(function* () {
     expiresAt: Option.none(),
   };
 });
-
-function chunkPathsForGitCheckIgnore(relativePaths: ReadonlyArray<string>): string[][] {
-  const chunks: string[][] = [];
-  let chunk: string[] = [];
-  let chunkBytes = 0;
-
-  for (const relativePath of relativePaths) {
-    const relativePathBytes = Buffer.byteLength(relativePath) + 1;
-    if (chunk.length > 0 && chunkBytes + relativePathBytes > GIT_CHECK_IGNORE_MAX_STDIN_BYTES) {
-      chunks.push(chunk);
-      chunk = [];
-      chunkBytes = 0;
-    }
-
-    chunk.push(relativePath);
-    chunkBytes += relativePathBytes;
-
-    if (chunkBytes >= GIT_CHECK_IGNORE_MAX_STDIN_BYTES) {
-      chunks.push(chunk);
-      chunk = [];
-      chunkBytes = 0;
-    }
-  }
-
-  if (chunk.length > 0) {
-    chunks.push(chunk);
-  }
-
-  return chunks;
-}
 
 function parseGitRemoteVerboseOutput(
   output: string,
@@ -669,7 +639,7 @@ export const makeVcsDriverShape = Effect.fn("makeGitVcsDriverShape")(function* (
     }
 
     const ignoredPaths = new Set<string>();
-    const chunks = chunkPathsForGitCheckIgnore(relativePaths);
+    const chunks = chunkPathsForCheckIgnore(relativePaths);
 
     for (const chunk of chunks) {
       const result = yield* gitCommand(
@@ -780,6 +750,7 @@ export const makeVcsDriverShape = Effect.fn("makeGitVcsDriverShape")(function* (
   const checkpoints: VcsDriver.VcsCheckpointOps = {
     captureCheckpoint: Effect.fn("GitVcsDriver.checkpoints.captureCheckpoint")(function* (input) {
       const operation = VcsProcess.CHECKPOINT_CAPTURE_OPERATION;
+      const reportedExclusions: string[] = [];
       const indexConfig = [
         "-c",
         "core.fsmonitor=false",
@@ -989,6 +960,7 @@ export const makeVcsDriverShape = Effect.fn("makeGitVcsDriverShape")(function* (
                     !(yield* hasHeadCommit(nestedCwd, nestedRepoEnv))
                   ) {
                     exclusions.push(`:(exclude,literal)${entry}`);
+                    reportedExclusions.push(`${entry} (embedded repository has no commits)`);
                   }
                 }
                 if (exclusions.length === 0) return yield* error;
@@ -1044,6 +1016,7 @@ export const makeVcsDriverShape = Effect.fn("makeGitVcsDriverShape")(function* (
           args: [...durableWrite, "update-ref", input.checkpointRef, commitOid],
         });
       }).pipe(Effect.ensuring(cleanupTempIndex));
+      return { exclusions: reportedExclusions };
     }),
 
     hasCheckpointRef: (input) =>

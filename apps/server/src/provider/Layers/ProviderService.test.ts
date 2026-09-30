@@ -78,11 +78,15 @@ import * as ServerSettings from "../../serverSettings.ts";
 import * as AnalyticsService from "../../telemetry/AnalyticsService.ts";
 import { makeAdapterRegistryMock } from "../testUtils/providerAdapterRegistryMock.ts";
 import * as ProjectionSnapshotQuery from "../../orchestration/Services/ProjectionSnapshotQuery.ts";
+import * as VcsDriverRegistry from "../../vcs/VcsDriverRegistry.ts";
 
 const encodeJson = Schema.encodeSync(Schema.fromJsonString(Schema.Unknown));
 const defaultServerSettingsLayer = ServerSettings.ServerSettingsService.layerTest();
 const serverConfigTestLayer = ServerConfig.layerTest(process.cwd(), process.cwd()).pipe(
   Layer.provide(NodeServices.layer),
+  Layer.merge(
+    Layer.mock(VcsDriverRegistry.VcsDriverRegistry)({ detect: () => Effect.succeed(null) }),
+  ),
 );
 
 // startSession verifies the workspace folder exists before dispatching to an
@@ -1616,6 +1620,7 @@ routing.layer("ProviderServiceLive routing", (it) => {
       assert.deepEqual(routing.codex.sendTurn.mock.calls.at(-1)?.[0], {
         threadId: codexThreadId,
         continuation: true,
+        vcsAgentHint: null,
       });
 
       const claudeThreadId = asThreadId("thread-promptless-continuation-unsupported");

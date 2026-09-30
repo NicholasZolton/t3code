@@ -1196,6 +1196,7 @@ const ComposerFooterPrimaryActions = memo(function ComposerFooterPrimaryActions(
   reserveContextWindowMeter: boolean;
   activeThreadModelDisplayName: string | null;
   isPreparingWorktree: boolean;
+  workspaceNoun: string;
   pendingAction: {
     questionIndex: number;
     isLastQuestion: boolean;
@@ -1243,6 +1244,7 @@ const ComposerFooterPrimaryActions = memo(function ComposerFooterPrimaryActions(
         isConnecting={props.isConnecting}
         isEnvironmentUnavailable={props.isEnvironmentUnavailable}
         isPreparingWorktree={props.isPreparingWorktree}
+        workspaceNoun={props.workspaceNoun}
         hasSendableContent={props.hasSendableContent}
         preserveComposerFocusOnPointerDown={props.preserveComposerFocusOnPointerDown ?? false}
         onPreviousPendingQuestion={props.onPreviousPendingQuestion}
@@ -1331,6 +1333,7 @@ export interface ChatComposerProps {
   supportsQuestionAttachments: boolean;
   maxFileAttachmentBytes: number | null;
   routeKind: "server" | "draft";
+  workspaceNoun: string;
   routeThreadRef: ScopedThreadRef;
   draftId: DraftId | null;
   multipleModelSelections: ReadonlyArray<ModelSelection> | null;
@@ -1492,6 +1495,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   const {
     composerDraftTarget,
     environmentId,
+    workspaceNoun,
     attachmentUploadsCapabilityKnown,
     supportsAttachmentUploads,
     supportsQuestionAttachments,
@@ -6383,6 +6387,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                                 projectSelectionRequired
                               }
                               isPreparingWorktree={false}
+                              workspaceNoun={workspaceNoun}
                               hasSendableContent={false}
                               preserveComposerFocusOnPointerDown
                               onPreviousPendingQuestion={onPreviousActivePendingUserInputQuestion}
@@ -7004,6 +7009,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                         projectSelectionRequired
                       }
                       isPreparingWorktree={false}
+                      workspaceNoun={workspaceNoun}
                       hasSendableContent={false}
                       preserveComposerFocusOnPointerDown
                       onPreviousPendingQuestion={onPreviousActivePendingUserInputQuestion}
@@ -7113,6 +7119,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                       projectSelectionRequired
                     }
                     isPreparingWorktree={isPreparingWorktree}
+                    workspaceNoun={workspaceNoun}
                     hasSendableContent={composerSendState.hasSendableContent}
                     preserveComposerFocusOnPointerDown={isMobileViewport || isComposerResting}
                     onPreviousPendingQuestion={onPreviousActivePendingUserInputQuestion}

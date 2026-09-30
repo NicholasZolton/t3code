@@ -7,6 +7,8 @@ import type {
   VcsInitInput,
   VcsListRemotesResult,
   VcsListWorkspaceFilesResult,
+  ReviewDiffFileContentsInput,
+  ReviewDiffFileContentsResult,
   ReviewDiffPreviewInput,
   ReviewDiffPreviewResult,
   VcsRepositoryIdentity,
@@ -40,7 +42,9 @@ export interface VcsDeleteCheckpointRefsInput {
 }
 
 export interface VcsCheckpointOps {
-  readonly captureCheckpoint: (input: VcsCaptureCheckpointInput) => Effect.Effect<void, VcsError>;
+  readonly captureCheckpoint: (
+    input: VcsCaptureCheckpointInput,
+  ) => Effect.Effect<CheckpointCaptureResult, VcsError>;
   readonly hasCheckpointRef: (
     input: Omit<VcsRestoreCheckpointInput, "fallbackToHead">,
   ) => Effect.Effect<boolean, VcsError>;
@@ -53,10 +57,15 @@ export interface VcsCheckpointOps {
   ) => Effect.Effect<void, VcsError>;
 }
 
+export interface CheckpointCaptureResult {
+  readonly exclusions: ReadonlyArray<string>;
+}
+
 export class VcsDriver extends Context.Service<
   VcsDriver,
   {
     readonly capabilities: VcsDriverCapabilities;
+    readonly agentContextHint?: string;
     readonly execute: (
       input: Omit<VcsProcess.VcsProcessInput, "command">,
     ) => Effect.Effect<VcsProcess.VcsProcessOutput, VcsError>;
@@ -77,5 +86,18 @@ export class VcsDriver extends Context.Service<
     readonly getDiffPreview?: (
       input: ReviewDiffPreviewInput,
     ) => Effect.Effect<ReviewDiffPreviewResult, VcsError>;
+    /**
+     * Expand unchanged context in a review diff. Optional for the same reason as `getDiffPreview`:
+     * the Git driver reaches its implementation through the legacy `GitVcsDriver` service instead.
+     */
+    readonly getDiffFileContents?: (
+      input: ReviewDiffFileContentsInput,
+    ) => Effect.Effect<ReviewDiffFileContentsResult, VcsError>;
+    /**
+     * Whether `checkpoints` can actually run against THIS repository, as opposed to whether this
+     * driver implements checkpointing at all. A driver that is always usable once detected omits
+     * it; absent means yes. Never fails: a probe error reads as `false`.
+     */
+    readonly checkpointsUsable?: (cwd: string) => Effect.Effect<boolean, never>;
   }
 >()("t3/vcs/VcsDriver") {}

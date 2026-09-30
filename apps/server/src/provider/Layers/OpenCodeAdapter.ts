@@ -3278,6 +3278,7 @@ export function makeOpenCodeAdapter(
                 value: buildRuntimeInstructions({
                   harness: "OpenCode",
                   model: `${parsedModel.providerID}/${parsedModel.modelID}`,
+                  vcsAgentHint: input.vcsAgentHint,
                 }),
               },
               { signal },

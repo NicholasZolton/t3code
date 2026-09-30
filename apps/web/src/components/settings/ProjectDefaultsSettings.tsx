@@ -16,6 +16,7 @@ import {
   sortProviderInstanceEntries,
 } from "../../providerInstances";
 import { useEnvironments } from "../../state/environments";
+import { useVcsTerminology } from "../../state/vcs";
 import { EMPTY_SERVER_PROVIDERS } from "../../state/server";
 import { resolveEnvModeLabel, WORKTREE_SUBMODULES_LABELS } from "../BranchToolbar.logic";
 import { ProviderModelPicker } from "../chat/ProviderModelPicker";
@@ -60,6 +61,10 @@ export function ProjectDefaultsSettings({ category }: { category: ProjectSetting
   const representative = target
     ? environments.find((environment) => environment.environmentId === target.environmentId)
     : undefined;
+  const workspaceRoot =
+    scope.members.find((member) => member.environmentId === target?.environmentId)?.workspaceRoot ??
+    null;
+  const vcsTerminology = useVcsTerminology(target?.environmentId ?? null, workspaceRoot);
   const providers = representative?.serverConfig?.providers ?? EMPTY_SERVER_PROVIDERS;
   const selection = resolveDefaultProviderModelSelection(providers, settings.defaultModelSelection);
   const entries = sortProviderInstanceEntries(
@@ -79,6 +84,7 @@ export function ProjectDefaultsSettings({ category }: { category: ProjectSetting
   const mixedSubmodules = useScopedSettingsMixed(["worktreeSubmodules"]);
   const mixedBrowser = useScopedSettingsMixed(["enableAgentBrowserAccess"]);
   const mixedAutoPull = useScopedSettingsMixed(["defaultAutoPull"]);
+  const mixedVcsHints = useScopedSettingsMixed(["enableVcsAgentHints"]);
   const mixedMergeMethod = useScopedSettingsMixed(["pullRequestMergeMethod"]);
   const modelSource = useScopedSettingSource(["defaultModelSelection"]);
   const isProjectScope = scope.kind === "project" || scope.kind === "checkout";
@@ -231,7 +237,7 @@ export function ProjectDefaultsSettings({ category }: { category: ProjectSetting
             <SelectValue>
               {(value: string | null) =>
                 value === "local" || value === "worktree"
-                  ? resolveEnvModeLabel(value)
+                  ? resolveEnvModeLabel(value, vcsTerminology)
                   : unavailable
                     ? "Unavailable"
                     : "Mixed"
@@ -239,8 +245,10 @@ export function ProjectDefaultsSettings({ category }: { category: ProjectSetting
             </SelectValue>
           </SelectTrigger>
           <SelectPopup align="end" alignItemWithTrigger={false}>
-            <SelectItem value="local">{resolveEnvModeLabel("local")}</SelectItem>
-            <SelectItem value="worktree">{resolveEnvModeLabel("worktree")}</SelectItem>
+            <SelectItem value="local">{resolveEnvModeLabel("local", vcsTerminology)}</SelectItem>
+            <SelectItem value="worktree">
+              {resolveEnvModeLabel("worktree", vcsTerminology)}
+            </SelectItem>
           </SelectPopup>
         </Select>
       }
@@ -383,6 +391,24 @@ export function ProjectDefaultsSettings({ category }: { category: ProjectSetting
         </>
       ) : category === "source-control" ? (
         <>
+          <SettingsSection title="Agent context">
+            <SettingsRow
+              serverScoped
+              settingKeys={["enableVcsAgentHints"]}
+              mixed={mixedVcsHints}
+              id={searchableSetting("vcs-agent-hints").id}
+              title="VCS agent hints"
+              description="Give agents a short hint about the workspace's version control. Changes apply on the next turn, including resumed threads."
+              control={
+                <Switch
+                  checked={settings.enableVcsAgentHints}
+                  disabled={unavailable}
+                  aria-label="VCS agent hints"
+                  onCheckedChange={(checked) => updateSettings({ enableVcsAgentHints: checked })}
+                />
+              }
+            />
+          </SettingsSection>
           <SettingsRow
             serverScoped
             settingKeys={["defaultAutoPull"]}

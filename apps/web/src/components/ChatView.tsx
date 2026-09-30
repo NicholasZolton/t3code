@@ -357,6 +357,7 @@ import { vcsEnvironment } from "../state/vcs";
 import { sourceControlEnvironment } from "../state/sourceControl";
 import { useProjectClone } from "../state/projectClones";
 import { projectCloneDisplayName, projectCloneProgressSummary } from "@t3tools/contracts";
+import { resolveVcsTerminology } from "@t3tools/shared/vcs";
 import { useEnvironments, usePrimaryEnvironment } from "../state/environments";
 import {
   useProject,
@@ -3705,6 +3706,7 @@ export default function ChatView(props: ChatViewProps) {
           input: { cwd: gitStatusCwd },
         }),
   );
+  const vcsTerminology = resolveVcsTerminology(gitStatusQuery.data);
   useWorkspaceMutationRefresh({
     enabled: gitStatusCwd !== null,
     mutationId: workspaceMutationId,
@@ -6634,10 +6636,10 @@ export default function ChatView(props: ChatViewProps) {
             disabled={isRestoringThreadBranch}
             onClick={handleRestoreThreadBranch}
           >
-            {isRestoringThreadBranch ? "Restoring..." : "Restore branch"}
+            {isRestoringThreadBranch ? "Restoring..." : `Restore ${vcsTerminology.refNoun}`}
           </Button>
         ),
-        dismissLabel: "Dismiss branch change notice",
+        dismissLabel: `Dismiss ${vcsTerminology.refNoun} change notice`,
         onDismiss: () => {
           dismissBranchMismatchForSession(activeBranchMismatchKey);
           setBranchMismatchDismissTick((tick) => tick + 1);
@@ -6658,6 +6660,7 @@ export default function ChatView(props: ChatViewProps) {
     showBranchMismatchBanner,
     systemComposerBannerItems,
     usageLimitsBanner,
+    vcsTerminology,
     wokeThreadBannerItem,
   ]);
   useEffect(() => {
@@ -10202,6 +10205,7 @@ export default function ChatView(props: ChatViewProps) {
                             composerRef={composerRef}
                             composerDraftTarget={composerDraftTarget}
                             environmentId={environmentId}
+                            workspaceNoun={vcsTerminology.workspaceNoun}
                             attachmentUploadsCapabilityKnown={attachmentUploadsCapabilityKnown}
                             supportsAttachmentUploads={supportsAttachmentUploads}
                             supportsQuestionAttachments={supportsQuestionAttachments}
@@ -10230,7 +10234,7 @@ export default function ChatView(props: ChatViewProps) {
                                   : threadDetailLoading
                                     ? "Messages loading"
                                     : worktreeSetupBlocksSend
-                                      ? "Preparing worktree"
+                                      ? `Preparing ${vcsTerminology.workspaceNoun}`
                                       : projectCloneSendBlockReason
                             }
                             isPreparingWorktree={isPreparingWorktree}

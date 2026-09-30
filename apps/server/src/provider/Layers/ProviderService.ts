@@ -86,6 +86,7 @@ import * as McpProviderSession from "../../mcp/McpProviderSession.ts";
 import * as McpSessionRegistry from "../../mcp/McpSessionRegistry.ts";
 import * as ServerSettings from "../../serverSettings.ts";
 import * as ProjectionSnapshotQuery from "../../orchestration/Services/ProjectionSnapshotQuery.ts";
+import * as VcsDriverRegistry from "../../vcs/VcsDriverRegistry.ts";
 const isModelSelection = Schema.is(ModelSelection);
 const encodePromptJson = Schema.encodeSync(Schema.fromJsonString(Schema.Unknown));
 
@@ -479,9 +480,26 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
   const registry = yield* ProviderAdapterRegistry.ProviderAdapterRegistry;
   const directory = yield* ProviderSessionDirectory.ProviderSessionDirectory;
   const serverSettings = yield* ServerSettings.ServerSettingsService;
+  const vcsRegistry = yield* VcsDriverRegistry.VcsDriverRegistry;
   const projectionQuery = yield* Effect.serviceOption(
     ProjectionSnapshotQuery.ProjectionSnapshotQuery,
   );
+  const resolveAgentContextHint = Effect.fnUntraced(function* (threadId: ThreadId, cwd?: string) {
+    let settings = yield* serverSettings.getSettings.pipe(Effect.orDie);
+    if (Option.isSome(projectionQuery)) {
+      const thread = yield* projectionQuery.value
+        .getThreadShellById(threadId)
+        .pipe(Effect.orElseSucceed(() => Option.none()));
+      if (Option.isSome(thread))
+        settings = resolveProjectSettings(settings, thread.value.projectId).settings;
+    }
+    return settings.enableVcsAgentHints && cwd
+      ? yield* vcsRegistry.detect({ cwd }).pipe(
+          Effect.map((handle) => handle?.driver.agentContextHint ?? null),
+          Effect.orElseSucceed(() => null),
+        )
+      : null;
+  });
   const issueMcpCredential =
     options?.issueMcpCredential ?? McpSessionRegistry.issueActiveMcpCredential;
   const fileSystem = yield* FileSystem.FileSystem;
@@ -1274,6 +1292,7 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
       const resumed = yield* adapter
         .startSession({
           threadId: input.binding.threadId,
+          agentContextHint: resolveAgentContextHint(input.binding.threadId, persistedCwd),
           provider: input.binding.provider,
           providerInstanceId: bindingInstanceId,
           ...(persistedCwd ? { cwd: persistedCwd } : {}),
@@ -1505,6 +1524,7 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
         const session = yield* adapter
           .startSession({
             ...input,
+            agentContextHint: resolveAgentContextHint(threadId, effectiveCwd),
             providerInstanceId: resolvedInstanceId,
             ...(effectiveCwd !== undefined ? { cwd: effectiveCwd } : {}),
             ...(effectiveResumeCursor !== undefined ? { resumeCursor: effectiveResumeCursor } : {}),
@@ -1733,7 +1753,12 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
         }),
         (turnMetadata) =>
           Effect.gen(function* () {
-            const turn = yield* routed.adapter.sendTurn(input);
+            const binding = yield* directory.getBinding(input.threadId);
+            const cwd = Option.isSome(binding)
+              ? readPersistedCwd(binding.value.runtimePayload)
+              : undefined;
+            const hint = yield* resolveAgentContextHint(input.threadId, cwd);
+            const turn = yield* routed.adapter.sendTurn({ ...input, vcsAgentHint: hint });
             yield* associateTurnAnalytics({
               providerInstanceId: routed.instanceId,
               threadId: input.threadId,

@@ -27,7 +27,8 @@ import * as Ref from "effect/Ref";
 import * as Stream from "effect/Stream";
 import { TestClock } from "effect/testing";
 
-import { GitManager, type GitBranchPullRequest } from "../git/GitManager.ts";
+import { type GitBranchPullRequest } from "../git/GitManager.ts";
+import { GitWorkflowService as GitManager } from "../git/GitWorkflowService.ts";
 import { PullRequestService } from "../pullRequest/PullRequestService.ts";
 import { RepositoryIdentityResolver } from "../project/RepositoryIdentityResolver.ts";
 import { ServerActivation } from "../serverActivation.ts";

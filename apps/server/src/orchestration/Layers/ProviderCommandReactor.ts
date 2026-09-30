@@ -514,20 +514,19 @@ const make = Effect.gen(function* () {
       Effect.map((settings) => settings.worktreeSubmodules),
       Effect.orElseSucceed(() => null),
     );
-    yield* gitWorkflow.pruneWorktrees({ cwd }).pipe(
-      Effect.andThen(
-        gitWorkflow.createWorktree({ cwd, refName: branch, path: worktreePath }, { submodules }),
-      ),
-      Effect.catchCauseIf(
-        (cause) => !Cause.hasInterruptsOnly(cause),
-        (cause) =>
-          Effect.logWarning("provider command reactor failed to recreate worktree", {
-            threadId: thread.id,
-            worktreePath,
-            cause: Cause.pretty(cause),
-          }),
-      ),
-    );
+    yield* gitWorkflow
+      .ensureWorkspace({ cwd, refName: branch, path: worktreePath }, { submodules })
+      .pipe(
+        Effect.catchCauseIf(
+          (cause) => !Cause.hasInterruptsOnly(cause),
+          (cause) =>
+            Effect.logWarning("provider command reactor failed to recreate worktree", {
+              threadId: thread.id,
+              worktreePath,
+              cause: Cause.pretty(cause),
+            }),
+        ),
+      );
   });
 
   const resolveThreadShell = Effect.fnUntraced(function* (threadId: ThreadId) {

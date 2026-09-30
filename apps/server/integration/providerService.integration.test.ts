@@ -28,6 +28,8 @@ import { ServerSettingsService } from "../src/serverSettings.ts";
 import { AnalyticsService } from "../src/telemetry/AnalyticsService.ts";
 import { SqlitePersistenceMemory } from "../src/persistence/Layers/Sqlite.ts";
 import * as ProviderSessionRuntime from "../src/persistence/ProviderSessionRuntime.ts";
+import * as VcsDriverRegistry from "../src/vcs/VcsDriverRegistry.ts";
+import * as VcsProcess from "../src/vcs/VcsProcess.ts";
 
 import {
   makeTestProviderAdapterHarness,
@@ -101,6 +103,8 @@ const makeIntegrationFixture = (options?: { readonly analytics?: Layer.Layer<Ana
     ).pipe(Layer.provide(SqlitePersistenceMemory));
 
     const layer = makeProviderServiceLive().pipe(
+      Layer.provide(VcsDriverRegistry.layer),
+      Layer.provide(VcsProcess.layer),
       Layer.provide(NodeServices.layer),
       Layer.provide(shared),
     );
