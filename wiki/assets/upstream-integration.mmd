@@ -1,0 +1,19 @@
+---
+config:
+  fontFamily: Arial, sans-serif
+  themeVariables:
+    fontFamily: Arial, sans-serif
+---
+%% Render with mmdc -s 3 --no-font-embed to keep the SVG free of bundled fonts.
+flowchart LR
+    baseline["Previous upstream baseline<br/>6530de0339<br/>September 25, Pacific time"]
+    candidate["Upstream d15210cd3d<br/>Included in unmerged<br/>candidate a8df093eb6"]
+    latest["Reviewed upstream tip<br/>0fcd5f9061"]
+    fork["Previous fork main<br/>dfd23dbec7"]
+    integrated["Completed upstream merge<br/>d8353ce56e<br/>PR 21 landed on main<br/>3da3d19cc2<br/>Zero reviewed upstream gap"]
+
+    baseline -->|53 commits| candidate
+    candidate -->|28 further commits| latest
+    baseline -->|Fork-only changes| fork
+    latest -->|Full upstream merge| integrated
+    fork -->|Preserved fork behavior| integrated

@@ -221,6 +221,12 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["red green blue orange additions deletions changes counts palette colorblind"],
   },
   {
+    id: "chat-width",
+    title: "Chat width",
+    to: "/settings/appearance",
+    searchTerms: ["wide full width column layout messages composer monitor"],
+  },
+  {
     id: "panel-animations",
     title: "Panel animations",
     to: "/settings/appearance",
@@ -750,10 +756,18 @@ export const SETTINGS_SEARCH_ITEMS = [
     id: "vcs-agent-hints",
     title: "VCS agent hints",
     to: "/settings/source-control",
-    scope: "environment-defaults",
+    scope: "project-defaults",
     searchTerms: [
       "version control git jujutsu jj agent context instructions injection hints disable",
     ],
+  },
+  {
+    id: "bitbucket-credentials",
+    title: "Bitbucket credentials",
+    to: "/settings/source-control",
+    searchTerms: ["bitbucket atlassian access token api token email credentials sign in"],
+    environmentOnly: true,
+    scope: "environment-defaults",
   },
   {
     id: "source-control-writing-style",

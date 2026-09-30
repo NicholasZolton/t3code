@@ -137,6 +137,13 @@ Most code changes do not need an internal documentation change. Agents can read 
 - Keep user docs in the shipped product's voice, without implementation details or contributor tooling. Update the relevant feature section when how to use it changes. A UI tweak does not need a documentation entry, and a new control does not need its own page.
 - `docs/operations/` holds maintainer setup, release, and debugging procedures. Keep instructions for operating an installed T3 Code server in the user guides.
 
+## Fork knowledge wiki
+
+- Start at `wiki/index.md`. Maintain this repository-local knowledge bundle in [OKF v0.2](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md); follow `wiki/maintenance.md` when editing it.
+- Update affected concepts in the same change when durable fork decisions, compatibility exceptions, or upstream integration status change. Keep provenance and verification timestamps accurate, and add a concise entry to `wiki/log.md`.
+- For upstream syncs, record exact fork and upstream commits, what reached fork `main`, and any remaining gap. Distinguish unmerged candidates from completed integrations; refresh the record after the integration actually reaches `main`.
+- Keep the wiki focused on reusable maintainer knowledge. Link to source, commits, and PRs instead of duplicating implementation details or task checklists.
+
 ## Plans and work artifacts
 
 - Do not commit implementation plans, research notes, or agent scratch files. Keep temporary working material outside the worktree. `.plans/` is gitignored only as a safety net for legacy tooling.
