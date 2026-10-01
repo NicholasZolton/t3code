@@ -1351,7 +1351,11 @@ const makeSshEnvironmentManager = Effect.fn("ssh/tunnel.SshEnvironmentManager.ma
   const portlessLock = Semaphore.makeUnsafe(1);
   const portlessCandidates = new Map<
     string,
-    { readonly target: DesktopSshEnvironmentTarget; readonly ports: Set<number> }
+    {
+      readonly target: DesktopSshEnvironmentTarget;
+      readonly ports: Set<number>;
+      readonly defaultPort: number | null;
+    }
   >();
   let preferredPortlessForward: { readonly key: string; readonly port: number } | null = null;
   const portlessForwards = new Map<
@@ -1533,7 +1537,11 @@ const makeSshEnvironmentManager = Effect.fn("ssh/tunnel.SshEnvironmentManager.ma
   const discoverPortlessPorts = Effect.fn("ssh/portless.discover")(function* (
     key: string,
     target: DesktopSshEnvironmentTarget,
-  ): Effect.fn.Return<Set<number>, SshEnvironmentEffectError, SshEnvironmentEffectContext> {
+  ): Effect.fn.Return<
+    { readonly ports: Set<number>; readonly defaultPort: number | null },
+    SshEnvironmentEffectError,
+    SshEnvironmentEffectContext
+  > {
     const result = yield* runWithSshAuth({
       key,
       target,
@@ -1561,12 +1569,12 @@ printf '\nT3_PORTLESS_DEFAULT:%s\n' "\${port:-}"
       const port = validPortlessPort(match[1] ?? "");
       if (port !== null) ports.add(port);
     }
-    const defaultPort =
+    const defaultPortValue =
       result.stdout.match(/(?:^|\n)T3_PORTLESS_DEFAULT:(\d{1,5})\s*$/)?.[1] ??
       result.stdout.trim().match(/^\d{1,5}$/)?.[0];
-    const port = validPortlessPort(defaultPort ?? "");
-    if (port !== null) ports.add(port);
-    return ports;
+    const defaultPort = validPortlessPort(defaultPortValue ?? "");
+    if (defaultPort !== null) ports.add(defaultPort);
+    return { ports, defaultPort };
   });
 
   const portlessPortForThread = Effect.fn("ssh/portless.threadPort")(function* (
@@ -1798,16 +1806,18 @@ PY`;
         const forwardedPorts = [...portlessForwards.values()].filter(
           (forward) => forward.key === key,
         );
+        const existing = portlessCandidates.get(key);
         const port =
           (yield* portlessPortForThread(key, target, input.cwd)) ??
           (preferredPortlessForward?.key === key ? preferredPortlessForward.port : null) ??
+          existing?.defaultPort ??
           (forwardedPorts.length === 1 ? (forwardedPorts[0]?.port ?? null) : null);
         preferredPortlessForward = port === null ? null : { key, port };
         if (port !== null) {
-          const existing = portlessCandidates.get(key);
           portlessCandidates.set(key, {
             target,
             ports: new Set([...(existing?.ports ?? []), port]),
+            defaultPort: existing?.defaultPort ?? null,
           });
         }
         yield* reconcilePortlessForwards();
@@ -2016,8 +2026,8 @@ PY`;
         const entry = yield* ensureTunnelEntry(key, resolvedTarget, runner);
         yield* portlessLock.withPermits(1)(
           Effect.gen(function* () {
-            const ports = yield* discoverPortlessPorts(key, resolvedTarget);
-            portlessCandidates.set(key, { target: resolvedTarget, ports });
+            const discovered = yield* discoverPortlessPorts(key, resolvedTarget);
+            portlessCandidates.set(key, { target: resolvedTarget, ...discovered });
             yield* reconcilePortlessForwards();
           }).pipe(
             Effect.catch((cause) =>
