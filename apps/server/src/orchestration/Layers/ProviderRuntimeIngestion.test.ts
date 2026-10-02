@@ -482,6 +482,78 @@ describe("ProviderRuntimeIngestion", () => {
     expect(thread.session?.lastError).toBe("turn failed");
   });
 
+  it("persists an OpenCode background continuation after its user turn completes", async () => {
+    const harness = await createHarness();
+    const threadId = asThreadId("thread-1");
+    const userTurnId = asTurnId("opencode-user-turn");
+    const continuationTurnId = asTurnId("opencode-background-turn");
+    const base = {
+      provider: ProviderDriverKind.make("opencode"),
+      threadId,
+      createdAt: "2026-01-01T00:00:01.000Z",
+    };
+    await harness.emitAndDrain([
+      { ...base, turnId: userTurnId, type: "turn.started", eventId: asEventId("user-started") },
+      {
+        ...base,
+        turnId: userTurnId,
+        type: "turn.completed",
+        eventId: asEventId("user-completed"),
+        payload: { state: "completed" },
+      },
+    ]);
+
+    await harness.emitAndDrain([
+      {
+        ...base,
+        turnId: continuationTurnId,
+        type: "turn.started",
+        eventId: asEventId("background-started"),
+      },
+    ]);
+    const running = await harness.readThreadShell();
+    expect(running.session).toMatchObject({
+      status: "running",
+      activeTurnId: continuationTurnId,
+    });
+    expect(running.latestTurn?.turnId).toBe(continuationTurnId);
+
+    await harness.emitAndDrain([
+      {
+        ...base,
+        turnId: continuationTurnId,
+        type: "content.delta",
+        eventId: asEventId("background-text"),
+        itemId: asItemId("background-text-part"),
+        payload: { streamKind: "assistant_text", delta: "The background command finished." },
+      },
+      {
+        ...base,
+        turnId: continuationTurnId,
+        type: "turn.completed",
+        eventId: asEventId("background-completed"),
+        createdAt: "2026-01-01T00:00:02.000Z",
+        payload: { state: "completed" },
+      },
+    ]);
+    const thread = (await harness.readModel()).threads.find((entry) => entry.id === threadId);
+    expect(thread?.session).toMatchObject({ status: "ready", activeTurnId: null });
+    expect(thread?.latestTurn).toMatchObject({
+      turnId: continuationTurnId,
+      state: "completed",
+      completedAt: "2026-01-01T00:00:02.000Z",
+    });
+    expect(thread?.messages).toEqual([
+      expect.objectContaining({
+        role: "assistant",
+        turnId: continuationTurnId,
+        text: "The background command finished.",
+        streaming: false,
+      }),
+    ]);
+    expect(await harness.readTurn(userTurnId)).toMatchObject({ state: "completed" });
+  });
+
   it.each([
     { delivery: "buffered", responseStreamingMode: "paragraph" as const },
     { delivery: "streamed", responseStreamingMode: "token" as const },
