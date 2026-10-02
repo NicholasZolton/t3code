@@ -322,6 +322,8 @@ function makeFakeCodexAdapter(
 
   return {
     adapter,
+    shutdownEvents: PubSub.shutdown(runtimeEventPubSub),
+    subscribeEvents: PubSub.subscribe(runtimeEventPubSub),
     emit,
     updateSession,
     startSession,
@@ -3326,6 +3328,163 @@ routing.layer("ProviderServiceLive routing", (it) => {
 });
 
 const fanout = makeProviderServiceLayer();
+for (const change of ["replace", "remove"] as const) {
+  it.effect(`settles lost sessions when settings ${change} a provider instance`, () =>
+    Effect.gen(function* () {
+      const driver = ProviderDriverKind.make("opencode");
+      const instanceId = ProviderInstanceId.make("opencode");
+      const otherInstanceId = ProviderInstanceId.make("opencode-other");
+      const original = makeFakeCodexAdapter(driver);
+      const replacement = makeFakeCodexAdapter(driver);
+      const replacementSubscribed = yield* Deferred.make<void>();
+      const replacementAdapter: ProviderAdapterShape<ProviderAdapterError> = {
+        ...replacement.adapter,
+        streamEvents: Stream.unwrap(
+          replacement.subscribeEvents.pipe(
+            Effect.tap(() => Deferred.succeed(replacementSubscribed, undefined)),
+            Effect.map(Stream.fromSubscription),
+          ),
+        ),
+      };
+      const unaffected = makeFakeCodexAdapter(driver);
+      const changes = yield* PubSub.unbounded<void>();
+      let currentRegistry = makeStaticInstanceRegistry([
+        [instanceId, original.adapter],
+        [otherInstanceId, unaffected.adapter],
+      ]);
+      const registry: ProviderAdapterRegistry.ProviderAdapterRegistry["Service"] = {
+        getByInstance: (id) => currentRegistry.getByInstance(id),
+        getInstanceInfo: (id) => currentRegistry.getInstanceInfo(id),
+        listInstances: () => currentRegistry.listInstances(),
+        subscribeChanges: PubSub.subscribe(changes),
+      };
+      const directoryLayer = ProviderSessionDirectoryLive.pipe(
+        Layer.provide(ProviderSessionRuntime.layer.pipe(Layer.provide(SqlitePersistenceMemory))),
+      );
+      const providerLayer = makeProviderServiceLive().pipe(
+        Layer.provide(NodeServices.layer),
+        Layer.provide(Layer.succeed(ProviderAdapterRegistry.ProviderAdapterRegistry, registry)),
+        Layer.provideMerge(directoryLayer),
+        Layer.provide(defaultServerSettingsLayer),
+        Layer.provide(serverConfigTestLayer),
+        Layer.provide(AnalyticsService.layerTest),
+        Layer.provide(
+          Layer.succeed(
+            ProviderEventLoggers.ProviderEventLoggers,
+            ProviderEventLoggers.NoOpProviderEventLoggers,
+          ),
+        ),
+      );
+      yield* Effect.gen(function* () {
+        const provider = yield* ProviderService.ProviderService;
+        const directory = yield* ProviderSessionDirectory.ProviderSessionDirectory;
+        const threadId = asThreadId("settings-lost-session");
+        const otherThreadId = asThreadId("settings-unaffected-session");
+        const stoppedThreadId = asThreadId("settings-already-stopped");
+        const adoptedThreadId = asThreadId("settings-recovered-before-reconcile");
+        const session = yield* provider.startSession(threadId, {
+          threadId,
+          providerInstanceId: instanceId,
+          runtimeMode: "approval-required",
+          cwd: fixtureCwd("settings-lost-session"),
+        });
+        yield* provider.sendTurn({ threadId, input: "Start working" });
+        yield* provider.startSession(otherThreadId, {
+          threadId: otherThreadId,
+          providerInstanceId: otherInstanceId,
+          runtimeMode: "full-access",
+        });
+        yield* provider.sendTurn({ threadId: otherThreadId, input: "Keep working" });
+        yield* provider.startSession(stoppedThreadId, {
+          threadId: stoppedThreadId,
+          providerInstanceId: instanceId,
+          runtimeMode: "full-access",
+        });
+        yield* provider.stopSession({ threadId: stoppedThreadId });
+        if (change === "replace") {
+          yield* provider.startSession(adoptedThreadId, {
+            threadId: adoptedThreadId,
+            providerInstanceId: instanceId,
+            runtimeMode: "full-access",
+          });
+        }
+        const otherBinding = yield* directory.getBinding(otherThreadId);
+        const stoppedBinding = yield* directory.getBinding(stoppedThreadId);
+        const pull = yield* Stream.toPull(provider.streamEvents);
+        const exitEvents = yield* pull.pipe(Effect.forkChild({ startImmediately: true }));
+
+        // Model teardown that interrupts native sessions and closes the stream silently.
+        yield* original.stopAll();
+        yield* original.shutdownEvents;
+        currentRegistry = makeStaticInstanceRegistry(
+          change === "replace"
+            ? [
+                [instanceId, replacementAdapter],
+                [otherInstanceId, unaffected.adapter],
+              ]
+            : [[otherInstanceId, unaffected.adapter]],
+        );
+        if (change === "replace") {
+          yield* provider.startSession(adoptedThreadId, {
+            threadId: adoptedThreadId,
+            providerInstanceId: instanceId,
+            runtimeMode: "full-access",
+          });
+          yield* provider.sendTurn({ threadId: adoptedThreadId, input: "Already recovered" });
+        }
+        const adoptedBinding = yield* directory.getBinding(adoptedThreadId);
+        yield* PubSub.publish(changes, undefined);
+        const events = yield* Fiber.join(exitEvents);
+        assert.equal(events.length, 1);
+        assert.deepInclude(events[0], {
+          type: "session.exited",
+          provider: driver,
+          providerInstanceId: instanceId,
+          threadId,
+          payload: {
+            reason: "Provider session stopped after a settings change.",
+            recoverable: true,
+            exitKind: "graceful",
+          },
+        });
+        const binding = yield* directory.getBinding(threadId);
+        assert(Option.isSome(binding));
+        assert.equal(binding.value.status, "stopped");
+        assert.propertyVal(binding.value.runtimePayload, "activeTurnId", null);
+        assert.deepEqual(binding.value.resumeCursor, session.resumeCursor);
+        assert.deepEqual(yield* directory.getBinding(otherThreadId), otherBinding);
+        assert.deepEqual(yield* directory.getBinding(stoppedThreadId), stoppedBinding);
+        assert.deepEqual(yield* directory.getBinding(adoptedThreadId), adoptedBinding);
+
+        if (change === "replace") {
+          yield* Deferred.await(replacementSubscribed);
+          const turn = yield* provider.sendTurn({ threadId, input: "Continue" });
+          const resumed = (yield* replacement.listSessions()).find(
+            (entry) => entry.threadId === threadId,
+          );
+          assert.deepInclude(resumed, {
+            resumeCursor: session.resumeCursor,
+            cwd: session.cwd,
+            runtimeMode: session.runtimeMode,
+          });
+          replacement.emit({
+            type: "turn.completed",
+            eventId: asEventId("settings-resumed-turn-completed"),
+            provider: driver,
+            threadId,
+            turnId: turn.turnId,
+            createdAt: "2026-01-01T00:00:03.000Z",
+            payload: { state: "completed" },
+          });
+          const resumedEvents = yield* pull;
+          assert.equal(resumedEvents[0]?.type, "turn.completed");
+          assert.equal(resumedEvents[0]?.providerInstanceId, instanceId);
+        }
+      }).pipe(Effect.provide(providerLayer));
+    }),
+  );
+}
+
 fanout.layer("ProviderServiceLive fanout", (it) => {
   it.effect("fans out adapter turn completion events", () =>
     Effect.gen(function* () {

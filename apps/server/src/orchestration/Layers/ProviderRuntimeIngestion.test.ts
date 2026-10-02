@@ -610,6 +610,55 @@ describe("ProviderRuntimeIngestion", () => {
   it.each([
     { delivery: "buffered", responseStreamingMode: "paragraph" as const },
     { delivery: "streamed", responseStreamingMode: "token" as const },
+  ])("settles a lost session and preserves $delivery assistant text", async (settings) => {
+    const harness = await createHarness({
+      serverSettings: { responseStreamingMode: settings.responseStreamingMode },
+    });
+    const threadId = asThreadId("thread-1");
+    const turnId = asTurnId("settings-interrupted-turn");
+    const base = {
+      provider: ProviderDriverKind.make("opencode"),
+      threadId,
+      createdAt: "2026-01-01T00:00:01.000Z",
+    };
+    await harness.emitAndDrain([
+      { ...base, turnId, type: "turn.started", eventId: asEventId("settings-turn-started") },
+      {
+        ...base,
+        turnId,
+        type: "content.delta",
+        eventId: asEventId("settings-partial-text"),
+        itemId: asItemId("settings-text-part"),
+        payload: { streamKind: "assistant_text", delta: "Work before the settings change." },
+      },
+      {
+        ...base,
+        type: "session.exited",
+        eventId: asEventId("settings-session-exited"),
+        createdAt: "2026-01-01T00:00:02.000Z",
+        payload: { exitKind: "graceful", recoverable: true, reason: "Provider settings changed." },
+      },
+    ]);
+    const thread = (await harness.readModel()).threads.find((entry) => entry.id === threadId);
+    expect(thread?.session).toMatchObject({ status: "stopped", activeTurnId: null });
+    expect(thread?.latestTurn).toMatchObject({
+      turnId,
+      state: "interrupted",
+      completedAt: "2026-01-01T00:00:02.000Z",
+    });
+    expect(thread?.messages).toEqual([
+      expect.objectContaining({
+        role: "assistant",
+        turnId,
+        text: "Work before the settings change.",
+        streaming: false,
+      }),
+    ]);
+  });
+
+  it.each([
+    { delivery: "buffered", responseStreamingMode: "paragraph" as const },
+    { delivery: "streamed", responseStreamingMode: "token" as const },
   ])("keeps $delivery OpenCode text parts as separate assistant messages", async (settings) => {
     const harness = await createHarness({
       serverSettings: { responseStreamingMode: settings.responseStreamingMode },

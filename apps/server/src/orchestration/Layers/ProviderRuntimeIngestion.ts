@@ -2347,8 +2347,8 @@ const make = Effect.gen(function* () {
         });
       }
 
-      if (isTerminalTurn) {
-        const turnId = toTurnId(event.turnId);
+      if (isTerminalTurn || event.type === "session.exited") {
+        const turnId = event.type === "session.exited" ? (activeTurnId ?? undefined) : eventTurnId;
         if (turnId) {
           const userInputActivities =
             yield* projectionThreadActivityRepository.listUserInputLifecycleByThreadId({
