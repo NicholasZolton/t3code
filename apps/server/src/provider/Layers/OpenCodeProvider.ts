@@ -275,6 +275,9 @@ function flattenOpenCodeModels(input: OpenCodeInventory): ReadonlyArray<ServerPr
       name,
       ...(subProvider ? { subProvider } : {}),
       isCustom: false,
+      ...(input.defaultModel?.providerID === model.providerID && input.defaultModel.id === model.id
+        ? { isDefault: true }
+        : {}),
       capabilities: openCodeCapabilitiesForModel({
         providerID: model.providerID,
         model,
