@@ -48,6 +48,7 @@ export type DesktopSshEnvironmentDiscoverError = SshHostDiscoveryError;
 export class DesktopSshEnvironment extends Context.Service<
   DesktopSshEnvironment,
   {
+    readonly shutdown: Effect.Effect<void>;
     readonly discoverHosts: (input?: {
       readonly homeDir?: string;
     }) => Effect.Effect<readonly DesktopDiscoveredSshHost[], DesktopSshEnvironmentDiscoverError>;
@@ -134,6 +135,7 @@ export const make = Effect.gen(function* () {
   const passwordPrompt = SshAuth.SshPasswordPrompt.of(makePasswordPrompt(prompts));
 
   return DesktopSshEnvironment.of({
+    shutdown: manager.shutdown.pipe(Effect.withSpan("desktop.ssh.shutdown")),
     discoverHosts: (input) =>
       discoverDesktopSshHostsEffect(input).pipe(
         Effect.provide(runtimeContext),

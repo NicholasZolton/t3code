@@ -13,6 +13,7 @@ import * as ElectronUpdater from "../electron/ElectronUpdater.ts";
 import * as ElectronWindow from "../electron/ElectronWindow.ts";
 import * as DesktopAppSettings from "../settings/DesktopAppSettings.ts";
 import * as DesktopState from "../app/DesktopState.ts";
+import * as DesktopSshEnvironment from "../ssh/DesktopSshEnvironment.ts";
 import * as DesktopUpdates from "./DesktopUpdates.ts";
 
 /** Shared DesktopUpdates test harness: a fully stubbed updater layer whose
@@ -32,6 +33,7 @@ export interface UpdatesHarnessOptions {
   readonly downloadUpdate?: Effect.Effect<void>;
   readonly quitAndInstall?: Effect.Effect<void, ElectronUpdater.ElectronUpdaterQuitAndInstallError>;
   readonly stopBackend?: Effect.Effect<void>;
+  readonly shutdownSsh?: Effect.Effect<void>;
   readonly startBackend?: Effect.Effect<void>;
   readonly env?: Record<string, string | undefined>;
   readonly platform?: NodeJS.Platform;
@@ -146,6 +148,14 @@ export function makeHarness(options: UpdatesHarnessOptions = {}) {
     waitForReady: () => Effect.succeed(true),
   };
   const backendLayer = DesktopBackendPool.layerTest([stubBackendInstance]);
+  const sshLayer = Layer.succeed(DesktopSshEnvironment.DesktopSshEnvironment, {
+    shutdown: options.shutdownSsh ?? Effect.void,
+    discoverHosts: () => Effect.die("unexpected SSH host discovery"),
+    resolveHost: () => Effect.die("unexpected SSH host resolution"),
+    ensureEnvironment: () => Effect.die("unexpected SSH connection"),
+    disconnectEnvironment: () => Effect.die("unexpected SSH disconnection"),
+    syncPortlessForward: () => Effect.die("unexpected Portless forward"),
+  });
 
   const environmentLayer = DesktopEnvironment.layer({
     dirname: "/repo/apps/desktop/src",
@@ -239,6 +249,7 @@ export function makeHarness(options: UpdatesHarnessOptions = {}) {
     Layer.provideMerge(updaterLayer),
     Layer.provideMerge(windowLayer),
     Layer.provideMerge(backendLayer),
+    Layer.provideMerge(sshLayer),
     Layer.provideMerge(DesktopState.layer),
     Layer.provideMerge(settingsLayer),
     Layer.provideMerge(

@@ -384,6 +384,35 @@ describe("DesktopUpdates", () => {
     }),
   );
 
+  it.effect("waits for SSH tunnel cleanup before letting the updater exit", () =>
+    Effect.gen(function* () {
+      const cleanupStarted = yield* Deferred.make<void>();
+      const finishCleanup = yield* Deferred.make<void>();
+      const harness = makeHarness({
+        shutdownSsh: Deferred.succeed(cleanupStarted, undefined).pipe(
+          Effect.andThen(Deferred.await(finishCleanup)),
+        ),
+      });
+
+      yield* Effect.scoped(
+        Effect.gen(function* () {
+          const updates = yield* DesktopUpdates.DesktopUpdates;
+          yield* updates.configure;
+          harness.emit("update-downloaded", { version: "1.2.4" });
+          yield* flushCallbacks;
+
+          const installFiber = yield* updates.install.pipe(Effect.forkScoped);
+          yield* Deferred.await(cleanupStarted);
+          assert.equal(harness.quitAndInstalls(), 0);
+
+          yield* Deferred.succeed(finishCleanup, undefined);
+          assert.isTrue((yield* Fiber.join(installFiber)).accepted);
+          assert.equal(harness.quitAndInstalls(), 1);
+        }),
+      ).pipe(Effect.provide(harness.layer));
+    }),
+  );
+
   it.effect("keeps raw updater event failures out of update state", () => {
     const harness = makeHarness();
     const cause = new Error(
