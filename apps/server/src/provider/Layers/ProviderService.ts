@@ -42,6 +42,7 @@ import { getModelSelectionStringOptionValue } from "@t3tools/shared/model";
 import { resolveProjectSettings } from "@t3tools/shared/projectSettings";
 import { derivePendingRequests } from "@t3tools/shared/pendingRequests";
 import * as DateTime from "effect/DateTime";
+import * as Crypto from "effect/Crypto";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -481,6 +482,7 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
 ) {
   const analytics = yield* Effect.service(AnalyticsService.AnalyticsService);
   const serverConfig = yield* ServerConfig.ServerConfig;
+  const crypto = yield* Crypto.Crypto;
   const eventLoggers = yield* ProviderEventLoggers.ProviderEventLoggers;
   // Options-provided logger wins (test overrides); otherwise we take whatever
   // the `ProviderEventLoggers` tag exposes — `undefined` means "no canonical
@@ -1271,6 +1273,59 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
       if (Option.isNone(adapterOption)) continue;
       const adapter = adapterOption.value;
       next.set(id, adapter);
+    }
+
+    // Adapter teardown can close its event stream before reporting session exits.
+    // Settle lost bindings before subscribing to the replacement's buffered events.
+    const retiredIds = new Set(
+      [...previous].filter(([id, adapter]) => next.get(id) !== adapter).map(([id]) => id),
+    );
+    if (retiredIds.size > 0) {
+      const bindings = yield* directory.listBindings({ excludeStopped: true });
+      for (const binding of bindings) {
+        const instanceId = binding.providerInstanceId;
+        if (instanceId === undefined || !retiredIds.has(instanceId)) continue;
+        const replacement = next.get(instanceId);
+        if (replacement && (yield* replacement.hasSession(binding.threadId))) continue;
+
+        const createdAt = yield* nowIso;
+        const eventId = EventId.make(yield* crypto.randomUUIDv4);
+        yield* directory.upsert({
+          threadId: binding.threadId,
+          provider: binding.provider,
+          providerInstanceId: instanceId,
+          status: "stopped",
+          runtimePayload: {
+            activeTurnId: null,
+            continueAfterServerUpdate: null,
+            continueAfterServerUpdatePrepared: null,
+          },
+        });
+        yield* clearMcpSession(binding.threadId);
+        const pendingCompaction = pendingCompactions.get(binding.threadId);
+        if (pendingCompaction !== undefined) {
+          yield* settleCompaction(binding.threadId, pendingCompaction, "turn.aborted");
+        }
+        timedOutNativeCompactions.delete(binding.threadId);
+        yield* processRuntimeEvent(
+          { instanceId, provider: binding.provider },
+          {
+            eventId,
+            provider: binding.provider,
+            threadId: binding.threadId,
+            createdAt,
+            type: "session.exited",
+            payload: {
+              reason: "Provider session stopped after a settings change.",
+              recoverable: true,
+              exitKind: "graceful",
+            },
+          },
+        );
+      }
+    }
+
+    for (const [id, adapter] of next) {
       if (previous.get(id) !== adapter) {
         yield* Stream.runForEach(adapter.streamEvents, (event) =>
           processRuntimeEvent(
@@ -1288,9 +1343,13 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
 
   const instanceChanges = yield* registry.subscribeChanges;
   yield* reconcileInstanceSubscriptions;
-  yield* Stream.runForEach(
-    Stream.fromSubscription(instanceChanges),
-    () => reconcileInstanceSubscriptions,
+  yield* Stream.runForEach(Stream.fromSubscription(instanceChanges), () =>
+    reconcileInstanceSubscriptions.pipe(
+      Effect.retry({ times: 1 }),
+      Effect.catch((cause) =>
+        Effect.logError("failed to reconcile provider instance sessions", { cause }),
+      ),
+    ),
   ).pipe(Effect.forkScoped);
 
   const recoverSessionForThread = Effect.fn("recoverSessionForThread")(function* (input: {
