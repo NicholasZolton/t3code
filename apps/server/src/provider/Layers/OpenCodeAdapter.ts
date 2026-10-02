@@ -1077,6 +1077,113 @@ export function makeOpenCodeAdapter(
       },
     ) => writeNativeEvent(threadId, event).pipe(Effect.ignoreCause);
 
+    // Native inbox work can resume a session after T3 has completed its user turn.
+    const startOpenCodeContinuation = Effect.fn("startOpenCodeContinuation")(function* (
+      context: OpenCodeSessionContext,
+      parentEventSequence: number,
+      raw: unknown,
+      completeUsage: boolean,
+    ) {
+      if (
+        context.activeTurnId !== undefined ||
+        context.cancellation !== undefined ||
+        context.reconcileIdleStatus
+      ) {
+        return;
+      }
+      const generation = context.promptGeneration;
+      const sequence = context.lastParentEventSequence;
+      const turnId = TurnId.make(`opencode-turn-${yield* randomUUIDv4}`);
+      const base = yield* buildEventBase({ threadId: context.session.threadId, turnId, raw });
+      if (
+        (yield* Ref.get(context.stopped)) ||
+        sessions.get(context.session.threadId) !== context ||
+        context.activeTurnId !== undefined ||
+        context.cancellation !== undefined ||
+        context.reconcileIdleStatus ||
+        context.promptGeneration !== generation ||
+        context.lastParentEventSequence !== sequence
+      ) {
+        return;
+      }
+      context.activeTurnId = turnId;
+      context.promptGeneration += 1;
+      context.promptAdmission = undefined;
+      context.interruptedTurnId = undefined;
+      context.awaitingBusyAfterInterruption = false;
+      context.turnTokenUsage = makeOpenCodeTurnTokenUsageAccumulator(parentEventSequence);
+      context.turnTokenUsage.complete = completeUsage;
+      applyProviderSessionUpdate(
+        context,
+        { status: "running", activeTurnId: turnId },
+        { clearLastError: true },
+        base.createdAt,
+      );
+      emitUnsafe({
+        ...base,
+        type: "turn.started",
+        payload: context.session.model ? { model: context.session.model } : {},
+      });
+    });
+
+    // A reconnect may miss execution.started while the native session keeps working.
+    const recoverOpenCodeContinuation = Effect.fn("recoverOpenCodeContinuation")(function* (
+      context: OpenCodeSessionContext,
+    ) {
+      const generation = context.promptGeneration;
+      let retryCount = 0;
+      while (
+        !(yield* Ref.get(context.stopped)) &&
+        sessions.get(context.session.threadId) === context &&
+        context.activeTurnId === undefined &&
+        context.cancellation === undefined &&
+        !context.reconcileIdleStatus &&
+        context.promptGeneration === generation
+      ) {
+        const sequence = context.lastParentEventSequence;
+        const response = yield* runOpenCodeSdk("session.active", (signal) =>
+          context.client.session.active({ signal }),
+        ).pipe(Effect.timeout("1 second"), Effect.option);
+        if (
+          context.activeTurnId !== undefined ||
+          context.cancellation !== undefined ||
+          context.reconcileIdleStatus ||
+          context.promptGeneration !== generation
+        ) {
+          return;
+        }
+        if (context.lastParentEventSequence !== sequence) continue;
+        const statuses = Option.isSome(response)
+          ? Option.getOrUndefined(decodeOpenCodeSessionStatusMap(response.value))
+          : undefined;
+        if (statuses !== undefined) {
+          if (statuses[context.openCodeSessionId]?.type === "running") {
+            yield* startOpenCodeContinuation(
+              context,
+              sequence,
+              {
+                type: "session.status.recovered",
+                sessionID: context.openCodeSessionId,
+                status: statuses[context.openCodeSessionId],
+              },
+              false,
+            );
+          }
+          return;
+        }
+        if (retryCount === 0) {
+          yield* emit({
+            ...(yield* buildEventBase({ threadId: context.session.threadId })),
+            type: "runtime.warning",
+            payload: { message: "OpenCode continuation recovery is waiting for session status." },
+          });
+        }
+        const delayMs = Math.min(250 * 2 ** retryCount, 5_000);
+        retryCount += 1;
+        yield* Effect.sleep(`${delayMs} millis`);
+      }
+    });
+
     const cancelIdleReconciliation = Effect.fn("cancelIdleReconciliation")(function* (
       context: OpenCodeSessionContext,
     ) {
@@ -2162,6 +2269,10 @@ export function makeOpenCodeAdapter(
           if (context.activeTurnId !== undefined && context.promptAdmission === undefined) {
             yield* scheduleIdleReconciliation(context, context.activeTurnId, event);
           }
+          yield* recoverOpenCodeContinuation(context).pipe(
+            Effect.ignoreCause,
+            Effect.forkIn(context.sessionScope),
+          );
         }
         return;
       }
@@ -2182,6 +2293,9 @@ export function makeOpenCodeAdapter(
         isParentEvent && durableEvent?.aggregateId === context.openCodeSessionId
           ? durableEvent.sequence
           : undefined;
+      const priorParentEventSequence = context.lastParentEventSequence;
+      const isFreshParentEvent =
+        eventSequence === undefined || eventSequence > priorParentEventSequence;
       if (eventSequence !== undefined) {
         context.lastParentEventSequence = Math.max(context.lastParentEventSequence, eventSequence);
       }
@@ -2223,6 +2337,25 @@ export function makeOpenCodeAdapter(
       if (!isParentEvent && !isChildRequestEvent) {
         return;
       }
+      if (
+        isParentEvent &&
+        isFreshParentEvent &&
+        (event.type === "session.execution.started" ||
+          event.type === "session.step.started" ||
+          event.type === "session.text.delta" ||
+          event.type === "session.reasoning.delta" ||
+          event.type === "session.tool.input.started" ||
+          event.type === "session.tool.called" ||
+          event.type === "session.retry.scheduled")
+      ) {
+        // Live progress can beat the reconnect status snapshot after a missed start.
+        yield* startOpenCodeContinuation(
+          context,
+          priorParentEventSequence,
+          event,
+          event.type === "session.execution.started",
+        );
+      }
       const turnId = context.activeTurnId;
       yield* writeNativeEventBestEffort(context.session.threadId, {
         observedAt: yield* nowIso,
@@ -2259,6 +2392,18 @@ export function makeOpenCodeAdapter(
       if (!isParentEvent) {
         return;
       }
+      // Fence terminals at the turn boundary; newer metadata can arrive before completion.
+      const executionSequenceFloor =
+        event.type === "session.execution.started"
+          ? priorParentEventSequence
+          : (context.turnTokenUsage?.parentEventSequence ?? priorParentEventSequence);
+      if (
+        event.type.startsWith("session.execution.") &&
+        eventSequence !== undefined &&
+        eventSequence <= executionSequenceFloor
+      ) {
+        return;
+      }
 
       switch (event.type) {
         case "session.renamed": {
@@ -2274,6 +2419,20 @@ export function makeOpenCodeAdapter(
         }
         case "session.inbox.enqueued": {
           const admission = context.promptAdmission;
+          const isInterruptedPrompt =
+            event.data.item.type === "user" &&
+            (event.data.inboxID === admission?.messageId ||
+              (context.interruptedTurnId !== undefined &&
+                event.data.item.payload.metadata?.t3CodeTurnId === context.interruptedTurnId));
+          if (
+            isFreshParentEvent &&
+            context.activeTurnId === undefined &&
+            context.cancellation === undefined &&
+            !isInterruptedPrompt
+          ) {
+            // New native work may wake the session after Stop; late busy events may not.
+            context.reconcileIdleStatus = false;
+          }
           if (
             admission &&
             event.data.item.type === "user" &&
@@ -3104,6 +3263,13 @@ export function makeOpenCodeAdapter(
             providerThreadId: started.openCodeSession.id,
           },
         });
+
+        if (!started.created) {
+          yield* recoverOpenCodeContinuation(context).pipe(
+            Effect.ignoreCause,
+            Effect.forkIn(context.sessionScope),
+          );
+        }
 
         return context.session;
       },

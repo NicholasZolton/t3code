@@ -748,22 +748,856 @@ const permissionRequest = (id: string, sessionID: string): PermissionRequest => 
   metadata: {},
 });
 
-const formRequest = (id: string, sessionID: string): FormDetail => ({
-  id,
-  sessionID,
-  title: "Scope",
-  fields: [
-    {
-      key: "scope",
-      type: "string",
-      title: "Which scope should OpenCode use?",
-      options: [{ value: "workspace", label: "Workspace", description: "Use this workspace." }],
-    },
-  ],
-  state: { status: "pending" },
+const formRequest = (id: string, sessionID: string) =>
+  ({
+    id,
+    sessionID,
+    title: "Scope",
+    fields: [
+      {
+        key: "scope",
+        type: "string",
+        title: "Which scope should OpenCode use?",
+        options: [{ value: "workspace", label: "Workspace", description: "Use this workspace." }],
+      },
+    ],
+    state: { status: "pending" },
+  }) satisfies FormDetail;
+
+const nativeEventBase = (sessionID: string, sequence: number) => ({
+  id: `evt_${sequence}`,
+  created: sequence,
+  durable: { aggregateID: sessionID, seq: sequence, version: 1 as const },
 });
 
 it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
+  it.effect("streams a background wakeup as a new turn and ignores old execution replays", () =>
+    Effect.gen(function* () {
+      const adapter = yield* OpenCodeAdapter;
+      const threadId = asThreadId("thread-background-wakeup");
+      const sessionID = "ses_background";
+      runtimeMock.state.createdSessionIds.push(sessionID);
+      const firstCompletion = promiseWithResolvers<OpenCodeEvent>();
+      const wakeup = promiseWithResolvers<OpenCodeEvent>();
+      const work = promiseWithResolvers<OpenCodeEvent>();
+      const done = promiseWithResolvers<OpenCodeEvent>();
+      runtimeMock.state.subscribedEvents = [
+        firstCompletion.promise,
+        // A replay must neither reopen a completed turn nor close its continuation.
+        {
+          ...nativeEventBase(sessionID, 1),
+          type: "session.execution.started",
+          data: { sessionID },
+        },
+        wakeup.promise,
+        {
+          ...nativeEventBase(sessionID, 4),
+          type: "session.execution.started",
+          data: { sessionID },
+        },
+        {
+          ...nativeEventBase(sessionID, 2),
+          type: "session.execution.succeeded",
+          data: { sessionID },
+        },
+        {
+          ...nativeEventBase("ses_unrelated", 100),
+          type: "session.execution.started",
+          data: { sessionID: "ses_unrelated" },
+        },
+        work.promise,
+        {
+          id: "evt_reasoning_delta",
+          created: 6,
+          type: "session.reasoning.delta",
+          data: {
+            sessionID,
+            assistantMessageID: "msg_background",
+            ordinal: 0,
+            delta: "Reviewing the result.",
+          },
+        },
+        {
+          ...nativeEventBase(sessionID, 7),
+          type: "session.tool.input.started",
+          data: {
+            sessionID,
+            assistantMessageID: "msg_background",
+            id: "call_background",
+            name: "shell",
+          },
+        },
+        {
+          ...nativeEventBase(sessionID, 8),
+          type: "session.tool.called",
+          data: {
+            sessionID,
+            assistantMessageID: "msg_background",
+            id: "call_background",
+            input: { command: "git status" },
+            executed: false,
+          },
+        },
+        {
+          ...nativeEventBase(sessionID, 9),
+          durable: { aggregateID: sessionID, seq: 9, version: 2 },
+          type: "session.tool.success",
+          data: {
+            sessionID,
+            assistantMessageID: "msg_background",
+            id: "call_background",
+            content: [{ type: "text", text: "Clean." }],
+            executed: false,
+          },
+        },
+        {
+          id: "evt_text_delta",
+          created: 10,
+          type: "session.text.delta",
+          data: {
+            sessionID,
+            assistantMessageID: "msg_background",
+            ordinal: 0,
+            delta: "Background work finished.",
+          },
+        },
+        {
+          ...nativeEventBase(sessionID, 11),
+          type: "session.text.ended",
+          data: {
+            sessionID,
+            assistantMessageID: "msg_background",
+            ordinal: 0,
+            text: "Background work finished.",
+          },
+        },
+        {
+          ...nativeEventBase(sessionID, 12),
+          type: "session.step.ended",
+          data: {
+            sessionID,
+            assistantMessageID: "msg_background",
+            finish: "stop",
+            cost: 0,
+            tokens: { input: 10, output: 5, reasoning: 2, cache: { read: 3, write: 1 } },
+          },
+        },
+        // Newer metadata must not fence the continuation's out-of-order completion.
+        {
+          ...nativeEventBase(sessionID, 14),
+          type: "session.renamed",
+          data: { sessionID, title: "Background review" },
+        },
+        done.promise,
+        {
+          ...nativeEventBase(sessionID, 4),
+          type: "session.execution.started",
+          data: { sessionID },
+        },
+      ] satisfies Array<OpenCodeEvent | Promise<OpenCodeEvent>>;
+      const firstSettled = yield* Deferred.make<void>();
+      const continuationStarted = yield* Deferred.make<void>();
+      const continuationSettled = yield* Deferred.make<void>();
+      const contentFinished = yield* Deferred.make<void>();
+      let completionCount = 0;
+      const eventsFiber = yield* adapter.streamEvents.pipe(
+        Stream.filter((event) => event.threadId === threadId),
+        Stream.tap((event) => {
+          if (event.type === "item.completed" && event.itemId === "msg_background:0") {
+            return Deferred.succeed(contentFinished, undefined);
+          }
+          if (event.type === "turn.completed") {
+            completionCount += 1;
+            return Deferred.succeed(
+              completionCount === 1 ? firstSettled : continuationSettled,
+              undefined,
+            );
+          }
+          if (event.type === "turn.started" && completionCount > 0) {
+            return Deferred.succeed(continuationStarted, undefined);
+          }
+          return Effect.void;
+        }),
+        Stream.takeUntil((event) => event.type === "session.exited"),
+        Stream.runCollect,
+        Effect.forkChild,
+      );
+      yield* adapter.startSession({
+        provider: ProviderDriverKind.make("opencode"),
+        threadId,
+        runtimeMode: "full-access",
+      });
+      const firstTurn = yield* adapter.sendTurn({
+        threadId,
+        input: "Start background work",
+        modelSelection: createModelSelection(ProviderInstanceId.make("opencode"), "openai/gpt-5"),
+      });
+      firstCompletion.resolve({
+        ...nativeEventBase(sessionID, 2),
+        type: "session.execution.succeeded",
+        data: { sessionID },
+      });
+      yield* Deferred.await(firstSettled);
+      wakeup.resolve({
+        ...nativeEventBase(sessionID, 3),
+        type: "session.inbox.enqueued",
+        data: {
+          sessionID,
+          inboxID: "msg_notification",
+          item: {
+            type: "synthetic",
+            delivery: "steer",
+            payload: { text: "Background work completed." },
+          },
+        },
+      });
+      yield* Deferred.await(continuationStarted);
+      const continuation = (yield* adapter.listSessions()).find(
+        (session) => session.threadId === threadId,
+      );
+      NodeAssert.equal(continuation?.status, "running");
+      NodeAssert.ok(continuation?.activeTurnId);
+      NodeAssert.notEqual(continuation.activeTurnId, firstTurn.turnId);
+      runtimeMock.state.sessionStatusImplementation = async () => ({
+        [sessionID]: { type: "running" },
+      });
+      const steer = yield* adapter.sendTurn({
+        threadId,
+        input: "Continue reviewing",
+        modelSelection: createModelSelection(ProviderInstanceId.make("opencode"), "openai/gpt-5"),
+      });
+      NodeAssert.equal(steer.turnId, continuation.activeTurnId);
+      work.resolve({
+        ...nativeEventBase(sessionID, 5),
+        type: "session.step.started",
+        data: {
+          sessionID,
+          assistantMessageID: "msg_background",
+          agent: "build",
+          model: { providerID: "openai", id: "gpt-5" },
+          started: 5,
+        },
+      });
+      yield* Deferred.await(contentFinished);
+      runtimeMock.state.sessionStatusImplementation = null;
+      done.resolve({
+        ...nativeEventBase(sessionID, 13),
+        type: "session.execution.succeeded",
+        data: { sessionID },
+      });
+      yield* Deferred.await(continuationSettled);
+      yield* adapter.stopSession(threadId);
+      const events = Array.from(yield* Fiber.join(eventsFiber));
+      NodeAssert.deepEqual(
+        events.filter((event) => event.type === "turn.started").map((event) => event.turnId),
+        [firstTurn.turnId, continuation.activeTurnId],
+      );
+      NodeAssert.deepEqual(
+        events
+          .filter((event) => event.type === "content.delta")
+          .map((event) => [event.turnId, event.payload.delta]),
+        [
+          [continuation.activeTurnId, "Reviewing the result."],
+          [continuation.activeTurnId, "Background work finished."],
+        ],
+      );
+      const tool = events.find(
+        (event) => event.type === "item.completed" && event.itemId === "call_background",
+      );
+      NodeAssert.ok(tool?.type === "item.completed");
+      NodeAssert.equal(tool?.turnId, continuation.activeTurnId);
+      NodeAssert.equal(tool?.payload.status, "completed");
+      const completed = events.find(
+        (event) => event.type === "turn.completed" && event.turnId === continuation.activeTurnId,
+      );
+      NodeAssert.ok(completed?.type === "turn.completed");
+      NodeAssert.deepEqual(completed?.payload.tokenUsage, {
+        usageStatus: "complete",
+        usageScope: "main_agent",
+        inputTokens: 14,
+        cachedInputTokens: 3,
+        cacheCreationTokens: 1,
+        outputTokens: 7,
+        reasoningTokens: 2,
+        hasSubagents: false,
+      });
+      NodeAssert.equal(runtimeMock.state.promptCalls.length, 2);
+    }),
+  );
+
+  it.effect.each(["resume", "reconnect"] as const)(
+    "recovers an already-running native session on %s without sending a prompt",
+    (connection) =>
+      Effect.gen(function* () {
+        const adapter = yield* OpenCodeAdapter;
+        const threadId = asThreadId(`thread-native-running-${connection}`);
+        const sessionID = "ses_native_running";
+        const reconnected = promiseWithResolvers<OpenCodeEvent>();
+        const work = promiseWithResolvers<OpenCodeEvent>();
+        runtimeMock.state.createdSessionIds.push(sessionID);
+        runtimeMock.state.subscribedEvents = [
+          ...(connection === "reconnect" ? [reconnected.promise] : []),
+          work.promise,
+          {
+            ...nativeEventBase(sessionID, 2),
+            type: "session.text.delta",
+            data: {
+              sessionID,
+              assistantMessageID: "msg_recovered",
+              ordinal: 0,
+              delta: "Still working.",
+            },
+          },
+          {
+            ...nativeEventBase(sessionID, 3),
+            type: "session.step.ended",
+            data: {
+              sessionID,
+              assistantMessageID: "msg_recovered",
+              finish: "stop",
+              cost: 0,
+              tokens: { input: 10, output: 5, reasoning: 2, cache: { read: 3, write: 1 } },
+            },
+          },
+          {
+            ...nativeEventBase(sessionID, 4),
+            type: "session.execution.succeeded",
+            data: { sessionID },
+          },
+        ] satisfies Array<OpenCodeEvent | Promise<OpenCodeEvent>>;
+        const started = yield* Deferred.make<void>();
+        const eventsFiber = yield* adapter.streamEvents.pipe(
+          Stream.filter((event) => event.threadId === threadId),
+          Stream.tap((event) =>
+            event.type === "turn.started" ? Deferred.succeed(started, undefined) : Effect.void,
+          ),
+          Stream.takeUntil((event) => event.type === "turn.completed"),
+          Stream.runCollect,
+          Effect.forkChild,
+        );
+        if (connection === "resume") {
+          runtimeMock.state.sessionStatusImplementation = async () => ({
+            [sessionID]: { type: "running" },
+          });
+        }
+        yield* adapter.startSession({
+          provider: ProviderDriverKind.make("opencode"),
+          threadId,
+          runtimeMode: "full-access",
+          ...(connection === "resume"
+            ? { resumeCursor: { schemaVersion: 1, sessionId: sessionID } }
+            : {}),
+        });
+        runtimeMock.state.sessionStatusImplementation = async () => ({
+          [sessionID]: { type: "running" },
+        });
+        if (connection === "reconnect") {
+          reconnected.resolve({ id: "evt_reconnect", type: "server.connected", data: {} });
+        }
+        yield* Deferred.await(started);
+        const session = (yield* adapter.listSessions()).find(
+          (entry) => entry.threadId === threadId,
+        );
+        NodeAssert.equal(session?.status, "running");
+        NodeAssert.ok(session?.activeTurnId);
+        work.resolve({
+          ...nativeEventBase(sessionID, 1),
+          type: "session.step.started",
+          data: {
+            sessionID,
+            assistantMessageID: "msg_recovered",
+            agent: "build",
+            model: { providerID: "openai", id: "gpt-5" },
+            started: 1,
+          },
+        });
+        const events = Array.from(yield* Fiber.join(eventsFiber));
+        NodeAssert.equal(events.filter((event) => event.type === "turn.started").length, 1);
+        NodeAssert.equal(
+          events.find((event) => event.type === "content.delta")?.turnId,
+          session.activeTurnId,
+        );
+        const completed = events.find((event) => event.type === "turn.completed");
+        NodeAssert.equal(completed?.turnId, session.activeTurnId);
+        NodeAssert.equal(completed?.payload.tokenUsage?.usageStatus, "partial");
+        NodeAssert.equal(completed?.payload.tokenUsage?.inputTokens, 14);
+        NodeAssert.equal(runtimeMock.state.promptCalls.length, 0);
+        NodeAssert.equal(
+          (yield* adapter.listSessions()).find((entry) => entry.threadId === threadId)?.status,
+          "ready",
+        );
+        yield* adapter.stopSession(threadId);
+      }),
+  );
+
+  it.effect.each(["failure", "timeout", "invalid"] as const)(
+    "retries a %s status probe to recover a blocked native session",
+    (failure) =>
+      Effect.gen(function* () {
+        const adapter = yield* OpenCodeAdapter;
+        const threadId = asThreadId(`thread-recovery-${failure}`);
+        const sessionID = "ses_recovery_retry";
+        const probeStarted = promiseWithResolvers<void>();
+        runtimeMock.state.pendingPermissions = [permissionRequest("per_recovery_retry", sessionID)];
+        runtimeMock.state.sessionStatusImplementation = async () => {
+          if (runtimeMock.state.sessionStatusCalls === 1) {
+            probeStarted.resolve(undefined);
+            if (failure === "failure") throw new Error("remote connection failed");
+            if (failure === "timeout") return new Promise<never>(() => {});
+            return { invalid: { type: "busy" } };
+          }
+          return { [sessionID]: { type: "running" } };
+        };
+        const warned = yield* Deferred.make<void>();
+        const started = yield* Deferred.make<void>();
+        const opened = yield* Deferred.make<void>();
+        const eventsFiber = yield* adapter.streamEvents.pipe(
+          Stream.filter((event) => event.threadId === threadId),
+          Stream.tap((event) => {
+            if (event.type === "runtime.warning") return Deferred.succeed(warned, undefined);
+            if (event.type === "turn.started") return Deferred.succeed(started, undefined);
+            if (event.type === "request.opened") return Deferred.succeed(opened, undefined);
+            return Effect.void;
+          }),
+          Stream.takeUntil((event) => event.type === "session.exited"),
+          Stream.runCollect,
+          Effect.forkChild,
+        );
+        yield* adapter.startSession({
+          provider: ProviderDriverKind.make("opencode"),
+          threadId,
+          runtimeMode: "approval-required",
+          resumeCursor: { schemaVersion: 1, sessionId: sessionID },
+        });
+        yield* Effect.promise(() => probeStarted.promise);
+        if (failure === "timeout") yield* advanceTestClock(1_000);
+        yield* Deferred.await(warned);
+        yield* advanceTestClock(250);
+        yield* Deferred.await(started);
+        yield* Deferred.await(opened);
+        const session = (yield* adapter.listSessions()).find(
+          (entry) => entry.threadId === threadId,
+        );
+        NodeAssert.equal(session?.status, "running");
+        NodeAssert.ok(session?.activeTurnId);
+        yield* adapter.interruptTurn(threadId, session.activeTurnId);
+        NodeAssert.ok(runtimeMock.state.abortCalls.includes(sessionID));
+        yield* adapter.stopSession(threadId);
+        const events = Array.from(yield* Fiber.join(eventsFiber));
+        NodeAssert.equal(events.filter((event) => event.type === "turn.started").length, 1);
+        NodeAssert.equal(
+          events.find((event) => event.type === "turn.aborted")?.turnId,
+          session.activeTurnId,
+        );
+        NodeAssert.equal(runtimeMock.state.promptCalls.length, 0);
+      }),
+  );
+
+  it.effect("keeps live reconnect output when its status snapshot arrives after completion", () =>
+    Effect.gen(function* () {
+      const adapter = yield* OpenCodeAdapter;
+      const threadId = asThreadId("thread-reconnect-status-race");
+      const sessionID = "ses_reconnect_status_race";
+      const reconnected = promiseWithResolvers<OpenCodeEvent>();
+      const snapshotStarted = promiseWithResolvers<void>();
+      const snapshot = promiseWithResolvers<Record<string, { type: "running" }>>();
+      const content = promiseWithResolvers<OpenCodeEvent>();
+      const done = promiseWithResolvers<OpenCodeEvent>();
+      runtimeMock.state.createdSessionIds.push(sessionID);
+      runtimeMock.state.subscribedEvents = [reconnected.promise, content.promise, done.promise];
+      const contentSeen = yield* Deferred.make<void>();
+      const completed = yield* Deferred.make<void>();
+      const eventsFiber = yield* adapter.streamEvents.pipe(
+        Stream.filter((event) => event.threadId === threadId),
+        Stream.tap((event) => {
+          if (event.type === "content.delta") return Deferred.succeed(contentSeen, undefined);
+          if (event.type === "turn.completed") return Deferred.succeed(completed, undefined);
+          return Effect.void;
+        }),
+        Stream.takeUntil((event) => event.type === "session.exited"),
+        Stream.runCollect,
+        Effect.forkChild,
+      );
+      yield* adapter.startSession({
+        provider: ProviderDriverKind.make("opencode"),
+        threadId,
+        runtimeMode: "full-access",
+      });
+      runtimeMock.state.sessionStatusImplementation = async () => {
+        snapshotStarted.resolve(undefined);
+        return snapshot.promise;
+      };
+      reconnected.resolve({ id: "evt_reconnect_race", type: "server.connected", data: {} });
+      yield* Effect.promise(() => snapshotStarted.promise);
+      content.resolve({
+        id: "evt_live_delta",
+        created: 1,
+        type: "session.text.delta",
+        data: { sessionID, assistantMessageID: "msg_live", ordinal: 0, delta: "Still working." },
+      });
+      yield* Deferred.await(contentSeen);
+      done.resolve({
+        ...nativeEventBase(sessionID, 2),
+        type: "session.execution.succeeded",
+        data: { sessionID },
+      });
+      yield* Deferred.await(completed);
+      snapshot.resolve({ [sessionID]: { type: "running" } });
+      yield* Effect.yieldNow;
+      NodeAssert.equal(
+        (yield* adapter.listSessions()).find((entry) => entry.threadId === threadId)?.status,
+        "ready",
+      );
+      yield* adapter.stopSession(threadId);
+      const events = Array.from(yield* Fiber.join(eventsFiber));
+      const turns = events.filter((event) => event.type === "turn.started");
+      NodeAssert.equal(turns.length, 1);
+      const delta = events.find((event) => event.type === "content.delta");
+      NodeAssert.equal(delta?.turnId, turns[0]?.turnId);
+      NodeAssert.equal(delta?.payload.delta, "Still working.");
+      NodeAssert.equal(runtimeMock.state.promptCalls.length, 0);
+    }),
+  );
+
+  it.effect.each(["failed", "interrupted"] as const)(
+    "settles a native continuation that is %s, including retry notices",
+    (outcome) =>
+      Effect.gen(function* () {
+        const adapter = yield* OpenCodeAdapter;
+        const threadId = asThreadId(`thread-native-${outcome}`);
+        const sessionID = "ses_native_terminal";
+        const wakeup = promiseWithResolvers<OpenCodeEvent>();
+        const terminal = promiseWithResolvers<OpenCodeEvent>();
+        runtimeMock.state.createdSessionIds.push(sessionID);
+        runtimeMock.state.subscribedEvents = [
+          wakeup.promise,
+          {
+            ...nativeEventBase(sessionID, 2),
+            type: "session.retry.scheduled",
+            data: {
+              sessionID,
+              assistantMessageID: "msg_retry",
+              attempt: 1,
+              at: 2,
+              error: { type: "provider.transport", message: "Connection lost." },
+            },
+          },
+          terminal.promise,
+        ] satisfies Array<OpenCodeEvent | Promise<OpenCodeEvent>>;
+        const started = yield* Deferred.make<void>();
+        const terminalSettled = yield* Deferred.make<void>();
+        const eventsFiber = yield* adapter.streamEvents.pipe(
+          Stream.filter((event) => event.threadId === threadId),
+          Stream.tap((event) => {
+            if (event.type === "turn.started") return Deferred.succeed(started, undefined);
+            if (event.type === "turn.completed" || event.type === "turn.aborted")
+              return Deferred.succeed(terminalSettled, undefined);
+            return Effect.void;
+          }),
+          Stream.takeUntil((event) => event.type === "session.exited"),
+          Stream.runCollect,
+          Effect.forkChild,
+        );
+        yield* adapter.startSession({
+          provider: ProviderDriverKind.make("opencode"),
+          threadId,
+          runtimeMode: "full-access",
+        });
+        wakeup.resolve({
+          ...nativeEventBase(sessionID, 1),
+          type: "session.execution.started",
+          data: { sessionID },
+        });
+        yield* Deferred.await(started);
+        const session = (yield* adapter.listSessions()).find(
+          (entry) => entry.threadId === threadId,
+        );
+        NodeAssert.ok(session?.activeTurnId);
+        if (outcome === "failed") {
+          terminal.resolve({
+            ...nativeEventBase(sessionID, 3),
+            type: "session.execution.failed",
+            data: {
+              sessionID,
+              error: { type: "provider.transport", message: "Provider unavailable." },
+            },
+          });
+        } else {
+          terminal.resolve({
+            ...nativeEventBase(sessionID, 3),
+            type: "session.execution.interrupted",
+            data: { sessionID, reason: "user" },
+          });
+        }
+        yield* Deferred.await(terminalSettled);
+        NodeAssert.equal(
+          (yield* adapter.listSessions()).find((entry) => entry.threadId === threadId)?.status,
+          outcome === "failed" ? "error" : "ready",
+        );
+        yield* adapter.stopSession(threadId);
+        const events = Array.from(yield* Fiber.join(eventsFiber));
+        NodeAssert.equal(events.filter((event) => event.type === "turn.started").length, 1);
+        NodeAssert.equal(
+          events.find((event) => event.type === "runtime.warning")?.turnId,
+          session.activeTurnId,
+        );
+        const settled = events.find(
+          (event) => event.type === "turn.completed" || event.type === "turn.aborted",
+        );
+        NodeAssert.equal(settled?.turnId, session.activeTurnId);
+        NodeAssert.equal(settled?.type, outcome === "failed" ? "turn.completed" : "turn.aborted");
+        if (settled?.type === "turn.completed") {
+          NodeAssert.equal(settled.payload.state, "failed");
+          NodeAssert.equal(settled.payload.errorMessage, "Provider unavailable.");
+        }
+      }),
+  );
+
+  it.effect("routes approvals and questions from native work through its continuation turn", () =>
+    Effect.gen(function* () {
+      const adapter = yield* OpenCodeAdapter;
+      const threadId = asThreadId("thread-native-requests");
+      const sessionID = "ses_native_requests";
+      const wakeup = promiseWithResolvers<OpenCodeEvent>();
+      const question = promiseWithResolvers<OpenCodeEvent>();
+      const done = promiseWithResolvers<OpenCodeEvent>();
+      runtimeMock.state.createdSessionIds.push(sessionID);
+      runtimeMock.state.subscribedEvents = [
+        wakeup.promise,
+        {
+          id: "evt_permission",
+          created: 2,
+          type: "permission.asked",
+          data: permissionRequest("per_native", sessionID),
+        },
+        question.promise,
+        done.promise,
+      ] satisfies Array<OpenCodeEvent | Promise<OpenCodeEvent>>;
+      const permissionOpened = yield* Deferred.make<void>();
+      const questionOpened = yield* Deferred.make<void>();
+      const eventsFiber = yield* adapter.streamEvents.pipe(
+        Stream.filter((event) => event.threadId === threadId),
+        Stream.tap((event) => {
+          if (event.type === "request.opened") return Deferred.succeed(permissionOpened, undefined);
+          if (event.type === "user-input.requested")
+            return Deferred.succeed(questionOpened, undefined);
+          return Effect.void;
+        }),
+        Stream.takeUntil((event) => event.type === "turn.completed"),
+        Stream.runCollect,
+        Effect.forkChild,
+      );
+      yield* adapter.startSession({
+        provider: ProviderDriverKind.make("opencode"),
+        threadId,
+        runtimeMode: "approval-required",
+      });
+      wakeup.resolve({
+        ...nativeEventBase(sessionID, 1),
+        type: "session.execution.started",
+        data: { sessionID },
+      });
+      yield* Deferred.await(permissionOpened);
+      const session = (yield* adapter.listSessions()).find((entry) => entry.threadId === threadId);
+      NodeAssert.ok(session?.activeTurnId);
+      yield* adapter.respondToRequest(threadId, ApprovalRequestId.make("per_native"), "accept");
+      question.resolve({
+        id: "evt_question",
+        created: 3,
+        type: "form.created",
+        data: { form: formRequest("que_native", sessionID) },
+      });
+      yield* Deferred.await(questionOpened);
+      yield* adapter.respondToUserInput(threadId, ApprovalRequestId.make("que_native"), {
+        scope: "Workspace",
+      });
+      done.resolve({
+        ...nativeEventBase(sessionID, 4),
+        type: "session.execution.succeeded",
+        data: { sessionID },
+      });
+      const events = Array.from(yield* Fiber.join(eventsFiber));
+      NodeAssert.deepEqual(
+        events
+          .filter(
+            (event) =>
+              event.type === "request.opened" ||
+              event.type === "request.resolved" ||
+              event.type === "user-input.requested" ||
+              event.type === "user-input.resolved",
+          )
+          .map((event) => [event.type, event.turnId]),
+        [
+          ["request.opened", session.activeTurnId],
+          ["request.resolved", session.activeTurnId],
+          ["user-input.requested", session.activeTurnId],
+          ["user-input.resolved", session.activeTurnId],
+        ],
+      );
+      NodeAssert.deepEqual(runtimeMock.state.permissionReplyCalls, [
+        { requestID: "per_native", reply: "once" },
+      ]);
+      NodeAssert.deepEqual(runtimeMock.state.questionReplyCalls, [
+        { requestID: "que_native", answers: [["workspace"]] },
+      ]);
+      yield* adapter.stopSession(threadId);
+    }),
+  );
+
+  it.effect("keeps delayed cancelled-prompt echoes from reviving a stopped turn", () =>
+    Effect.gen(function* () {
+      const adapter = yield* OpenCodeAdapter;
+      const threadId = asThreadId("thread-cancelled-prompt-echo");
+      const sessionID = "ses_cancelled_prompt_echo";
+      const echo = promiseWithResolvers<OpenCodeEvent>();
+      const marker = promiseWithResolvers<OpenCodeEvent>();
+      runtimeMock.state.createdSessionIds.push(sessionID);
+      runtimeMock.state.subscribedEvents = [
+        echo.promise,
+        {
+          ...nativeEventBase(sessionID, 2),
+          type: "session.execution.started",
+          data: { sessionID },
+        },
+        {
+          ...nativeEventBase(sessionID, 3),
+          type: "session.text.delta",
+          data: { sessionID, assistantMessageID: "msg_stopped", ordinal: 0, delta: "Late output." },
+        },
+        marker.promise,
+      ];
+      const observed = yield* Deferred.make<void>();
+      const eventsFiber = yield* adapter.streamEvents.pipe(
+        Stream.filter((event) => event.threadId === threadId),
+        Stream.tap((event) =>
+          event.type === "thread.metadata.updated"
+            ? Deferred.succeed(observed, undefined)
+            : Effect.void,
+        ),
+        Stream.takeUntil((event) => event.type === "session.exited"),
+        Stream.runCollect,
+        Effect.forkChild,
+      );
+      yield* adapter.startSession({
+        provider: ProviderDriverKind.make("opencode"),
+        threadId,
+        runtimeMode: "full-access",
+      });
+      const modelSelection = createModelSelection(
+        ProviderInstanceId.make("opencode"),
+        "openai/gpt-5",
+      );
+      const turn = yield* adapter.sendTurn({ threadId, input: "Work", modelSelection });
+      yield* adapter.sendTurn({ threadId, input: "Steer", modelSelection });
+      const messageId = runtimeMock.state.messages.at(-1)?.info.id;
+      NodeAssert.ok(messageId);
+      yield* adapter.interruptTurn(threadId, turn.turnId);
+      runtimeMock.state.promptEchoEvents.length = 0;
+      echo.resolve({
+        ...nativeEventBase(sessionID, 1),
+        type: "session.inbox.enqueued",
+        data: {
+          sessionID,
+          inboxID: messageId,
+          item: {
+            type: "user",
+            delivery: "steer",
+            payload: { text: "Steer", metadata: { t3CodeTurnId: turn.turnId } },
+          },
+        },
+      });
+      marker.resolve({
+        ...nativeEventBase(sessionID, 4),
+        type: "session.renamed",
+        data: { sessionID, title: "Stopped work" },
+      });
+      yield* Deferred.await(observed);
+      const session = (yield* adapter.listSessions()).find((entry) => entry.threadId === threadId);
+      NodeAssert.equal(session?.status, "ready");
+      NodeAssert.equal(session?.activeTurnId, undefined);
+      yield* adapter.stopSession(threadId);
+      const events = Array.from(yield* Fiber.join(eventsFiber));
+      NodeAssert.equal(events.filter((event) => event.type === "turn.started").length, 1);
+      NodeAssert.equal(
+        events.some((event) => event.type === "content.delta"),
+        false,
+      );
+    }),
+  );
+
+  it.effect("admits a new background notification after an interrupted turn", () =>
+    Effect.gen(function* () {
+      const adapter = yield* OpenCodeAdapter;
+      const threadId = asThreadId("thread-background-after-stop");
+      const sessionID = "ses_background_after_stop";
+      const wakeup = promiseWithResolvers<OpenCodeEvent>();
+      runtimeMock.state.createdSessionIds.push(sessionID);
+      runtimeMock.state.subscribedEvents = [
+        wakeup.promise,
+        {
+          ...nativeEventBase(sessionID, 2),
+          type: "session.execution.started",
+          data: { sessionID },
+        },
+      ];
+      const continuationStarted = yield* Deferred.make<void>();
+      let stopped = false;
+      const eventsFiber = yield* adapter.streamEvents.pipe(
+        Stream.filter((event) => event.threadId === threadId),
+        Stream.tap((event) =>
+          event.type === "turn.started" && stopped
+            ? Deferred.succeed(continuationStarted, undefined)
+            : Effect.void,
+        ),
+        Stream.takeUntil((event) => event.type === "session.exited"),
+        Stream.runCollect,
+        Effect.forkChild,
+      );
+      yield* adapter.startSession({
+        provider: ProviderDriverKind.make("opencode"),
+        threadId,
+        runtimeMode: "full-access",
+      });
+      const turn = yield* adapter.sendTurn({
+        threadId,
+        input: "Work",
+        modelSelection: createModelSelection(ProviderInstanceId.make("opencode"), "openai/gpt-5"),
+      });
+      yield* adapter.interruptTurn(threadId, turn.turnId);
+      stopped = true;
+      wakeup.resolve({
+        ...nativeEventBase(sessionID, 1),
+        type: "session.inbox.enqueued",
+        data: {
+          sessionID,
+          inboxID: "msg_wakeup",
+          item: {
+            type: "synthetic",
+            delivery: "steer",
+            payload: { text: "Background command completed." },
+          },
+        },
+      });
+      yield* Deferred.await(continuationStarted);
+      const continuation = (yield* adapter.listSessions()).find(
+        (entry) => entry.threadId === threadId,
+      );
+      NodeAssert.ok(continuation?.activeTurnId);
+      NodeAssert.notEqual(continuation.activeTurnId, turn.turnId);
+      yield* adapter.interruptTurn(threadId, continuation.activeTurnId);
+      NodeAssert.equal(
+        (yield* adapter.listSessions()).find((entry) => entry.threadId === threadId)?.activeTurnId,
+        undefined,
+      );
+      yield* adapter.stopSession(threadId);
+      const events = Array.from(yield* Fiber.join(eventsFiber));
+      NodeAssert.deepEqual(
+        events.filter((event) => event.type === "turn.aborted").map((event) => event.turnId),
+        [turn.turnId, continuation.activeTurnId],
+      );
+    }),
+  );
+
   it.effect("reuses a configured OpenCode server URL instead of spawning a local server", () =>
     Effect.gen(function* () {
       const adapter = yield* OpenCodeAdapter;
