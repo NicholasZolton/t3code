@@ -1,4 +1,5 @@
 import { resolveProjectSettings } from "@t3tools/shared/projectSettings";
+import { normalizeProjectPathForComparison } from "@t3tools/shared/path";
 import {
   CommandId,
   EventId,
@@ -16,6 +17,8 @@ import * as Crypto from "effect/Crypto";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
+import * as FileSystem from "effect/FileSystem";
+import * as Path from "effect/Path";
 import * as Option from "effect/Option";
 import * as Schedule from "effect/Schedule";
 import * as Schema from "effect/Schema";
@@ -29,6 +32,7 @@ import * as WorktreeSetupTracker from "../project/WorktreeSetupTracker.ts";
 import * as TerminalManager from "../terminal/Manager.ts";
 import * as GitWorkflowService from "../git/GitWorkflowService.ts";
 import * as VcsStatusBroadcaster from "../vcs/VcsStatusBroadcaster.ts";
+import * as NewProject from "../project/NewProject.ts";
 
 const isOrchestrationDispatchCommandError = Schema.is(OrchestrationDispatchCommandError);
 const nowIso = Effect.map(DateTime.now, DateTime.formatIso);
@@ -74,6 +78,9 @@ export const makeThreadCommandDispatcher = Effect.fn("makeThreadCommandDispatche
   const projectSetupScriptRunner = yield* ProjectSetupScriptRunner.ProjectSetupScriptRunner;
   const vcsStatusBroadcaster = yield* VcsStatusBroadcaster.VcsStatusBroadcaster;
   const startup = yield* ServerRuntimeStartup.ServerRuntimeStartup;
+  const resolveScratchWorkspaceRoot = yield* NewProject.makeScratchWorkspaceRoot();
+  const fileSystem = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
   const dispatchFromClient: OrchestrationEngine.OrchestrationEngineShape["dispatch"] = (command) =>
     orchestrationEngine.dispatch(command, options.origin ? { origin: options.origin } : undefined);
   const refreshGitStatus = (cwd: string) =>
@@ -897,7 +904,112 @@ export const makeThreadCommandDispatcher = Effect.fn("makeThreadCommandDispatche
       return yield* runBootstrap;
     });
 
-  const dispatchNormalizedCommand = (
+  // Keep Scratch preparation on the shared dispatch path so MCP and clients
+  // give each projectless thread its own working directory.
+  const scratchThreadFolder = (input: {
+    readonly threadId: ThreadId;
+    readonly projectId: ProjectId;
+    readonly worktreePath: string | null;
+    readonly createdAt: string;
+    readonly text: string;
+  }): Effect.Effect<string | null, OrchestrationDispatchCommandError> =>
+    Effect.gen(function* () {
+      if (input.worktreePath !== null) return null;
+      const scratchRoot = yield* resolveScratchWorkspaceRoot;
+      if (scratchRoot === undefined) return null;
+      const project = yield* projectionSnapshotQuery.getProjectShellById(input.projectId).pipe(
+        Effect.mapError(
+          (cause) =>
+            new OrchestrationDispatchCommandError({
+              message: "Failed to look up the thread's project.",
+              cause,
+            }),
+        ),
+      );
+      if (
+        Option.isNone(project) ||
+        normalizeProjectPathForComparison(project.value.workspaceRoot) !==
+          normalizeProjectPathForComparison(scratchRoot)
+      ) {
+        return null;
+      }
+      // A leaf mkdir claims the folder atomically; a taken short id falls back
+      // to the full thread id. Only [a-z0-9] reaches the capped name segments.
+      const words = input.text
+        .toLowerCase()
+        .split(/[^a-z0-9]+/)
+        .filter(Boolean)
+        .slice(0, 5)
+        .join("-")
+        .slice(0, 48)
+        .replace(/-+$/, "");
+      const id = input.threadId.toLowerCase().replace(/[^a-z0-9]/g, "");
+      const folderFor = (idPart: string) =>
+        path.join(
+          scratchRoot,
+          [input.createdAt.slice(0, 10), words, idPart].filter(Boolean).join("-"),
+        );
+      yield* fileSystem.makeDirectory(scratchRoot, { recursive: true }).pipe(
+        Effect.mapError(
+          (cause) =>
+            new OrchestrationDispatchCommandError({
+              message: "Failed to create the folder for threads without a project.",
+              cause,
+            }),
+        ),
+      );
+      const claim = (folder: string) =>
+        fileSystem.makeDirectory(folder).pipe(
+          Effect.as(true),
+          Effect.catchIf(
+            (error) => error.reason._tag === "AlreadyExists",
+            () => Effect.succeed(false),
+          ),
+          Effect.mapError(
+            (cause) =>
+              new OrchestrationDispatchCommandError({
+                message: "Failed to create the thread's folder.",
+                cause,
+              }),
+          ),
+        );
+      const shortFolder = folderFor(id.slice(0, 8));
+      if (yield* claim(shortFolder)) return shortFolder;
+      const fullFolder = folderFor(id);
+      yield* claim(fullFolder);
+      return fullFolder;
+    });
+  const withScratchThreadFolder = (
+    command: OrchestrationCommand,
+  ): Effect.Effect<OrchestrationCommand, OrchestrationDispatchCommandError> => {
+    if (command.type === "thread.create") {
+      return scratchThreadFolder({ ...command, text: command.title }).pipe(
+        Effect.map((worktreePath) =>
+          worktreePath === null ? command : { ...command, worktreePath },
+        ),
+      );
+    }
+    if (command.type !== "thread.turn.start") return Effect.succeed(command);
+    const bootstrap = command.bootstrap;
+    const createThread = bootstrap?.createThread;
+    if (bootstrap === undefined || createThread === undefined) return Effect.succeed(command);
+    return scratchThreadFolder({
+      ...createThread,
+      threadId: command.threadId,
+      text: command.message.text,
+    }).pipe(
+      Effect.map((worktreePath) =>
+        worktreePath === null
+          ? command
+          : {
+              ...command,
+              bootstrap: { ...bootstrap, createThread: { ...createThread, worktreePath } },
+            },
+      ),
+    );
+  };
+
+  const dispatchPreparedCommand = (
     normalizedCommand: OrchestrationCommand,
   ): Effect.Effect<{ readonly sequence: number }, OrchestrationDispatchCommandError> => {
     const dispatchEffect =
@@ -926,5 +1038,6 @@ export const makeThreadCommandDispatcher = Effect.fn("makeThreadCommandDispatche
       );
   };
 
-  return dispatchNormalizedCommand;
+  return (command: OrchestrationCommand) =>
+    withScratchThreadFolder(command).pipe(Effect.flatMap(dispatchPreparedCommand));
 });

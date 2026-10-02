@@ -11,6 +11,63 @@ import {
 } from "./ComposerPromptEditorTiptap";
 
 describe("Vim composer integration", () => {
+  it.each(["pasted text", "pasted\ntext"])(
+    "undoes consecutive clipboard pastes separately in Vim mode: %s",
+    async (pasted) => {
+      vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+      const container = document.createElement("div");
+      document.body.appendChild(container);
+      const root = createRoot(container);
+      const editorRef = createRef<ComposerPromptEditorHandle>();
+      try {
+        await act(async () => {
+          root.render(
+            <ComposerPromptEditorTiptap
+              value="Please "
+              cursor={7}
+              keybindings={DEFAULT_RESOLVED_KEYBINDINGS}
+              vimEnabled
+              contextRecords={new Map()}
+              skills={[]}
+              disabled={false}
+              placeholder="Prompt"
+              onChange={() => {}}
+              onPaste={() => {}}
+              editorRef={editorRef}
+            />,
+          );
+        });
+        const paste = async (text: string): Promise<void> => {
+          const clipboardData = new DataTransfer();
+          clipboardData.setData("text/plain", text);
+          await act(async () => {
+            container
+              .querySelector(".tiptap")
+              ?.dispatchEvent(new ClipboardEvent("paste", { clipboardData, bubbles: true }));
+          });
+        };
+        await paste(pasted);
+        const firstPaste = editorRef.current?.readSnapshot().value;
+        await paste(" again");
+        expect(editorRef.current?.readSnapshot().value).toBe(`${firstPaste} again`);
+        await act(async () => {
+          for (const key of ["Escape", "u"]) {
+            container
+              .querySelector(".tiptap")
+              ?.dispatchEvent(
+                new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true }),
+              );
+          }
+        });
+        expect(editorRef.current?.readSnapshot().value).toBe(firstPaste);
+      } finally {
+        await act(async () => root.unmount());
+        container.remove();
+        vi.unstubAllGlobals();
+      }
+    },
+  );
+
   it("serializes the same prompt and context references after pasting skills in either mode", async () => {
     vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
     const container = document.createElement("div");
