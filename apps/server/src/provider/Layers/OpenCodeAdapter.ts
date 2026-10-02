@@ -942,6 +942,10 @@ export function makeOpenCodeAdapter(
       options?.nativeEventLogger === undefined ? nativeEventLogger : undefined;
     const runtimeEvents = yield* Queue.unbounded<ProviderRuntimeEvent>();
     const sessions = new Map<ThreadId, OpenCodeSessionContext>();
+    const useProviderPermissions = openCodeSettings.permissionMode === "provider";
+    // Empty rules restore native config on resume as well as on newly created or forked sessions.
+    const resolvePermissionRules = (runtimeMode: ProviderSession["runtimeMode"]) =>
+      useProviderPermissions ? [] : buildOpenCodePermissionRules(runtimeMode);
     const deleteContextIfCurrent = (context: OpenCodeSessionContext) => {
       if (sessions.get(context.session.threadId) === context) {
         sessions.delete(context.session.threadId);
@@ -1831,7 +1835,7 @@ export function makeOpenCodeAdapter(
         if (context.pendingPermissions.has(request.id)) {
           return;
         }
-        if (context.session.runtimeMode === "full-access") {
+        if (!useProviderPermissions && context.session.runtimeMode === "full-access") {
           // Reply outside the event pump so a slow HTTP response cannot hide
           // progress, terminal replies, or the acknowledgment for Stop.
           context.resolvedRequestIds.add(request.id);
@@ -3076,7 +3080,7 @@ export function makeOpenCodeAdapter(
                   yield* runOpenCodeSdk("session.update", () =>
                     client.session.update({
                       sessionID: reusable.id,
-                      permissions: buildOpenCodePermissionRules(input.runtimeMode),
+                      permissions: resolvePermissionRules(input.runtimeMode),
                     }),
                   );
                   return { openCodeSession: reusable, created: false };
@@ -3107,7 +3111,7 @@ export function makeOpenCodeAdapter(
                   yield* runOpenCodeSdk("session.update", () =>
                     client.session.update({
                       sessionID: forked.id,
-                      permissions: buildOpenCodePermissionRules(input.runtimeMode),
+                      permissions: resolvePermissionRules(input.runtimeMode),
                     }),
                   );
                   return { openCodeSession: forked, created: true };
@@ -3122,7 +3126,7 @@ export function makeOpenCodeAdapter(
                   client.session.create({
                     location: { directory },
                     ...(input.title ? { title: input.title } : {}),
-                    permissions: buildOpenCodePermissionRules(input.runtimeMode),
+                    permissions: resolvePermissionRules(input.runtimeMode),
                   }),
                 );
                 if (!createdSession?.id) {
@@ -4235,7 +4239,7 @@ export function makeOpenCodeAdapter(
           yield* runOpenCodeSdk("session.update", () =>
             context.client.session.update({
               sessionID: forkedSessionId,
-              permissions: buildOpenCodePermissionRules(context.session.runtimeMode),
+              permissions: resolvePermissionRules(context.session.runtimeMode),
             }),
           ).pipe(Effect.mapError(toRequestError));
           yield* clearPendingOpenCodeRequests(context, { type: "session.fork" });

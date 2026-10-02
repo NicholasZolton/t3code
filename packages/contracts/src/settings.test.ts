@@ -7,6 +7,7 @@ import {
   ClientSettingsSchema,
   ClientSettingsPatch,
   ClaudeSettings,
+  OpenCodeSettings,
   DEFAULT_SERVER_SETTINGS,
   resolveProviderInstanceEnabled,
   ServerSettings,
@@ -20,6 +21,23 @@ const decodeServerSettings = Schema.decodeUnknownSync(ServerSettings);
 const decodeServerSettingsPatch = Schema.decodeUnknownSync(ServerSettingsPatch);
 const encodeServerSettings = Schema.encodeSync(ServerSettings);
 const decodeClaudeSettings = Schema.decodeUnknownSync(ClaudeSettings);
+const decodeOpenCodeSettings = Schema.decodeUnknownSync(OpenCodeSettings);
+
+describe("OpenCode permission settings", () => {
+  it("keeps T3 permission modes for existing provider configurations", () => {
+    expect(decodeOpenCodeSettings({}).permissionMode).toBe("t3");
+  });
+
+  it("retains provider permissions through settings and patches", () => {
+    const input = { providers: { opencode: { permissionMode: "provider" } } };
+    expect(encodeServerSettings(decodeServerSettings(input))).toMatchObject(input);
+    expect(decodeServerSettingsPatch(input)).toEqual(input);
+    expect(() => decodeOpenCodeSettings({ permissionMode: "unsupported" })).toThrow();
+    expect(() =>
+      decodeServerSettingsPatch({ providers: { opencode: { permissionMode: "unsupported" } } }),
+    ).toThrow();
+  });
+});
 
 describe("worktree settings", () => {
   it("retains the existing layout and branch prefix for older settings", () => {

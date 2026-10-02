@@ -858,6 +858,12 @@ export const AntigravitySettings = makeProviderSettingsSchema(
 );
 export type AntigravitySettings = typeof AntigravitySettings.Type;
 
+const OPENCODE_PERMISSION_MODES = [
+  { value: "t3", label: "T3 Code modes" },
+  { value: "provider", label: "Provider settings" },
+] as const satisfies ReadonlyArray<ProviderSettingsFormOption>;
+const OpenCodePermissionMode = Schema.Literals(OPENCODE_PERMISSION_MODES.map((mode) => mode.value));
+
 export const OpenCodeSettings = makeProviderSettingsSchema(
   {
     // Off by default (like Cursor and Grok): the binding is not yet stable
@@ -899,13 +905,26 @@ export const OpenCodeSettings = makeProviderSettingsSchema(
         },
       }),
     ),
+    permissionMode: OpenCodePermissionMode.pipe(
+      Schema.withDecodingDefault(Effect.succeed("t3" as const)),
+      Schema.annotateKey({
+        title: "Permissions",
+        description:
+          "Use thread permission modes, or preserve your opencode.json(c) rules instead. Applies when sessions reconnect.",
+        providerSettingsForm: {
+          control: "select",
+          options: OPENCODE_PERMISSION_MODES,
+          clearWhenEmpty: "omit",
+        },
+      }),
+    ),
     customModels: Schema.Array(CustomModelSetting).pipe(
       Schema.withDecodingDefault(Effect.succeed([])),
       Schema.annotateKey({ providerSettingsForm: { hidden: true } }),
     ),
   },
   {
-    order: ["binaryPath", "serverUrl", "serverPassword"],
+    order: ["binaryPath", "serverUrl", "serverPassword", "permissionMode"],
   },
 );
 export type OpenCodeSettings = typeof OpenCodeSettings.Type;
@@ -1509,6 +1528,7 @@ const OpenCodeSettingsPatch = Schema.Struct({
   binaryPath: Schema.optionalKey(TrimmedString),
   serverUrl: Schema.optionalKey(TrimmedString),
   serverPassword: Schema.optionalKey(TrimmedString),
+  permissionMode: Schema.optionalKey(OpenCodePermissionMode),
   customModels: Schema.optionalKey(Schema.Array(CustomModelSetting)),
 });
 
