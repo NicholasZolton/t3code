@@ -41,6 +41,7 @@ import { ServerSettingsService } from "../../../serverSettings.ts";
 import { ProjectSetupScriptRunner } from "../../../project/ProjectSetupScriptRunner.ts";
 import { ProjectCloneTracker } from "../../../project/ProjectCloneTracker.ts";
 import * as WorktreeSetup from "../../../project/WorktreeSetupTracker.ts";
+import * as ServerConfig from "../../../config.ts";
 import { TerminalManager } from "../../../terminal/Manager.ts";
 import { GitWorkflowService } from "../../../git/GitWorkflowService.ts";
 import { VcsStatusBroadcaster } from "../../../vcs/VcsStatusBroadcaster.ts";
@@ -345,6 +346,9 @@ const makeFixture = Effect.gen(function* () {
             }),
         }),
         NodeServices.layer,
+        ServerConfig.layerTest(process.cwd(), { prefix: "t3-mcp-threads-" }).pipe(
+          Layer.provide(NodeServices.layer),
+        ),
       ),
     ),
   );

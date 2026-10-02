@@ -1,5 +1,9 @@
 # Wiki update log
 
+## 2026-10-02
+
+- **Integration candidate**: Recorded local full merge `24d2e49fd9` through upstream `99e08526e5` in [upstream integration](upstream-integration.md). The candidate includes all 50 commits; fork `main` at `b469d18b16` still awaits the sync. Retained the upstream-first policy and fork compatibility boundaries.
+
 ## 2026-09-30
 
 - **Compatibility**: Added the selective Jujutsu port and durable mixed-backend recovery boundary to [upstream integration](upstream-integration.md), with links to the architecture and migration guidance.
