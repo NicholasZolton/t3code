@@ -66,6 +66,101 @@ function settingsWithProviderInstances(): UnifiedSettings {
 }
 
 describe("instance-scoped model selection", () => {
+  describe("OpenCode defaults", () => {
+    const instanceId = ProviderInstanceId.make("opencode");
+    const nativeDefault = "openai/gpt-6-sol";
+    const configuredDefault = "openai/gpt-6.1-sol";
+    const imageModel = "openai/chatgpt-image-latest";
+    const snapshot = provider({
+      provider: ProviderDriverKind.make("opencode"),
+      instanceId,
+      models: [imageModel, nativeDefault, configuredDefault],
+    });
+    const providers: ReadonlyArray<ServerProvider> = [
+      {
+        ...snapshot,
+        models: snapshot.models.map((model) => ({
+          ...model,
+          isDefault: model.slug === nativeDefault,
+        })),
+      },
+    ];
+    const settings: UnifiedSettings = {
+      ...DEFAULT_UNIFIED_SETTINGS,
+      defaultModelSelection: createModelSelection(instanceId, configuredDefault),
+    };
+
+    it.each([null, "openai/missing-model"])(
+      "uses the configured T3 default when resolving %s",
+      (selectedModel) => {
+        expect(
+          resolveAppModelSelectionForInstance(instanceId, settings, providers, selectedModel),
+        ).toBe(configuredDefault);
+      },
+    );
+
+    it("uses the native default when T3 has no configured default", () => {
+      expect(
+        resolveAppModelSelectionForInstance(
+          instanceId,
+          { ...settings, defaultModelSelection: null },
+          providers,
+          null,
+        ),
+      ).toBe(nativeDefault);
+    });
+
+    it.each([
+      createModelSelection(ProviderInstanceId.make("opencode_other"), configuredDefault),
+      createModelSelection(instanceId, "openai/unavailable-default"),
+    ])("does not borrow another instance's or unavailable configured default", (selection) => {
+      expect(
+        resolveAppModelSelectionForInstance(
+          instanceId,
+          { ...settings, defaultModelSelection: selection },
+          providers,
+          null,
+        ),
+      ).toBe(nativeDefault);
+    });
+
+    it("does not select a hidden configured default", () => {
+      expect(
+        resolveAppModelSelectionForInstance(
+          instanceId,
+          {
+            ...settings,
+            providerModelPreferences: {
+              [instanceId]: { hiddenModels: [configuredDefault], modelOrder: [] },
+            },
+          },
+          providers,
+          null,
+        ),
+      ).toBe(nativeDefault);
+    });
+
+    it("keeps an explicit selection ahead of both defaults", () => {
+      expect(resolveAppModelSelectionForInstance(instanceId, settings, providers, imageModel)).toBe(
+        imageModel,
+      );
+    });
+
+    it("uses the configured default for a composer without a seeded selection", () => {
+      const state = deriveEffectiveComposerModelState({
+        draft: null,
+        providers,
+        selectedProvider: ProviderDriverKind.make("opencode"),
+        selectedInstanceId: instanceId,
+        threadModelSelection: null,
+        projectModelSelection: null,
+        settings,
+      });
+
+      expect(state.selectedModel).toBe(configuredDefault);
+    });
+  });
+
   it("preserves server-provided legacy model metadata", () => {
     const baseProvider = provider({
       instanceId: "claudeAgent",

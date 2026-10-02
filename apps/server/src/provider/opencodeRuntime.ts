@@ -177,6 +177,7 @@ export interface OpenCodeCommandResult {
 export interface OpenCodeInventory {
   readonly providers: ReadonlyArray<ProviderInfo>;
   readonly models: ReadonlyArray<ModelInfo>;
+  readonly defaultModel: Pick<ModelInfo, "providerID" | "id"> | null;
   readonly agents: ReadonlyArray<AgentInfo>;
   readonly skills: ReadonlyArray<SkillInfo>;
   readonly commands: ReadonlyArray<CommandInfo>;
@@ -872,6 +873,9 @@ const makeOpenCodeRuntime = Effect.gen(function* () {
         runOpenCodeSdk("model.list", (signal) =>
           client.model.list({ location: { directory } }, { signal }),
         ).pipe(Effect.map((result) => result.data)),
+        runOpenCodeSdk("model.default", (signal) =>
+          client.model.default({ location: { directory } }, { signal }),
+        ).pipe(Effect.map((result) => result.data)),
         runOpenCodeSdk("agent.list", (signal) =>
           client.agent.list({ location: { directory } }, { signal }),
         ).pipe(
@@ -885,9 +889,10 @@ const makeOpenCodeRuntime = Effect.gen(function* () {
         concurrency: "unbounded",
       },
     ).pipe(
-      Effect.map(([providers, models, agents, skills, commands]) => ({
+      Effect.map(([providers, models, defaultModel, agents, skills, commands]) => ({
         providers,
         models,
+        defaultModel,
         agents,
         skills,
         commands,

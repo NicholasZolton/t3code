@@ -321,7 +321,17 @@ export function resolveAppModelSelectionForInstance(
       return unavailableSelection;
     }
   }
-  return options.find((option) => option.isDefault)?.slug ?? options[0]?.slug ?? null;
+  const defaultSelection = settings.defaultModelSelection;
+  const configuredDefault =
+    defaultSelection?.instanceId === instanceId
+      ? resolveSelectableModel(entry.driverKind, defaultSelection.model, options)
+      : null;
+  return (
+    configuredDefault ??
+    options.find((option) => option.isDefault)?.slug ??
+    options[0]?.slug ??
+    null
+  );
 }
 
 /**

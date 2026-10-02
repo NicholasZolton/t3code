@@ -176,6 +176,7 @@ const runtimeMock = {
     inventory: {
       providers: [{ id: "openai", name: "OpenAI", activation: "enabled" }] as unknown[],
       models: [] as unknown[],
+      defaultModel: null,
       agents: [] as unknown[],
       skills: [] as unknown[],
       commands: [] as unknown[],
@@ -194,6 +195,7 @@ const runtimeMock = {
     this.state.inventory = {
       providers: [{ id: "openai", name: "OpenAI", activation: "enabled" }] as unknown[],
       models: [] as unknown[],
+      defaultModel: null,
       agents: [] as unknown[],
       skills: [] as unknown[],
       commands: [] as unknown[],
@@ -335,6 +337,49 @@ const checkProvider = Effect.fn("checkProvider")(function* (
 });
 
 it.layer(testLayer)("checkOpenCodeProviderStatus", (it) => {
+  it.effect("marks OpenCode's native default without using alphabetical model order", () =>
+    Effect.gen(function* () {
+      runtimeMock.state.inventory = {
+        providers: [
+          { id: "openai", name: "OpenAI", activation: "enabled" },
+          { id: "other", name: "Other", activation: "enabled" },
+        ],
+        models: [
+          {
+            id: "gpt-6.1-sol",
+            providerID: "openai",
+            name: "GPT-6.1 Sol",
+            variants: [],
+          },
+          {
+            id: "chatgpt-image-latest",
+            providerID: "openai",
+            name: "chatgpt-image-latest",
+            variants: [],
+          },
+          {
+            id: "gpt-6.1-sol",
+            providerID: "other",
+            name: "Other GPT-6.1 Sol",
+            variants: [],
+          },
+        ],
+        defaultModel: { providerID: "openai", id: "gpt-6.1-sol" },
+        agents: [],
+        skills: [],
+        commands: [],
+      };
+
+      const snapshot = yield* checkProvider(makeOpenCodeSettings());
+
+      NodeAssert.equal(snapshot.models[0]?.slug, "openai/chatgpt-image-latest");
+      NodeAssert.deepEqual(
+        snapshot.models.filter((model) => model.isDefault).map((model) => model.slug),
+        ["openai/gpt-6.1-sol"],
+      );
+    }),
+  );
+
   it.effect("shows a codex-style missing binary message", () =>
     Effect.gen(function* () {
       runtimeMock.state.runVersionError = new Error("spawn opencode ENOENT");
@@ -382,6 +427,7 @@ it.layer(testLayer)("checkOpenCodeProviderStatus", (it) => {
     Effect.gen(function* () {
       runtimeMock.state.inventory = {
         providers: [{ id: "openai", name: "OpenAI", activation: "enabled" }],
+        defaultModel: null,
         models: [
           {
             id: "gpt-5.4",
@@ -433,6 +479,7 @@ it.layer(testLayer)("checkOpenCodeProviderStatus", (it) => {
     Effect.gen(function* () {
       runtimeMock.state.inventory = {
         providers: [{ id: "openai", name: "OpenAI", activation: "enabled" }],
+        defaultModel: null,
         models: [
           {
             id: "gpt-5.4",
@@ -502,6 +549,7 @@ it.layer(testLayer)("checkOpenCodeProviderStatus", (it) => {
         {
           providers: [],
           models: [],
+          defaultModel: null,
           agents: [],
           skills: [
             {
@@ -530,6 +578,7 @@ it.layer(testLayer)("checkOpenCodeProviderStatus", (it) => {
       runtimeMock.state.inventory = {
         providers: [],
         models: [],
+        defaultModel: null,
         agents: [],
         skills: [],
         commands: [],
@@ -607,6 +656,7 @@ it.layer(testLayer)("checkOpenCodeProviderStatus", (it) => {
           { id: "openai", name: "OpenAI", activation: "enabled" },
           { id: "legacy", name: "Legacy", activation: "disabled" },
         ],
+        defaultModel: { providerID: "legacy", id: "legacy-model" },
         models: [
           {
             id: "gpt-5.4",
@@ -645,6 +695,10 @@ it.layer(testLayer)("checkOpenCodeProviderStatus", (it) => {
         ["openai/gpt-5.4"],
       );
       NodeAssert.equal(snapshot.status, "ready");
+      NodeAssert.equal(
+        snapshot.models.some((model) => model.isDefault),
+        false,
+      );
       NodeAssert.match(snapshot.message ?? "", /1 upstream provider connected/);
     }),
   );
@@ -653,6 +707,7 @@ it.layer(testLayer)("checkOpenCodeProviderStatus", (it) => {
     Effect.gen(function* () {
       runtimeMock.state.inventory = {
         providers: [{ id: "legacy", name: "Legacy", activation: "disabled" }],
+        defaultModel: { providerID: "legacy", id: "legacy-model" },
         models: [
           {
             id: "legacy-model",

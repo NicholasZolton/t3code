@@ -14,6 +14,71 @@ import { OpenCodeRuntime, OpenCodeRuntimeLive } from "./opencodeRuntime.ts";
 const testLayer = OpenCodeRuntimeLive.pipe(Layer.provideMerge(NodeServices.layer));
 
 it.layer(testLayer)("OpenCodeRuntime inventory", (it) => {
+  it.effect("loads the directory-scoped default model alongside the catalog", () =>
+    Effect.gen(function* () {
+      const runtime = yield* OpenCodeRuntime;
+      const defaultModel = { providerID: "openai", id: "gpt-6.1-sol" };
+      const requests: Request[] = [];
+      const client = OpenCode.make({
+        baseUrl: "http://opencode.test",
+        fetch: Object.assign(
+          async (input: string | Request | URL, init?: RequestInit) => {
+            const request = new Request(input, init);
+            requests.push(request);
+            const route = new URL(request.url).pathname;
+            return Response.json({
+              location: { directory: "/workspace/project" },
+              data:
+                route === "/api/model/default"
+                  ? defaultModel
+                  : route === "/api/model"
+                    ? [defaultModel]
+                    : [],
+            });
+          },
+          { preconnect: () => undefined },
+        ),
+      });
+
+      const inventory = yield* runtime.loadOpenCodeInventory(client, "/workspace/project");
+
+      NodeAssert.deepEqual(inventory.defaultModel, defaultModel);
+      NodeAssert.deepEqual(inventory.models, [defaultModel]);
+      const defaultRequest = requests.find(
+        (request) => new URL(request.url).pathname === "/api/model/default",
+      );
+      NodeAssert.ok(defaultRequest);
+      NodeAssert.equal(
+        new URL(defaultRequest.url).searchParams.get("location[directory]"),
+        "/workspace/project",
+      );
+    }),
+  );
+
+  it.effect("fails inventory loading when OpenCode's default cannot be read", () =>
+    Effect.gen(function* () {
+      const runtime = yield* OpenCodeRuntime;
+      const client = OpenCode.make({
+        baseUrl: "http://opencode.test",
+        fetch: Object.assign(
+          async (input: string | Request | URL, init?: RequestInit) => {
+            const request = new Request(input, init);
+            return new URL(request.url).pathname === "/api/model/default"
+              ? Response.json({ message: "Default model unavailable" }, { status: 503 })
+              : Response.json({ location: { directory: "/workspace/project" }, data: [] });
+          },
+          { preconnect: () => undefined },
+        ),
+      });
+
+      const error = yield* runtime
+        .loadOpenCodeInventory(client, "/workspace/project")
+        .pipe(Effect.flip);
+
+      NodeAssert.equal(error.operation, "model.default");
+    }),
+  );
+
   it.effect("aborts pending SDK requests when inventory loading is interrupted", () =>
     Effect.gen(function* () {
       const runtime = yield* OpenCodeRuntime;
@@ -43,13 +108,14 @@ it.layer(testLayer)("OpenCodeRuntime inventory", (it) => {
       const inventoryFiber = yield* runtime
         .loadOpenCodeInventory(client, "/workspace/project")
         .pipe(Effect.forkChild);
-      yield* Queue.takeN(started, 5);
+      yield* Queue.takeN(started, 6);
       yield* Fiber.interrupt(inventoryFiber);
 
       NodeAssert.deepEqual((yield* Queue.takeAll(aborted)).toSorted(), [
         "/api/agent",
         "/api/command",
         "/api/model",
+        "/api/model/default",
         "/api/provider",
         "/api/skill",
       ]);
@@ -70,13 +136,18 @@ it.layer(testLayer)("OpenCodeRuntime inventory", (it) => {
             return Response.json({
               location: { directory: "/workspace/project" },
               data:
-                route === "/api/command" ? [{ name: "review", description: "Review changes" }] : [],
+                route === "/api/command"
+                  ? [{ name: "review", description: "Review changes" }]
+                  : route === "/api/model/default"
+                    ? null
+                    : [],
             });
           },
           { preconnect: () => undefined },
         ),
       });
       const inventory = yield* runtime.loadOpenCodeInventory(client, "/workspace/project");
+      NodeAssert.equal(inventory.defaultModel, null);
       NodeAssert.deepEqual(inventory.commands, [
         {
           name: "review",
@@ -104,7 +175,10 @@ it.layer(testLayer)("OpenCodeRuntime inventory", (it) => {
               data: [{ id: "openai" }],
             }),
         },
-        model: { list: () => Promise.resolve({ data: [] }) },
+        model: {
+          list: () => Promise.resolve({ data: [] }),
+          default: () => Promise.resolve({ data: null }),
+        },
         agent: { list: () => Promise.reject(new Error("agents endpoint unavailable")) },
         skill: { list: () => Promise.resolve({ data: [] }) },
       } as unknown as OpenCodeClient;
@@ -130,7 +204,10 @@ it.layer(testLayer)("OpenCodeRuntime inventory", (it) => {
               data: [{ id: "openai" }],
             }),
         },
-        model: { list: () => Promise.resolve({ data: [] }) },
+        model: {
+          list: () => Promise.resolve({ data: [] }),
+          default: () => Promise.resolve({ data: null }),
+        },
         agent: { list: () => Promise.resolve({ data: [] }) },
         skill: { list: () => Promise.reject(new Error("skills endpoint unavailable")) },
       } as unknown as OpenCodeClient;
@@ -156,7 +233,10 @@ it.layer(testLayer)("OpenCodeRuntime inventory", (it) => {
               data: [{ id: "openai" }],
             }),
         },
-        model: { list: () => Promise.resolve({ data: [] }) },
+        model: {
+          list: () => Promise.resolve({ data: [] }),
+          default: () => Promise.resolve({ data: null }),
+        },
         agent: { list: () => Promise.resolve({ data: [] }) },
         skill: {
           list: () =>
