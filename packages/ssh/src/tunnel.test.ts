@@ -721,62 +721,70 @@ describe("ssh tunnel scripts", () => {
     }).pipe(Effect.provide(layer));
   });
 
-  it.effect("forwards distinct Portless routes without needing an open thread", () => {
-    const forwards: string[] = [];
-    const stopped: string[] = [];
-    let portLookups = 0;
-    const spawner = ChildProcessSpawner.make((command) =>
-      Effect.sync(() => {
-        const args = commandArgs(command);
-        if (args.includes("-N")) {
-          const forward = args[args.indexOf("-L") + 1];
-          if (forward?.startsWith("127.0.0.1:")) forwards.push(forward);
-          return makeRunningProcess(() => {
-            if (forward?.startsWith("127.0.0.1:")) stopped.push(forward);
-          });
-        }
-        if (args.includes("t3-portless-discovery"))
-          return makeSuccessfulProcess(
-            "one.localhost:58345\ntwo.localhost:49329\nT3_PORTLESS_DEFAULT:\n",
-          );
-        if (args.includes("sh") && args.includes("--"))
-          return makeSuccessfulProcess('{"remotePort":3773}\n');
-        if (args.includes("sh")) {
-          portLookups += 1;
-          return makeSuccessfulProcess(portLookups === 1 ? "" : "49329\n");
-        }
-        return makeSuccessfulProcess("\n");
-      }),
-    );
-    const layer = Layer.mergeAll(
-      NodeServices.layer,
-      Layer.succeed(ChildProcessSpawner.ChildProcessSpawner, spawner),
-      Layer.succeed(HttpClient.HttpClient, testHttpClient),
-      Layer.succeed(
-        NetService.NetService,
-        NetService.NetService.of({
-          ...testNetService,
-          hasListenerOnHost: (port) => Effect.succeed(port === 58345 || port === 49329),
+  it.effect.each([{ defaultPort: null }, { defaultPort: 58345 }])(
+    "forwards distinct Portless routes without needing an open thread (default: $defaultPort)",
+    ({ defaultPort }) => {
+      const forwards: string[] = [];
+      const stopped: string[] = [];
+      let portLookups = 0;
+      const spawner = ChildProcessSpawner.make((command) =>
+        Effect.sync(() => {
+          const args = commandArgs(command);
+          if (args.includes("-N")) {
+            const forward = args[args.indexOf("-L") + 1];
+            if (forward?.startsWith("127.0.0.1:")) forwards.push(forward);
+            return makeRunningProcess(() => {
+              if (forward?.startsWith("127.0.0.1:")) stopped.push(forward);
+            });
+          }
+          if (args.includes("t3-portless-discovery"))
+            return makeSuccessfulProcess(
+              `one.localhost:49329\ntwo.localhost:58345\nT3_PORTLESS_DEFAULT:${defaultPort ?? ""}\n`,
+            );
+          if (args.includes("sh") && args.includes("--"))
+            return makeSuccessfulProcess('{"remotePort":3773}\n');
+          if (args.includes("sh")) {
+            portLookups += 1;
+            return makeSuccessfulProcess(portLookups === 2 ? "49329\n" : "");
+          }
+          return makeSuccessfulProcess("\n");
         }),
-      ),
-      SshPasswordPrompt.disabledLayer,
-      SshEnvironmentManager.layer({ resolveCliRunner: Effect.succeed(ARCHIVE) }),
-    );
-    const target = { alias: "devbox", hostname: "devbox", username: null, port: null };
-    return Effect.gen(function* () {
-      const manager = yield* SshEnvironmentManager;
-      yield* manager.ensureEnvironment(target);
-      assert.deepEqual(forwards, [
-        "127.0.0.1:58345:127.0.0.1:58345",
-        "127.0.0.1:49329:127.0.0.1:49329",
-      ]);
-      assert.equal(yield* manager.syncPortlessForward({ target, cwd: "/project" }), null);
-      assert.equal(yield* manager.syncPortlessForward({ target, cwd: "/project" }), 49329);
-      assert.deepEqual(stopped, []);
-      yield* manager.syncPortlessForward(null);
-      assert.deepEqual(stopped, []);
-    }).pipe(Effect.provide(layer));
-  });
+      );
+      const layer = Layer.mergeAll(
+        NodeServices.layer,
+        Layer.succeed(ChildProcessSpawner.ChildProcessSpawner, spawner),
+        Layer.succeed(HttpClient.HttpClient, testHttpClient),
+        Layer.succeed(
+          NetService.NetService,
+          NetService.NetService.of({
+            ...testNetService,
+            hasListenerOnHost: (port) => Effect.succeed(port === 58345 || port === 49329),
+          }),
+        ),
+        SshPasswordPrompt.disabledLayer,
+        SshEnvironmentManager.layer({ resolveCliRunner: Effect.succeed(ARCHIVE) }),
+      );
+      const target = { alias: "devbox", hostname: "devbox", username: null, port: null };
+      return Effect.gen(function* () {
+        const manager = yield* SshEnvironmentManager;
+        yield* manager.ensureEnvironment(target);
+        assert.deepEqual(forwards, [
+          "127.0.0.1:49329:127.0.0.1:49329",
+          "127.0.0.1:58345:127.0.0.1:58345",
+        ]);
+        assert.equal(yield* manager.syncPortlessForward({ target, cwd: "/project" }), defaultPort);
+        assert.equal(yield* manager.syncPortlessForward({ target, cwd: "/project" }), 49329);
+        assert.equal(yield* manager.syncPortlessForward({ target, cwd: "/project" }), 49329);
+        assert.deepEqual(stopped, []);
+        yield* manager.syncPortlessForward(null);
+        assert.equal(
+          yield* manager.syncPortlessForward({ target, cwd: "/project/idle" }),
+          defaultPort,
+        );
+        assert.deepEqual(stopped, []);
+      }).pipe(Effect.provide(layer));
+    },
+  );
 
   it.effect.each(["local tunnel", "remote server"] as const)(
     "waits for %s shutdown before reconnecting the same target",
