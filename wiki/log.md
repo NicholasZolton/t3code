@@ -2,6 +2,7 @@
 
 ## 2026-10-02
 
+- **Integration**: [PR #27](https://github.com/NicholasZolton/t3code/pull/27) reached fork `main` at `60e0650513`. Refreshed [upstream integration](upstream-integration.md): all 50 reviewed commits through `99e08526e5` are incorporated, with zero remaining ancestry gap against that tip.
 - **Integration candidate**: Recorded local full merge `24d2e49fd9` through upstream `99e08526e5` in [upstream integration](upstream-integration.md). The candidate includes all 50 commits; fork `main` at `b469d18b16` still awaits the sync. Retained the upstream-first policy and fork compatibility boundaries.
 
 ## 2026-09-30

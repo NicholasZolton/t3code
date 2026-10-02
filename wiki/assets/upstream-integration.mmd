@@ -6,12 +6,14 @@ config:
 ---
 %% Render with mmdc -s 3 --no-font-embed to keep the SVG free of bundled fonts.
 flowchart LR
-    baseline["Completed upstream baseline<br/>0fcd5f9061<br/>PR 21 landed on fork main<br/>3da3d19cc2"]
+    baseline["Previous upstream baseline<br/>0fcd5f9061<br/>PR 21 landed on fork main<br/>3da3d19cc2"]
     latest["Reviewed upstream tip<br/>99e08526e5"]
-    fork["Fork main snapshot<br/>b469d18b16<br/>50 upstream commits missing"]
-    candidate["Local full merge<br/>24d2e49fd9<br/>Zero upstream ancestry gap<br/>Awaiting fork main integration"]
+    fork["Fork parent<br/>b469d18b16<br/>Before the reviewed sync"]
+    integration["Full upstream merge<br/>24d2e49fd9"]
+    main["Completed fork main integration<br/>60e0650513 · PR 27<br/>Zero upstream ancestry gap"]
 
     baseline -->|50 upstream commits| latest
     baseline -->|Fork-only changes| fork
-    latest -->|Full upstream merge| candidate
-    fork -->|Preserved fork behavior| candidate
+    latest -->|Full upstream merge| integration
+    fork -->|Preserved fork behavior| integration
+    integration -->|Merged into main| main
