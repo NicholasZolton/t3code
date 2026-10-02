@@ -591,9 +591,10 @@ describe("ssh tunnel scripts", () => {
     },
   );
 
-  it.effect("uses the sole forwarded Portless port when no process has the worktree cwd", () => {
+  it.effect("uses the sole forwarded Portless port and closes owned tunnels on shutdown", () => {
     const commands: Array<ReadonlyArray<string>> = [];
     let forwardKills = 0;
+    let tunnelKills = 0;
     let portLookups = 0;
     let portlessListening = false;
     const spawner = ChildProcessSpawner.make((command) =>
@@ -606,6 +607,8 @@ describe("ssh tunnel scripts", () => {
             if (args.some((arg) => arg.includes("58345"))) {
               forwardKills += 1;
               portlessListening = false;
+            } else {
+              tunnelKills += 1;
             }
           });
         }
@@ -660,7 +663,20 @@ describe("ssh tunnel scripts", () => {
       assert.equal(forwardKills, 0);
       assert.equal(yield* manager.syncPortlessForward(null), null);
       assert.equal(forwardKills, 0);
-    }).pipe(Effect.provide(layer));
+      yield* manager.shutdown;
+      assert.equal(forwardKills, 1);
+      assert.equal(tunnelKills, 1);
+      assert.isFalse(portlessListening);
+      yield* manager.shutdown;
+    }).pipe(
+      Effect.provide(layer),
+      Effect.andThen(
+        Effect.sync(() => {
+          assert.equal(forwardKills, 1);
+          assert.equal(tunnelKills, 1);
+        }),
+      ),
+    );
   });
 
   it.effect("gives the active thread priority when SSH environments share a Portless port", () => {

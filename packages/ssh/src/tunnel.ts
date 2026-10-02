@@ -155,6 +155,7 @@ interface SshAuthAttemptInput<T> extends SshAuthOperationInput<T> {
 }
 
 export interface SshEnvironmentManagerShape {
+  readonly shutdown: Effect.Effect<void>;
   readonly ensureEnvironment: (
     target: DesktopSshEnvironmentTarget,
     options?: { readonly issuePairingToken?: boolean },
@@ -1399,17 +1400,19 @@ const makeSshEnvironmentManager = Effect.fn("ssh/tunnel.SshEnvironmentManager.ma
     });
   });
 
-  yield* Scope.addFinalizer(
-    managerScope,
-    Effect.gen(function* () {
-      yield* Effect.forEach([...portlessForwards.values()], (forward) =>
-        Scope.close(forward.scope, Exit.void),
-      );
-      yield* Effect.forEach([...tunnels.values()], closeTunnelEntry, {
-        concurrency: "unbounded",
-      });
-    }).pipe(Effect.ignore),
-  );
+  const shutdown = Effect.gen(function* () {
+    yield* Effect.forEach([...portlessForwards.values()], (forward) =>
+      Scope.close(forward.scope, Exit.void),
+    );
+    portlessForwards.clear();
+    portlessCandidates.clear();
+    preferredPortlessForward = null;
+    yield* Effect.forEach([...tunnels.values()], closeTunnelEntry, {
+      concurrency: "unbounded",
+    });
+    authSecrets.clear();
+  }).pipe(Effect.ignore, Effect.withSpan("ssh/tunnel.shutdown"));
+  yield* Scope.addFinalizer(managerScope, shutdown);
 
   const promptForPassword = Effect.fn("ssh/tunnel.promptForPassword")(function* (
     target: DesktopSshEnvironmentTarget,
@@ -2117,6 +2120,7 @@ PY`;
   });
 
   return SshEnvironmentManager.of({
+    shutdown,
     ensureEnvironment,
     disconnectEnvironment,
     syncPortlessForward,
