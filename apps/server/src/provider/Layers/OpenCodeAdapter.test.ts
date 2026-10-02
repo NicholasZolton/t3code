@@ -2174,6 +2174,78 @@ it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
     }),
   );
 
+  it.effect("clears T3 permission overrides on create, resume, worktree fork, and rewind", () =>
+    Effect.gen(function* () {
+      const adapter = yield* makeOpenCodeAdapter({
+        ...openCodeAdapterTestSettings,
+        permissionMode: "provider",
+      });
+      const threadId = asThreadId("thread-opencode-provider-permissions");
+      const sessionId = "ses_provider_permissions";
+      runtimeMock.state.createdSessionIds.push(sessionId);
+      const original = yield* adapter.startSession({ threadId, runtimeMode: "full-access" });
+      NodeAssert.deepEqual(runtimeMock.state.sessionCreateInputs[0]?.permissions, []);
+      yield* adapter.stopSession(threadId);
+
+      yield* adapter.startSession({
+        threadId,
+        runtimeMode: "full-access",
+        resumeCursor: original.resumeCursor,
+      });
+      NodeAssert.deepEqual(runtimeMock.state.sessionUpdateCalls.at(-1)?.permissions, []);
+      yield* adapter.stopSession(threadId);
+
+      runtimeMock.state.sessionDirectoryById.set(sessionId, "/another/worktree");
+      yield* adapter.startSession({
+        threadId,
+        runtimeMode: "full-access",
+        resumeCursor: original.resumeCursor,
+      });
+      NodeAssert.equal(runtimeMock.state.forkCalls.length, 1);
+      NodeAssert.deepEqual(runtimeMock.state.sessionUpdateCalls.at(-1)?.permissions, []);
+
+      runtimeMock.state.forkMessagesBySession.clear();
+      runtimeMock.state.messages = [
+        { info: { id: "user-1", role: "user" }, parts: [] },
+        { info: { id: "assistant-1", role: "assistant" }, parts: [] },
+        { info: { id: "user-2", role: "user" }, parts: [] },
+        { info: { id: "assistant-2", role: "assistant" }, parts: [] },
+      ];
+      yield* adapter.rollbackThread(threadId, 1);
+      NodeAssert.equal(runtimeMock.state.forkCalls.length, 2);
+      NodeAssert.deepEqual(runtimeMock.state.sessionUpdateCalls.at(-1)?.permissions, []);
+      yield* adapter.stopSession(threadId);
+    }),
+  );
+
+  it.effect("honors native approval requests even when the thread has full access", () =>
+    Effect.gen(function* () {
+      const adapter = yield* makeOpenCodeAdapter({
+        ...openCodeAdapterTestSettings,
+        permissionMode: "provider",
+      });
+      const threadId = asThreadId("thread-opencode-native-approval");
+      const request = permissionRequest("per_native_config", "http://127.0.0.1:9999/session");
+      runtimeMock.state.subscribedEvents = [
+        { id: "evt-native-ask", type: "permission.asked", created: 0, data: request },
+      ];
+      const openedFiber = yield* adapter.streamEvents.pipe(
+        Stream.filter((event) => event.threadId === threadId && event.type === "request.opened"),
+        Stream.runHead,
+        Effect.forkChild,
+      );
+      yield* adapter.startSession({ threadId, runtimeMode: "full-access" });
+      const opened = Option.getOrThrow(yield* Fiber.join(openedFiber));
+      NodeAssert.equal(opened.requestId, request.id);
+      NodeAssert.deepEqual(runtimeMock.state.permissionReplyCalls, []);
+      yield* adapter.respondToRequest(threadId, ApprovalRequestId.make(request.id), "decline");
+      NodeAssert.deepEqual(runtimeMock.state.permissionReplyCalls, [
+        { requestID: request.id, reply: "reject" },
+      ]);
+      yield* adapter.stopSession(threadId);
+    }),
+  );
+
   it.effect("re-applies the current runtimeMode permissions when resuming", () =>
     Effect.gen(function* () {
       const adapter = yield* OpenCodeAdapter;

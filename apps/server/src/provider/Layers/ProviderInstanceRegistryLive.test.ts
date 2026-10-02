@@ -142,6 +142,7 @@ const makeOpenCodeConfig = (overrides: Partial<OpenCodeSettings>): OpenCodeSetti
   binaryPath: "opencode",
   serverUrl: "",
   serverPassword: "",
+  permissionMode: "t3",
   customModels: [],
   ...overrides,
 });
