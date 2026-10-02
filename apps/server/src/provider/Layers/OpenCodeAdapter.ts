@@ -1130,32 +1130,58 @@ export function makeOpenCodeAdapter(
     const recoverOpenCodeContinuation = Effect.fn("recoverOpenCodeContinuation")(function* (
       context: OpenCodeSessionContext,
     ) {
-      if (context.activeTurnId !== undefined || context.reconcileIdleStatus) return;
       const generation = context.promptGeneration;
-      const sequence = context.lastParentEventSequence;
-      const response = yield* runOpenCodeSdk("session.active", (signal) =>
-        context.client.session.active({ signal }),
-      ).pipe(Effect.timeout("1 second"), Effect.option);
-      const statuses = Option.isSome(response)
-        ? Option.getOrUndefined(decodeOpenCodeSessionStatusMap(response.value))
-        : undefined;
-      if (
-        statuses?.[context.openCodeSessionId]?.type !== "running" ||
-        context.promptGeneration !== generation ||
-        context.lastParentEventSequence !== sequence
+      let retryCount = 0;
+      while (
+        !(yield* Ref.get(context.stopped)) &&
+        sessions.get(context.session.threadId) === context &&
+        context.activeTurnId === undefined &&
+        context.cancellation === undefined &&
+        !context.reconcileIdleStatus &&
+        context.promptGeneration === generation
       ) {
-        return;
+        const sequence = context.lastParentEventSequence;
+        const response = yield* runOpenCodeSdk("session.active", (signal) =>
+          context.client.session.active({ signal }),
+        ).pipe(Effect.timeout("1 second"), Effect.option);
+        if (
+          context.activeTurnId !== undefined ||
+          context.cancellation !== undefined ||
+          context.reconcileIdleStatus ||
+          context.promptGeneration !== generation
+        ) {
+          return;
+        }
+        if (context.lastParentEventSequence !== sequence) continue;
+        const statuses = Option.isSome(response)
+          ? Option.getOrUndefined(decodeOpenCodeSessionStatusMap(response.value))
+          : undefined;
+        if (statuses !== undefined) {
+          if (statuses[context.openCodeSessionId]?.type === "running") {
+            yield* startOpenCodeContinuation(
+              context,
+              sequence,
+              {
+                type: "session.status.recovered",
+                sessionID: context.openCodeSessionId,
+                status: statuses[context.openCodeSessionId],
+              },
+              false,
+            );
+          }
+          return;
+        }
+        if (retryCount === 0) {
+          yield* emit({
+            ...(yield* buildEventBase({ threadId: context.session.threadId })),
+            type: "runtime.warning",
+            payload: { message: "OpenCode continuation recovery is waiting for session status." },
+          });
+        }
+        const delayMs = Math.min(250 * 2 ** retryCount, 5_000);
+        retryCount += 1;
+        yield* Effect.sleep(`${delayMs} millis`);
       }
-      yield* startOpenCodeContinuation(
-        context,
-        sequence,
-        {
-          type: "session.status.recovered",
-          sessionID: context.openCodeSessionId,
-          status: statuses[context.openCodeSessionId],
-        },
-        false,
-      );
     });
 
     const cancelIdleReconciliation = Effect.fn("cancelIdleReconciliation")(function* (
@@ -2393,10 +2419,16 @@ export function makeOpenCodeAdapter(
         }
         case "session.inbox.enqueued": {
           const admission = context.promptAdmission;
+          const isInterruptedPrompt =
+            event.data.item.type === "user" &&
+            (event.data.inboxID === admission?.messageId ||
+              (context.interruptedTurnId !== undefined &&
+                event.data.item.payload.metadata?.t3CodeTurnId === context.interruptedTurnId));
           if (
             isFreshParentEvent &&
             context.activeTurnId === undefined &&
-            context.cancellation === undefined
+            context.cancellation === undefined &&
+            !isInterruptedPrompt
           ) {
             // New native work may wake the session after Stop; late busy events may not.
             context.reconcileIdleStatus = false;
