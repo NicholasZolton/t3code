@@ -2,6 +2,8 @@
 
 ## 2026-10-03
 
+- **Integration**: [PR #32](https://github.com/NicholasZolton/t3code/pull/32) reached fork `main` at `a9b81ef5c5`. Refreshed [upstream integration](upstream-integration.md): all 60 reviewed commits through `65731f986b` are incorporated, with zero ancestry gap. The completed V2 sync retains the accepted legacy-history and protocol 2 boundaries.
+
 - **Integration candidate**: Updated [upstream integration](upstream-integration.md) for local merge `696fd65db1` through `65731f986b`, the accepted legacy-history boundary, and retained fork features. Fork `main` remains at `0a5b85436b`; deployment and main integration are pending.
 
 - **Review**: Refreshed [upstream integration](upstream-integration.md) against fork `main` at `0a5b85436b` and upstream `65731f986b`: 60 commits remain unmerged, with 105 full-merge conflicts. Recorded V2 legacy-history and protocol rollout decisions, new upstream native OpenCode 2 support, and the fork compatibility protections still required.

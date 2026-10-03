@@ -6,21 +6,29 @@ tags: [upstream, fork, integration]
 status: stable
 generated:
   by: codex/gpt-6.1-sol
-  at: 2026-10-03T19:32:02Z
+  at: 2026-10-03T20:02:01Z
 verified:
   - by: codex/gpt-6.1-sol
-    at: 2026-10-03T19:32:02Z
+    at: 2026-10-03T20:02:01Z
 snapshot:
-  at: 2026-10-03T19:32:02Z
-  fork_main: 0a5b85436bc8fcd26b2ddb126b8c6e6c5818f190
+  at: 2026-10-03T20:02:01Z
+  fork_main: a9b81ef5c5017cc8268a7ca408ddb8430cc370c5
   upstream_main: 65731f986ba2175063b0182deb6a143f8f323b74
-  shared_baseline: 99e08526e5ec84f294940cba5929841518c52fec
-  last_main_integration: 24d2e49fd91aa8779992b187a3d3395a51de9138
-  branch_integration: 696fd65db117198476ad840ca41c4af031b086c4
+  shared_baseline: 65731f986ba2175063b0182deb6a143f8f323b74
+  last_main_integration: 696fd65db117198476ad840ca41c4af031b086c4
 sources:
-  - id: current-integration-candidate
-    resource: "Local Git object 696fd65db117198476ad840ca41c4af031b086c4 on NicholasZolton/review-upstream-changes-2; parents 0a5b85436bc8fcd26b2ddb126b8c6e6c5818f190 and 65731f986ba2175063b0182deb6a143f8f323b74; zero ancestry gap against the pinned upstream tip; not yet in fork main"
-    title: Full V2 integration candidate with preserved upstream ancestry
+  - id: current-integration
+    resource: https://github.com/NicholasZolton/t3code/commit/696fd65db117198476ad840ca41c4af031b086c4
+    title: Completed V2 integration with preserved upstream ancestry
+  - id: current-main-integration
+    resource: https://github.com/NicholasZolton/t3code/pull/32
+    title: Completed October 3 full upstream integration into fork main
+  - id: current-fork-main
+    resource: https://github.com/NicholasZolton/t3code/commit/a9b81ef5c5017cc8268a7ca408ddb8430cc370c5
+    title: Fork main after PR 32 merged
+  - id: current-git-history
+    resource: "Local Git verification: fork main a9b81ef5c5017cc8268a7ca408ddb8430cc370c5 contains integration 696fd65db117198476ad840ca41c4af031b086c4 and upstream 65731f986ba2175063b0182deb6a143f8f323b74; merge base is the pinned upstream tip and the remaining ancestry gap is zero"
+    title: Verified completed V2 integration boundary
   - id: reviewed-fork-main
     resource: https://github.com/NicholasZolton/t3code/commit/0a5b85436bc8fcd26b2ddb126b8c6e6c5818f190
     title: Fork main at the October 3 review
@@ -82,29 +90,24 @@ sources:
 
 # Upstream integration
 
-**Latest review: fork `main` at `0a5b85436b` is 60 commits behind
-upstream `65731f986b`. No integration from this reviewed range has
-landed.** The shared baseline remains `99e08526e5`; the last completed
-sync is still PR #27.[^latest-review-git]
-
-**Fork `main` includes all reviewed upstream history through `99e08526e5`,
+**Fork `main` includes all 60 reviewed upstream commits through `65731f986b`,
 with zero remaining ancestry gap against that tip.**
-[PR #27](https://github.com/NicholasZolton/t3code/pull/27) merged at October 2,
-2026, 06:32:19 UTC (October 1 in Pacific time), bringing all 50 reviewed
-upstream commits into `main` at `60e0650513`.[^main-integration][^git-history]
+[PR #32](https://github.com/NicholasZolton/t3code/pull/32) merged on October 3,
+2026, at 19:59:31 UTC, landing at `a9b81ef5c5`. The shared baseline is now
+`65731f986b`.[^current-main-integration][^current-git-history]
 
 This is a revision-pinned snapshot, not a claim about newer upstream work.
 Refresh it after the next review or integration using the
 [maintenance guidance](maintenance.md).
 
-## October 3 integration candidate
+## Latest completed upstream sync
 
-Merge `696fd65db117198476ad840ca41c4af031b086c4` on
-`NicholasZolton/review-upstream-changes-2` integrates all 60 reviewed commits through `65731f986ba2175063b0182deb6a143f8f323b74`, preserving upstream
-ancestry. It uses upstream orchestrator V2, the native OpenCode 2 adapter, and the
-new thread/project MCP tools. Fork `main` at `0a5b85436b` still awaits this
-integration; the last completed main sync remains PR #27. The branch has zero
-remaining ancestry gap against the pinned upstream tip.[^current-integration-candidate][^reviewed-fork-main]
+Merge `696fd65db117198476ad840ca41c4af031b086c4` has parents fork
+`0a5b85436bc8fcd26b2ddb126b8c6e6c5818f190` and upstream
+`65731f986ba2175063b0182deb6a143f8f323b74`. Both parents are incorporated into
+fork `main`; the sync was not squashed. It adopts upstream orchestrator V2,
+native OpenCode 2, and the new thread/project MCP services.
+[^current-integration][^current-fork-main]
 
 The maintainer chose upstream's legacy import: old messages and metadata survive,
 but pre-upgrade checkpoints, tool history, and native sessions do not. First
@@ -119,26 +122,7 @@ thread access, reusable prompts, Vim, mixed Git/Jujutsu recovery and checkpoints
 Crit/Portless, phone pairing identity, and SSH release handoff. Upstream now owns
 native OpenCode 2 and thread management; removed V1 adapters and the old plural
 thread toolkit are replaced by those upstream services. The legacy worktree prefix
-migrates to upstream branch naming while preserving temporary branch names. No
-live database or remote server was changed while preparing this candidate.
-
-## Latest completed upstream sync
-
-`24d2e49fd9` has parents fork `b469d18b16` and upstream `99e08526e5`.
-Both parents are incorporated into fork `main`. The
-[integrated range](https://github.com/pingdotgg/t3code/compare/0fcd5f90611451cca842689faea53b5450c022da...99e08526e5ec84f294940cba5929841518c52fec)
-includes GitHub polling reductions, Claude lifecycle fixes, desktop preview
-fixes, composer undo grouping, provider maintenance across environments,
-projectless threads, named projects, the Working sidebar, and Expo SDK 58 /
-React Native 0.88 migration.[^integration-commit][^upstream-main]
-
-Default to upstream implementations. Retain fork code for explicit features
-or fixes upstream does not provide. This sync combines upstream fresh catalog
-rescans and race protection with the fork's automatic catalog freshness and
-invalidation, and routes Scratch preparation through the existing shared
-[V1 thread dispatcher](https://github.com/NicholasZolton/t3code/blob/24d2e49fd91aa8779992b187a3d3395a51de9138/apps/server/src/orchestration/ThreadCommandDispatcher.ts)
-used by WebSocket and MCP. Native OpenCode v2, saved prompts, Vim clipboard
-undo, and mixed Git/Jujutsu recovery remain fork exceptions.[^integration-commit]
+migrates to upstream branch naming while preserving temporary branch names. The integration was verified against isolated state.
 
 ## Last completed integration
 
@@ -146,22 +130,27 @@ undo, and mixed Git/Jujutsu recovery remain fork exceptions.[^integration-commit
 | -------------------------------------------------- | --------------------------------------------------------------- |
 | Fork                                               | `NicholasZolton/t3code`, remote `origin`                        |
 | Upstream                                           | `pingdotgg/t3code`, remote `upstream`                           |
-| Main landing commit                                | `60e0650513` — merge of PR #27                                  |
-| Upstream integration commit                        | `24d2e49fd9` — `chore(sync): merge upstream through 99e08526e5` |
-| Fork-side parent                                   | `b469d18b16`                                                    |
-| Upstream-side parent / shared baseline             | `99e08526e5`                                                    |
+| Main landing commit                                | `a9b81ef5c5` — merge of PR #32                                  |
+| Upstream integration commit                        | `696fd65db1` — `chore(sync): merge upstream through 65731f986b` |
+| Fork-side parent                                   | `0a5b85436b`                                                    |
+| Upstream-side parent / shared baseline             | `65731f986b`                                                    |
 | Missing commits at that integration's upstream tip | **0**                                                           |
 
-The integration preserves native OpenCode v2, account switching and quota
-weighting, reusable prompts, Vim editing, rewind behavior, and SSH/Portless
-and Crit integrations. Both merge parents remain in fork main's ancestry;
-the sync was not squashed.[^integration-commit][^fork-main][^git-history]
-
-![Completed upstream integration into fork main](assets/upstream-integration.svg)
-
-[Mermaid source](assets/upstream-integration.mmd)
+Default to upstream implementations. Retain fork code for explicit features
+or fixes upstream does not provide. Native OpenCode 2 and thread management now
+use upstream services; fork configuration and UI improvements remain layered on
+those paths.[^current-integration]
 
 ## Earlier integration boundaries
+
+[PR #27](https://github.com/NicholasZolton/t3code/pull/27) merged on October 2,
+2026, at 06:32:19 UTC, bringing all 50 reviewed commits through `99e08526e5`
+into fork `main` at `60e0650513`. Its upstream merge was `24d2e49fd9`.
+[^main-integration][^integration-commit][^git-history]
+
+![Previous PR 27 integration boundary](assets/upstream-integration.svg)
+
+[Historical Mermaid source](assets/upstream-integration.mmd)
 
 [PR #21](https://github.com/NicholasZolton/t3code/pull/21) merged at September 30,
 2026, 05:57:39 UTC (September 29 in Pacific time), bringing the 81 previously
@@ -192,7 +181,7 @@ advisory, and PR #27 retained the bundled policy and remote metadata filter.
 That protection still matters at the newly reviewed tip.[^main-integration][^integration-commit]
 
 Upstream `65731f986b` supplies the native OpenCode 2 implementation, tested
-against 2.0.18. This candidate adopts its 2.0.18+ baseline, including the installed
+against 2.0.18. The completed integration adopts its 2.0.18+ baseline, including the installed
 2.0.22 CLI, and removes the obsolete fork V2 adapter. The bundled policy enables
 that baseline starting at this fork's package version 0.0.45, rather than waiting
 for upstream's 0.0.46 threshold. Remote compatibility metadata still cannot replace
@@ -230,7 +219,7 @@ absent.
 ```bash
 git rev-parse origin/main upstream/main
 git merge-base origin/main upstream/main
-git merge-base --is-ancestor 24d2e49fd9 origin/main
+git merge-base --is-ancestor 696fd65db1 origin/main
 git merge-base --is-ancestor a8df093eb6 origin/main
 git rev-list --count origin/main..upstream/main
 git log --reverse --oneline origin/main..upstream/main
@@ -264,7 +253,7 @@ git log --reverse --oneline origin/main..upstream/main
 
 [^reviewed-upstream-main]: Exact upstream main revision fetched for this review.
 
-[^latest-review-git]: Pinned ancestry, commit counts, and merge-tree simulations; no integration landed.
+[^latest-review-git]: Historical pre-integration review: pinned ancestry, commit counts, and merge-tree simulations.
 
 [^upstream-v2]: V2 replacement and the new provider/orchestration boundaries.
 
@@ -274,4 +263,10 @@ git log --reverse --oneline origin/main..upstream/main
 
 [^upstream-current-manifest]: Version-scoped OpenCode advisory at the reviewed tip.
 
-[^current-integration-candidate]: Verified merge parents and ancestry on the local integration branch; fork main has not incorporated the candidate.
+[^current-integration]: Full V2 upstream merge and its fork and upstream parents.
+
+[^current-main-integration]: PR #32 and its recorded merge time.
+
+[^current-fork-main]: Main landing commit retaining upstream ancestry.
+
+[^current-git-history]: Ancestry checks and zero missing commits against the pinned upstream tip.
