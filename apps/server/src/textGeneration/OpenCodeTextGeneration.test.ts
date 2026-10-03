@@ -25,9 +25,11 @@ const runtimeMock = {
     sessionCreateCalls: 0,
     connectionError: undefined as Error | undefined,
     sessionCreateError: undefined as unknown,
-    sessionResult: undefined as { id?: string } | undefined,
+    sessionResult: undefined as { data?: { id: string } } | undefined,
     promptRequestError: undefined as unknown,
-    promptResult: undefined as { content?: Array<unknown>; error?: unknown } | undefined,
+    promptResult: undefined as
+      | { data?: { info?: { error?: unknown }; parts?: Array<unknown> } }
+      | undefined,
   },
   reset() {
     this.state.startCalls.length = 0;
@@ -67,7 +69,7 @@ const OpenCodeRuntimeTestDouble: OpenCodeRuntime.OpenCodeRuntimeShape = {
         ...(effectiveServerPassword !== undefined
           ? { serverPassword: effectiveServerPassword }
           : {}),
-        version: "2.0.12",
+        version: "1.14.19",
         isRunning: Effect.succeed(true),
         exitCode: Effect.never,
       };
@@ -84,7 +86,7 @@ const OpenCodeRuntimeTestDouble: OpenCodeRuntime.OpenCodeRuntimeShape = {
       : Effect.succeed({
           url: serverUrl ?? "http://127.0.0.1:4301",
           ...(serverPassword ? { serverPassword } : {}),
-          version: "2.0.12",
+          version: "1.14.19",
           exitCode: null,
           external: Boolean(serverUrl),
         }),
@@ -97,26 +99,21 @@ const OpenCodeRuntimeTestDouble: OpenCodeRuntime.OpenCodeRuntimeShape = {
           if (runtimeMock.state.sessionCreateError !== undefined) {
             throw runtimeMock.state.sessionCreateError;
           }
-          return runtimeMock.state.sessionResult ?? { id: `${baseUrl}/session` };
+          return runtimeMock.state.sessionResult ?? { data: { id: `${baseUrl}/session` } };
         },
-        prompt: async (input: { readonly files: ReadonlyArray<unknown> }) => {
+        prompt: async (input: { readonly parts: ReadonlyArray<unknown> }) => {
           runtimeMock.state.promptUrls.push(baseUrl);
-          runtimeMock.state.promptParts.push(input.files);
+          runtimeMock.state.promptParts.push(input.parts);
           runtimeMock.state.authHeaders.push(
             serverPassword ? `Basic ${btoa(`opencode:${serverPassword}`)}` : null,
           );
-          if (runtimeMock.state.promptRequestError !== undefined)
+          if (runtimeMock.state.promptRequestError !== undefined) {
             throw runtimeMock.state.promptRequestError;
-        },
-        wait: async () => undefined,
-      },
-      message: {
-        list: async () => ({
-          data: [
-            {
-              type: "assistant",
-              ...(runtimeMock.state.promptResult ?? {
-                content: [
+          }
+          return (
+            runtimeMock.state.promptResult ?? {
+              data: {
+                parts: [
                   {
                     type: "text",
                     text: JSON.stringify({
@@ -125,10 +122,10 @@ const OpenCodeRuntimeTestDouble: OpenCodeRuntime.OpenCodeRuntimeShape = {
                     }),
                   },
                 ],
-              }),
-            },
-          ],
-        }),
+              },
+            }
+          );
+        },
       },
     }) as unknown as ReturnType<OpenCodeRuntime.OpenCodeRuntimeShape["createOpenCodeSdkClient"]>,
   loadOpenCodeInventory: () =>
@@ -140,6 +137,15 @@ const OpenCodeRuntimeTestDouble: OpenCodeRuntime.OpenCodeRuntimeShape = {
       }),
     ),
   loadOpenCodeSkills: () => Effect.succeed([]),
+  loadInventoryFromCli: () =>
+    Effect.fail(
+      new OpenCodeRuntime.OpenCodeRuntimeError({
+        operation: "loadInventoryFromCli",
+        detail: "OpenCodeRuntimeTestDouble.loadInventoryFromCli not used in this test",
+        cause: null,
+      }),
+    ),
+  loadSkillsFromCli: () => Effect.succeed([]),
 };
 
 const DEFAULT_TEST_MODEL_SELECTION = {
@@ -233,7 +239,9 @@ it.layer(OpenCodeTextGenerationTestLayer)("OpenCodeTextGeneration", (it) => {
     withOpenCodeTextGeneration(DEFAULT_OPENCODE_SETTINGS, (textGeneration) =>
       Effect.gen(function* () {
         runtimeMock.state.promptResult = {
-          content: [{ type: "text", text: '{"title":"Review uploaded report"}' }],
+          data: {
+            parts: [{ type: "text", text: '{"title":"Review uploaded report"}' }],
+          },
         };
 
         yield* textGeneration.generateThreadTitle({
@@ -259,7 +267,8 @@ it.layer(OpenCodeTextGenerationTestLayer)("OpenCodeTextGeneration", (it) => {
         });
 
         expect(runtimeMock.state.promptParts[0]).toEqual([
-          expect.objectContaining({ name: "screenshot.png" }),
+          expect.objectContaining({ type: "text" }),
+          expect.objectContaining({ type: "file", filename: "screenshot.png" }),
         ]);
       }),
     ),
@@ -443,7 +452,9 @@ it.layer(OpenCodeTextGenerationTestLayer)("OpenCodeTextGeneration", (it) => {
     withOpenCodeTextGeneration(DEFAULT_OPENCODE_SETTINGS, (textGeneration) =>
       Effect.gen(function* () {
         runtimeMock.state.promptResult = {
-          content: [null, { type: "tool" }, { type: "text", text: "   " }],
+          data: {
+            parts: [null, { type: "tool" }, { type: "text", text: "   " }],
+          },
         };
 
         const error = yield* textGeneration
@@ -470,12 +481,14 @@ it.layer(OpenCodeTextGenerationTestLayer)("OpenCodeTextGeneration", (it) => {
     withOpenCodeTextGeneration(DEFAULT_OPENCODE_SETTINGS, (textGeneration) =>
       Effect.gen(function* () {
         runtimeMock.state.promptResult = {
-          content: [
-            {
-              type: "text",
-              text: 'Here is the result:\n{"subject":"Tighten OpenCode parsing","body":"Handle JSON text output locally."}',
-            },
-          ],
+          data: {
+            parts: [
+              {
+                type: "text",
+                text: 'Here is the result:\n{"subject":"Tighten OpenCode parsing","body":"Handle JSON text output locally."}',
+              },
+            ],
+          },
         };
 
         const result = yield* textGeneration.generateCommitMessage({
@@ -498,9 +511,16 @@ it.layer(OpenCodeTextGenerationTestLayer)("OpenCodeTextGeneration", (it) => {
     withOpenCodeTextGeneration(DEFAULT_OPENCODE_SETTINGS, (textGeneration) =>
       Effect.gen(function* () {
         runtimeMock.state.promptResult = {
-          error: {
-            type: "StructuredOutputError",
-            message: "Model did not produce structured output",
+          data: {
+            info: {
+              error: {
+                name: "StructuredOutputError",
+                data: {
+                  message: "Model did not produce structured output",
+                  retries: 2,
+                },
+              },
+            },
           },
         };
 

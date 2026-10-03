@@ -60,10 +60,11 @@ import {
 import * as ProjectSetupScriptRunner from "../project/ProjectSetupScriptRunner.ts";
 import * as ProviderRegistry from "../provider/Services/ProviderRegistry.ts";
 import { extractBranchNameFromRemoteRef } from "./remoteRefs.ts";
+import { detachStackFrame } from "./detachStackFrame.ts";
 import * as ServerSettings from "../serverSettings.ts";
 import type { GitManagerServiceError } from "@t3tools/contracts";
 import * as GitVcsDriver from "../vcs/GitVcsDriver.ts";
-import { workspaceSettings } from "../project/WorkspaceSettings.ts";
+import { workspaceSettings, makeWorkspaceQueries } from "../project/WorkspaceSettings.ts";
 import * as SourceControlProviderRegistry from "../sourceControl/SourceControlProviderRegistry.ts";
 import { detectPrTemplate } from "../sourceControl/PrTemplateDetection.ts";
 import type { ChangeRequest } from "@t3tools/contracts";
@@ -1294,6 +1295,7 @@ export const resolveTextGenerationSettings = Effect.fn("resolveTextGenerationSet
 );
 
 export const make = Effect.gen(function* () {
+  const withWorkspaceQueries = yield* makeWorkspaceQueries;
   const gitCore = yield* GitVcsDriver.GitVcsDriver;
   const sourceControlProviders = yield* SourceControlProviderRegistry.SourceControlProviderRegistry;
   const textGeneration = yield* TextGeneration.TextGeneration;
@@ -1323,6 +1325,7 @@ export const make = Effect.gen(function* () {
     effect: Effect.Effect<A, E, ChangeRequestStepServices>,
   ): Effect.Effect<A, E> =>
     effect.pipe(
+      withWorkspaceQueries,
       Effect.provideService(Crypto.Crypto, crypto),
       Effect.provideService(ServerSettings.ServerSettingsService, serverSettingsService),
       Effect.provideService(FileSystem.FileSystem, fileSystem),
@@ -1340,6 +1343,7 @@ export const make = Effect.gen(function* () {
     readonly threadId?: ThreadId | undefined;
   }) {
     return yield* workspaceSettings(input).pipe(
+      withWorkspaceQueries,
       Effect.provideService(ServerSettings.ServerSettingsService, serverSettingsService),
     );
   });
@@ -1539,7 +1543,7 @@ export const make = Effect.gen(function* () {
   const canonicalizeExistingPath = (value: string) =>
     fileSystem.realPath(value).pipe(Effect.orElseSucceed(() => value));
   const normalizeStatusCacheKey = canonicalizeExistingPath;
-  const nonRepositoryStatusDetails = {
+  const nonRepositoryStatusDetails: GitVcsDriver.GitStatusDetails = {
     isRepo: false,
     hasOriginRemote: false,
     isDefaultBranch: false,
@@ -1551,10 +1555,10 @@ export const make = Effect.gen(function* () {
     aheadCount: 0,
     behindCount: 0,
     aheadOfDefaultCount: 0,
-  } satisfies GitVcsDriver.GitStatusDetails;
+  };
   const readLocalStatus = Effect.fn("readLocalStatus")(function* (cwd: string) {
     const details = yield* gitCore
-      .statusDetailsLocal(cwd)
+      .statusDetailsLocal(cwd, { includeDivergence: false, includeBranchChanges: true })
       .pipe(
         Effect.catchIf(isNotGitRepositoryError, () => Effect.succeed(nonRepositoryStatusDetails)),
       );
@@ -1570,6 +1574,7 @@ export const make = Effect.gen(function* () {
       refName: details.branch,
       hasWorkingTreeChanges: details.hasWorkingTreeChanges,
       workingTree: details.workingTree,
+      ...(details.branchChanges ? { branchChanges: details.branchChanges } : {}),
     } satisfies VcsStatusLocalResult;
   });
   const localStatusResultCache = yield* Cache.makeWith(readLocalStatus, {
@@ -1679,6 +1684,7 @@ export const make = Effect.gen(function* () {
       },
     },
   );
+  const getPrLookup = (key: string) => detachStackFrame(Cache.get(prLookupCache, key));
   // A transient lookup failure (rate limit, network blip) must not clear an
   // already-known PR badge, so the last successful answer per branch sticks
   // around as the fallback. Keep the resolved head context with it so a
@@ -1759,7 +1765,7 @@ export const make = Effect.gen(function* () {
         yield* Cache.invalidate(prLookupCache, cacheKey);
       }
     }
-    return yield* Cache.get(prLookupCache, cacheKey).pipe(
+    return yield* getPrLookup(cacheKey).pipe(
       Effect.map(({ latest, headContext }) => {
         if (!latest) return { pr: null, headContext };
         // On the default branch, only surface open PRs.
@@ -2429,7 +2435,7 @@ export const make = Effect.gen(function* () {
       );
       if (Option.isSome(cached)) yield* Cache.invalidate(prLookupCache, cacheKey);
     }
-    let cached = yield* Cache.get(prLookupCache, cacheKey);
+    let cached = yield* getPrLookup(cacheKey);
     // The cached head context may have resolved on a different remote than
     // the saved upstream: a branch tracking origin/main but pushed to a fork
     // is looked up on the fork. Verify against the remote the lookup used.
@@ -2457,7 +2463,7 @@ export const make = Effect.gen(function* () {
     }
     if (!hasSameIdentity(cached.headContext, currentIdentity)) {
       yield* Cache.invalidate(prLookupCache, cacheKey);
-      cached = yield* Cache.get(prLookupCache, cacheKey);
+      cached = yield* getPrLookup(cacheKey);
       const refreshedIdentity = yield* resolvePrLookupRepositoryIdentity(
         cacheCwd,
         branch,

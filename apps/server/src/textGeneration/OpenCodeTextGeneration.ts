@@ -8,7 +8,7 @@ import {
   type ModelSelection,
   type OpenCodeSettings,
 } from "@t3tools/contracts";
-import { sanitizeBranchFragment, sanitizeFeatureBranchName } from "@t3tools/shared/git";
+import { formatGeneratedBranchName, sanitizeFeatureBranchName } from "@t3tools/shared/git";
 import { getModelSelectionStringOptionValue } from "@t3tools/shared/model";
 import { extractJsonObject } from "@t3tools/shared/schemaJson";
 
@@ -125,9 +125,18 @@ function getOpenCodePromptFailure(error: unknown): OpenCodePromptFailure | null 
     return null;
   }
 
-  const name = "type" in error && typeof error.type === "string" ? error.type : undefined;
+  const name =
+    "name" in error && typeof error.name === "string" && error.name.trim().length > 0
+      ? error.name.trim()
+      : undefined;
   const message =
-    "message" in error && typeof error.message === "string" ? error.message.trim() : "";
+    "data" in error &&
+    error.data &&
+    typeof error.data === "object" &&
+    "message" in error.data &&
+    typeof error.data.message === "string"
+      ? error.data.message.trim()
+      : "";
   if (message.length > 0) {
     return {
       ...(name ? { name } : {}),
@@ -199,22 +208,14 @@ export const makeOpenCodeTextGeneration = Effect.fn("makeOpenCodeTextGeneration"
       ) {
         const client = openCodeRuntime.createOpenCodeSdkClient({
           baseUrl: server.url,
+          directory: input.cwd,
           ...(server.serverPassword !== undefined ? { serverPassword: server.serverPassword } : {}),
         });
-        const selectedAgent = getModelSelectionStringOptionValue(input.modelSelection, "agent");
-        const selectedVariant = getModelSelectionStringOptionValue(input.modelSelection, "variant");
         const session = yield* Effect.tryPromise({
           try: () =>
             client.session.create({
               title: `T3 Code ${input.operation}`,
-              location: { directory: input.cwd },
-              permissions: [{ action: "*", resource: "*", effect: "deny" }],
-              model: {
-                providerID: parsedModel.providerID,
-                id: parsedModel.modelID,
-                ...(selectedVariant ? { variant: selectedVariant } : {}),
-              },
-              ...(selectedAgent ? { agent: selectedAgent } : {}),
+              permission: [{ permission: "*", pattern: "*", action: "deny" }],
             }),
           catch: (cause) =>
             new OpenCodeTextGenerationSessionRequestError({
@@ -223,71 +224,38 @@ export const makeOpenCodeTextGeneration = Effect.fn("makeOpenCodeTextGeneration"
               cause,
             }),
         });
-        if (!session?.id) {
+        if (!session.data) {
           return yield* new OpenCodeTextGenerationSessionPayloadError({
             operation: input.operation,
             cwd: input.cwd,
           });
         }
+        const selectedAgent = getModelSelectionStringOptionValue(input.modelSelection, "agent");
+        const selectedVariant = getModelSelectionStringOptionValue(input.modelSelection, "variant");
         const promptContext = {
           operation: input.operation,
           cwd: input.cwd,
-          sessionId: session.id,
+          sessionId: session.data.id,
           providerId: parsedModel.providerID,
           modelId: parsedModel.modelID,
         };
 
         const result = yield* Effect.tryPromise({
-          try: async () => {
-            await client.session.prompt({
-              sessionID: session.id,
-              text: input.prompt,
-              files: fileParts,
-            });
-            // `session.wait` never resolves on its own when OpenCode stalls;
-            // bound it to the same 10-minute budget the v2 adapter uses for
-            // compaction so a hung request surfaces as a TextGenerationError
-            // through the prompt-request error path below. Aborting only ends
-            // the HTTP wait — interrupt the session so OpenCode does not keep
-            // generating (and billing) after we have given up on it.
-            const waitSignal = AbortSignal.timeout(10 * 60_000);
-            try {
-              await client.session.wait({ sessionID: session.id }, { signal: waitSignal });
-            } catch (cause) {
-              if (waitSignal.aborted) {
-                try {
-                  // Bound the cleanup too: a hung interrupt must not hold the
-                  // timed-out request open. The original wait error below is
-                  // what the caller must see either way.
-                  await client.session.interrupt(
-                    { sessionID: session.id },
-                    { signal: AbortSignal.timeout(30_000) },
-                  );
-                } catch {
-                  // Best effort: the session may already be gone. The original
-                  // timeout error below is what the caller must see.
-                }
-              }
-              throw cause;
-            }
-            const messages = await client.message.list(
-              {
-                sessionID: session.id,
-                order: "desc",
-              },
-              // Same overall budget as the wait above: a hung history fetch
-              // must not leave the generation pending indefinitely.
-              { signal: waitSignal },
-            );
-            return messages.data.find((message) => message.type === "assistant");
-          },
+          try: () =>
+            client.session.prompt({
+              sessionID: session.data.id,
+              model: parsedModel,
+              ...(selectedAgent ? { agent: selectedAgent } : {}),
+              ...(selectedVariant ? { variant: selectedVariant } : {}),
+              parts: [{ type: "text", text: input.prompt }, ...fileParts],
+            }),
           catch: (cause) =>
             new OpenCodeTextGenerationPromptRequestError({
               ...promptContext,
               cause,
             }),
         });
-        const promptFailure = getOpenCodePromptFailure(result?.error);
+        const promptFailure = getOpenCodePromptFailure(result.data?.info?.error);
         if (promptFailure) {
           return yield* new OpenCodeTextGenerationPromptResponseError({
             ...promptContext,
@@ -295,7 +263,7 @@ export const makeOpenCodeTextGeneration = Effect.fn("makeOpenCodeTextGeneration"
             providerMessage: promptFailure.message,
           });
         }
-        const responseParts = result?.content ?? [];
+        const responseParts = result.data?.parts ?? [];
         const rawText = getOpenCodeTextResponse(responseParts);
         if (rawText.length === 0) {
           return yield* new OpenCodeTextGenerationEmptyOutputError({
@@ -391,6 +359,23 @@ export const makeOpenCodeTextGeneration = Effect.fn("makeOpenCodeTextGeneration"
     );
   });
 
+  return makeOpenCodeOperations(runOpenCodeJson);
+});
+
+/** Runs one prompt and decodes its reply as `outputSchemaJson`, for either OpenCode runtime. */
+export type OpenCodeJsonRunner = <S extends Schema.Top>(input: {
+  readonly operation: OpenCodeTextGenerationOperation;
+  readonly cwd: string;
+  readonly prompt: string;
+  readonly outputSchemaJson: S;
+  readonly modelSelection: ModelSelection;
+  readonly attachments?: ReadonlyArray<ChatAttachment> | undefined;
+}) => Effect.Effect<S["Type"], TextGenerationError, S["DecodingServices"]>;
+
+/** The four text generation operations over an OpenCode prompt runner. */
+export function makeOpenCodeOperations(
+  runOpenCodeJson: OpenCodeJsonRunner,
+): TextGeneration.TextGeneration["Service"] {
   const generateCommitMessage: TextGeneration.TextGeneration["Service"]["generateCommitMessage"] =
     Effect.fn("OpenCodeTextGeneration.generateCommitMessage")(function* (input) {
       const { prompt, outputSchema } = buildCommitMessagePrompt({
@@ -447,6 +432,7 @@ export const makeOpenCodeTextGeneration = Effect.fn("makeOpenCodeTextGeneration"
       const { prompt, outputSchema } = buildBranchNamePrompt({
         message: input.message,
         attachments: input.attachments,
+        naming: input.naming,
       });
       const generated = yield* runOpenCodeJson({
         operation: "generateBranchName",
@@ -458,7 +444,7 @@ export const makeOpenCodeTextGeneration = Effect.fn("makeOpenCodeTextGeneration"
       });
 
       return {
-        branch: sanitizeBranchFragment(generated.branch),
+        branch: formatGeneratedBranchName(generated.branch, input.naming),
       };
     });
 
@@ -491,4 +477,4 @@ export const makeOpenCodeTextGeneration = Effect.fn("makeOpenCodeTextGeneration"
     generateBranchName,
     generateThreadTitle,
   } satisfies TextGeneration.TextGeneration["Service"];
-});
+}

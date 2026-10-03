@@ -2,6 +2,7 @@ import {
   isProviderDriverKind,
   isProviderAvailable,
   resolveProviderInstanceEnabled,
+  isProviderTextGenerationCapable,
   type ModelSelection,
   type ProjectId,
   type ProjectScopedServerSettingKey,
@@ -109,7 +110,9 @@ export function resolveSourceControlWriterModelSelection(
   }
 
   const provider = providers.find((candidate) => candidate.instanceId === selection.instanceId);
-  return provider?.enabled === true && isProviderAvailable(provider)
+  return provider?.enabled === true &&
+    isProviderAvailable(provider) &&
+    isProviderTextGenerationCapable(provider)
     ? selection
     : settings.textGenerationModelSelection;
 }
@@ -281,7 +284,12 @@ export function applyServerSettingsPatch(
   current: ServerSettings,
   rawPatch: ServerSettingsPatch,
 ): ServerSettings {
-  const patch = translateLegacyProjectOverridePatch(current, rawPatch);
+  const patch = translateLegacyProjectOverridePatch(current, {
+    ...rawPatch,
+    ...(rawPatch.branchNamePrefix === undefined && rawPatch.worktreeBranchPrefix !== undefined
+      ? { branchNamePrefix: rawPatch.worktreeBranchPrefix }
+      : {}),
+  });
   const selectionPatch = patch.textGenerationModelSelection;
   const {
     automaticGitFetchInterval,

@@ -26,12 +26,13 @@ export class OpenCodeServerOwner extends Context.Service<
   }
 >()("t3/provider/OpenCodeServerOwner") {}
 
-/** Maintains the lazy local OpenCode connection shared by one provider instance. */
+/** Owns the lazy local OpenCode server shared by one provider instance. */
 export const make = Effect.fn("OpenCodeServerOwner.make")(function* (input: {
   readonly binaryPath: string;
   readonly directory: string;
   readonly serverPassword?: string;
   readonly environment?: NodeJS.ProcessEnv;
+  readonly verify?: (url: string) => Effect.Effect<string, OpenCodeRuntime.OpenCodeRuntimeError>;
 }) {
   const runtime = yield* OpenCodeRuntime.OpenCodeRuntime;
   const ownerScope = yield* Effect.acquireRelease(Scope.make(), (scope) =>
@@ -106,6 +107,7 @@ export const make = Effect.fn("OpenCodeServerOwner.make")(function* (input: {
                     ? { serverPassword: input.serverPassword }
                     : {}),
                   ...(input.environment ? { environment: input.environment } : {}),
+                  ...(input.verify ? { verify: input.verify } : {}),
                 })
                 .pipe(Effect.provideService(Scope.Scope, serverScope)),
             ),
@@ -182,4 +184,5 @@ export const layer = (input: {
   readonly directory: string;
   readonly serverPassword?: string;
   readonly environment?: NodeJS.ProcessEnv;
+  readonly verify?: (url: string) => Effect.Effect<string, OpenCodeRuntime.OpenCodeRuntimeError>;
 }) => Layer.effect(OpenCodeServerOwner, make(input));

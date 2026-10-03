@@ -194,6 +194,15 @@ export const makeJjWorkspaces = (deps: JjWorkspaceOpsDeps): JjWorkspaceOps => {
         .exists(worktreePath)
         .pipe(Effect.orElseSucceed(() => false));
       if (destinationExisted) {
+        const info = yield* fileSystem
+          .stat(worktreePath)
+          .pipe(mapJjFailure(operation, input.cwd, "Could not inspect the workspace destination."));
+        if (info.type !== "Directory")
+          return yield* jjFailure(
+            operation,
+            input.cwd,
+            `${worktreePath} already exists and is not a directory.`,
+          );
         const entries = yield* fileSystem
           .readDirectory(worktreePath)
           .pipe(Effect.orElseSucceed(() => [] as ReadonlyArray<string>));

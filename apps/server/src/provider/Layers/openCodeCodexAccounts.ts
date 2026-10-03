@@ -9,7 +9,8 @@ import type { OpenCodeCodexAccount, ServerProviderUsageWindow } from "@t3tools/c
 import * as Schema from "effect/Schema";
 import * as Effect from "effect/Effect";
 
-import { runOpenCodeSdk, type OpenCodeClient } from "../opencodeRuntime.ts";
+import type { OpenCodeClient } from "@opencode/client/effect";
+import { Credential as NativeCredential } from "@opencode/schema/credential";
 
 const Credential = Schema.Struct({
   type: Schema.Literal("oauth"),
@@ -170,8 +171,8 @@ export const activateOpenCodeCredential = Effect.fn("activateOpenCodeCredential"
     if (!accounts.some((account) => account.id === input.credentialId)) {
       return yield* new OpenCodeAccountError({ detail: "OpenCode account not found." });
     }
-    yield* runOpenCodeSdk("credential.activate", (signal) =>
-      input.client.credential.activate({ credentialID: input.credentialId }, { signal }),
-    );
+    yield* input.client.credential.activate({
+      credentialID: NativeCredential.ID.make(input.credentialId),
+    });
   },
 );
