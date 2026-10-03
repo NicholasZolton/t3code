@@ -18,6 +18,8 @@ import type {
   OrchestrationReadModel,
   OrchestrationSearchThreadsInput,
   OrchestrationSearchThreadsResult,
+  OrchestrationSearchPromptsInput,
+  OrchestrationSearchPromptsResult,
   OrchestrationShellSnapshot,
   OrchestrationThread,
   OrchestrationThreadActivity,
@@ -187,6 +189,11 @@ export interface ProjectionSnapshotQueryShape {
   readonly searchThreads: (
     input: OrchestrationSearchThreadsInput,
   ) => Effect.Effect<OrchestrationSearchThreadsResult, ProjectionRepositoryError>;
+
+  /** Search persisted user messages across active and archived threads. */
+  readonly searchPrompts: (
+    input: OrchestrationSearchPromptsInput,
+  ) => Effect.Effect<OrchestrationSearchPromptsResult, ProjectionRepositoryError>;
 
   /**
    * Read the latest projection snapshot sequence without hydrating read-model

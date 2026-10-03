@@ -116,6 +116,12 @@ send shortcut, or use a modified send shortcut directly.
 
 ## Recall a sent prompt
 
+Press `Ctrl+R` on web or desktop to search prompts sent in any thread on the
+current environment, including archived threads. Type part of a prompt, use
+the arrow keys or `Ctrl+R` to browse matches, and press `Enter` to replace the
+composer text. **Load older prompts** searches further back. The current draft
+is left alone until you select a result.
+
 Press `ArrowUp` in an empty composer to bring back the last prompt you sent in this thread. Press
 `ArrowUp` again to go further back, and `ArrowDown` to come forward. Moving forward past the newest
 prompt clears the composer. Recall walks the prompts loaded in the thread. Attachments, terminal

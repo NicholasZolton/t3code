@@ -38,6 +38,7 @@ export const ORCHESTRATION_WS_METHODS = {
   getTurnDiff: "orchestration.getTurnDiff",
   getFullThreadDiff: "orchestration.getFullThreadDiff",
   searchThreads: "orchestration.searchThreads",
+  searchPrompts: "orchestration.searchPrompts",
   getArchivedShellSnapshot: "orchestration.getArchivedShellSnapshot",
   subscribeShell: "orchestration.subscribeShell",
   subscribeThread: "orchestration.subscribeThread",
@@ -2323,6 +2324,23 @@ export const OrchestrationSearchThreadsResult = Schema.Struct({
 });
 export type OrchestrationSearchThreadsResult = typeof OrchestrationSearchThreadsResult.Type;
 
+export const OrchestrationSearchPromptsInput = Schema.Struct({
+  query: TrimmedString.check(Schema.isMaxLength(200)),
+  offset: Schema.optionalKey(NonNegativeInt),
+});
+export type OrchestrationSearchPromptsInput = typeof OrchestrationSearchPromptsInput.Type;
+
+export const OrchestrationSearchPromptsResult = Schema.Struct({
+  matches: Schema.Array(
+    Schema.Struct({
+      messageId: MessageId,
+      text: Schema.String,
+    }),
+  ),
+  nextOffset: Schema.NullOr(NonNegativeInt),
+});
+export type OrchestrationSearchPromptsResult = typeof OrchestrationSearchPromptsResult.Type;
+
 export const OrchestrationGetWorkflowScriptInput = Schema.Struct({
   threadId: ThreadId,
   /** Absolute path from the workflow's runHandles.scriptPath. The server
@@ -2391,6 +2409,10 @@ export const OrchestrationRpcSchemas = {
   searchThreads: {
     input: OrchestrationSearchThreadsInput,
     output: OrchestrationSearchThreadsResult,
+  },
+  searchPrompts: {
+    input: OrchestrationSearchPromptsInput,
+    output: OrchestrationSearchPromptsResult,
   },
   getArchivedShellSnapshot: {
     input: Schema.Struct({}),

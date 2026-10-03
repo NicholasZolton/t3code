@@ -128,6 +128,7 @@ import {
 } from "../../promptStashStore";
 import { ComposerStashBadge } from "./ComposerStashBadge";
 import { ComposerStashMenu } from "./ComposerStashMenu";
+import { ComposerPromptSearch } from "./ComposerPromptSearch";
 import { useComposerMenuState } from "./useComposerMenuState";
 import { useComposerTriggerState } from "./useComposerTriggerState";
 import { useComposerFocusState } from "./useComposerFocusState";
@@ -2135,6 +2136,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   const composerSuggestionListId = `${composerSuggestionId}-${encodeURIComponent(draftId ?? activeThreadId ?? "new")}-suggestions`;
   // Active ArrowUp recall. Cleared on edit and on thread switch.
   const promptHistoryPositionRef = useRef<ComposerPromptHistoryPosition | null>(null);
+  const [isPromptSearchOpen, setIsPromptSearchOpen] = useState(false);
   const [composerHighlightedSearchKey, setComposerHighlightedSearchKey] = useState<string | null>(
     null,
   );
@@ -4019,6 +4021,37 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     },
     [composerDraftTarget, promptRef, setComposerDraftPrompt, setComposerTrigger],
   );
+
+  useEffect(() => {
+    const onKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (
+        event.key.toLowerCase() !== "r" ||
+        !event.ctrlKey ||
+        event.metaKey ||
+        event.altKey ||
+        event.shiftKey ||
+        event.isComposing ||
+        isPromptSearchOpen ||
+        isCommandPaletteOpen() ||
+        getTerminalFocusOwner() !== null
+      )
+        return;
+      const target = event.target;
+      if (
+        target instanceof Element &&
+        (target.closest("[data-slot=dialog-popup], [data-slot=command-dialog-popup]") ||
+          (target.closest("input, textarea, select, [contenteditable=true]") &&
+            !target.closest("[data-composer-editor]")))
+      )
+        return;
+      event.preventDefault();
+      event.stopPropagation();
+      setIsStashMenuOpen(false);
+      setIsPromptSearchOpen(true);
+    };
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => window.removeEventListener("keydown", onKeyDown, true);
+  }, [isPromptSearchOpen]);
 
   const navigatePromptHistory = useCallback(
     (direction: "backward" | "forward", event: KeyboardEvent): boolean => {
@@ -6257,6 +6290,19 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       className="mx-auto w-full min-w-0 max-w-(--chat-max-width)"
       data-chat-composer-form="true"
     >
+      {isPromptSearchOpen && (
+        <ComposerPromptSearch
+          key={promptHistoryTargetKey}
+          environmentId={environmentId}
+          onClose={() => setIsPromptSearchOpen(false)}
+          onSelect={(prompt) => {
+            promptHistoryPositionRef.current = null;
+            replacePromptFromHistory(prompt);
+            setIsPromptSearchOpen(false);
+            window.requestAnimationFrame(() => composerEditorRef.current?.focusAtEnd());
+          }}
+        />
+      )}
       {composerControlsInStrip && restingControlsHost
         ? createPortal(
             <div

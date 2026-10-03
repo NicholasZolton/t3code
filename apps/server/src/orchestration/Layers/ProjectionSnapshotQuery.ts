@@ -199,6 +199,10 @@ const ProjectionThreadSearchRow = Schema.Struct({
   matchText: Schema.String,
   messageCreatedAt: Schema.NullOr(IsoDateTime),
 });
+const ProjectionPromptSearchRow = Schema.Struct({
+  messageId: MessageId,
+  text: Schema.String,
+});
 const WorkspaceRootLookupInput = Schema.Struct({
   workspaceRoot: Schema.String,
 });
@@ -320,6 +324,8 @@ function maxIso(left: string | null, right: string): string {
 function escapeLikePattern(value: string): string {
   return value.replaceAll("!", "!!").replaceAll("%", "!%").replaceAll("_", "!_");
 }
+
+const PROMPT_SEARCH_PAGE_SIZE = 30;
 
 function foldAsciiCase(value: string): string {
   return value.replace(/[A-Z]/g, (character) => character.toLowerCase());
@@ -1196,6 +1202,27 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           thread_updated_at DESC,
           thread_id ASC
         LIMIT ${limit}
+      `,
+  });
+
+  const searchPromptRows = SqlSchema.findAll({
+    Request: Schema.Struct({ pattern: Schema.String, offset: NonNegativeInt }),
+    Result: ProjectionPromptSearchRow,
+    execute: ({ pattern, offset }) =>
+      sql`
+        SELECT
+          messages.message_id AS "messageId",
+          messages.text
+        FROM projection_thread_messages AS messages
+        INNER JOIN projection_threads AS threads ON threads.thread_id = messages.thread_id
+        INNER JOIN projection_projects AS projects ON projects.project_id = threads.project_id
+        WHERE messages.role = 'user'
+          AND messages.is_streaming = 0
+          AND threads.deleted_at IS NULL
+          AND projects.deleted_at IS NULL
+          AND messages.text LIKE ${pattern} ESCAPE '!'
+        ORDER BY messages.created_at DESC, messages.message_id DESC
+        LIMIT ${PROMPT_SEARCH_PAGE_SIZE + 1} OFFSET ${offset}
       `,
   });
 
@@ -3165,6 +3192,26 @@ pending_approval_requests AS (
     };
   });
 
+  const searchPrompts: ProjectionSnapshotQueryShape["searchPrompts"] = (input) =>
+    searchPromptRows({
+      pattern: `%${[...input.query].map(escapeLikePattern).join("%")}%`,
+      offset: input.offset ?? 0,
+    }).pipe(
+      Effect.mapError(
+        toPersistenceSqlOrDecodeError(
+          "ProjectionSnapshotQuery.searchPrompts:query",
+          "ProjectionSnapshotQuery.searchPrompts:decodeRows",
+        ),
+      ),
+      Effect.map((rows) => ({
+        matches: rows.slice(0, PROMPT_SEARCH_PAGE_SIZE),
+        nextOffset:
+          rows.length > PROMPT_SEARCH_PAGE_SIZE
+            ? (input.offset ?? 0) + PROMPT_SEARCH_PAGE_SIZE
+            : null,
+      })),
+    );
+
   const getActiveProjectByWorkspaceRoot: ProjectionSnapshotQueryShape["getActiveProjectByWorkspaceRoot"] =
     (workspaceRoot) =>
       getActiveProjectRowByWorkspaceRoot({ workspaceRoot }).pipe(
@@ -3972,6 +4019,7 @@ pending_approval_requests AS (
     getArchivedShellSnapshot,
     getDeletedWorktreeThreads,
     searchThreads,
+    searchPrompts,
     getSnapshotSequence,
     getCounts,
     getEventReplayStats,
