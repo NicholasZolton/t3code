@@ -6,17 +6,21 @@ tags: [upstream, fork, integration]
 status: stable
 generated:
   by: codex/gpt-6.1-sol
-  at: 2026-10-03T19:19:25Z
+  at: 2026-10-03T19:32:02Z
 verified:
   - by: codex/gpt-6.1-sol
-    at: 2026-10-03T19:19:25Z
+    at: 2026-10-03T19:32:02Z
 snapshot:
-  at: 2026-10-03T19:19:25Z
+  at: 2026-10-03T19:32:02Z
   fork_main: 0a5b85436bc8fcd26b2ddb126b8c6e6c5818f190
   upstream_main: 65731f986ba2175063b0182deb6a143f8f323b74
   shared_baseline: 99e08526e5ec84f294940cba5929841518c52fec
   last_main_integration: 24d2e49fd91aa8779992b187a3d3395a51de9138
+  branch_integration: 696fd65db117198476ad840ca41c4af031b086c4
 sources:
+  - id: current-integration-candidate
+    resource: "Local Git object 696fd65db117198476ad840ca41c4af031b086c4 on NicholasZolton/review-upstream-changes-2; parents 0a5b85436bc8fcd26b2ddb126b8c6e6c5818f190 and 65731f986ba2175063b0182deb6a143f8f323b74; zero ancestry gap against the pinned upstream tip; not yet in fork main"
+    title: Full V2 integration candidate with preserved upstream ancestry
   - id: reviewed-fork-main
     resource: https://github.com/NicholasZolton/t3code/commit/0a5b85436bc8fcd26b2ddb126b8c6e6c5818f190
     title: Fork main at the October 3 review
@@ -95,11 +99,12 @@ Refresh it after the next review or integration using the
 
 ## October 3 integration candidate
 
-The branch `NicholasZolton/review-upstream-changes-2` integrates the full reviewed
-range through `65731f986ba2175063b0182deb6a143f8f323b74`, preserving upstream
+Merge `696fd65db117198476ad840ca41c4af031b086c4` on
+`NicholasZolton/review-upstream-changes-2` integrates all 60 reviewed commits through `65731f986ba2175063b0182deb6a143f8f323b74`, preserving upstream
 ancestry. It uses upstream orchestrator V2, the native OpenCode 2 adapter, and the
 new thread/project MCP tools. Fork `main` at `0a5b85436b` still awaits this
-integration; the last completed main sync remains PR #27.[^reviewed-fork-main][^reviewed-upstream-main]
+integration; the last completed main sync remains PR #27. The branch has zero
+remaining ancestry gap against the pinned upstream tip.[^current-integration-candidate][^reviewed-fork-main]
 
 The maintainer chose upstream's legacy import: old messages and metadata survive,
 but pre-upgrade checkpoints, tool history, and native sessions do not. First
@@ -268,3 +273,5 @@ git log --reverse --oneline origin/main..upstream/main
 [^upstream-protocol]: Protocol version 2 and client/server negotiation metadata.
 
 [^upstream-current-manifest]: Version-scoped OpenCode advisory at the reviewed tip.
+
+[^current-integration-candidate]: Verified merge parents and ancestry on the local integration branch; fork main has not incorporated the candidate.

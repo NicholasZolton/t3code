@@ -2,7 +2,7 @@
 
 ## 2026-10-03
 
-- **Integration candidate**: Updated [upstream integration](upstream-integration.md) for the full V2 merge through `65731f986b`, the accepted legacy-history boundary, and retained fork features. Fork `main` remains at `0a5b85436b`; deployment and main integration are pending.
+- **Integration candidate**: Updated [upstream integration](upstream-integration.md) for local merge `696fd65db1` through `65731f986b`, the accepted legacy-history boundary, and retained fork features. Fork `main` remains at `0a5b85436b`; deployment and main integration are pending.
 
 - **Review**: Refreshed [upstream integration](upstream-integration.md) against fork `main` at `0a5b85436b` and upstream `65731f986b`: 60 commits remain unmerged, with 105 full-merge conflicts. Recorded V2 legacy-history and protocol rollout decisions, new upstream native OpenCode 2 support, and the fork compatibility protections still required.
 
