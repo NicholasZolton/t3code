@@ -6,12 +6,19 @@ import * as NodePath from "node:path";
 
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as NetService from "@t3tools/shared/Net";
-import { HostProcessEnvironment } from "@t3tools/shared/hostProcess";
+import { HostProcessEnvironment, HostProcessPlatform } from "@t3tools/shared/hostProcess";
 import { assert, describe, expect, it } from "@effect/vitest";
+import * as ConfigProvider from "effect/ConfigProvider";
 import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
+import * as Sink from "effect/Sink";
+import * as Stream from "effect/Stream";
 import * as TestConsole from "effect/testing/TestConsole";
 import { Command } from "effect/unstable/cli";
+import { FetchHttpClient } from "effect/unstable/http";
+import { ChildProcessSpawner } from "effect/unstable/process";
 
 import { cli } from "../bin.ts";
 import {
@@ -24,11 +31,10 @@ import {
   persistServerRuntimeState,
   type PersistedServerRuntimeState,
 } from "../serverRuntimeState.ts";
-import {
-  DevServerNotProxiableError,
-  resolveDirectPairingBaseUrl,
-  resolveTailscaleLocalTarget,
-} from "./pair.ts";
+import { resolveDirectPairingBaseUrl } from "./pair.ts";
+import { type CliServerFlags, resolveServerConfig } from "./config.ts";
+import * as TailscaleServe from "../environment/TailscaleServe.ts";
+import { DevServerNotProxiableError, resolveLocalTarget } from "../environment/TailscaleServe.ts";
 
 import packageJson from "../../package.json" with { type: "json" };
 
@@ -58,33 +64,34 @@ describe("pair base URL selection", () => {
 });
 
 describe("pair tailscale local target", () => {
+  const target = { port: baseState.port, host: undefined, devUrl: undefined };
   it("proxies the dev web port for dev servers", () => {
-    expect(resolveTailscaleLocalTarget({ ...baseState, devUrl: "http://localhost:5733/" })).toEqual(
-      { localPort: 5_733 },
-    );
+    expect(resolveLocalTarget({ ...target, devUrl: new URL("http://localhost:5733/") })).toEqual({
+      localPort: 5_733,
+    });
     // A dev server on a non-loopback interface must be proxied at that
     // interface; tailscale serve defaults to 127.0.0.1 otherwise.
-    expect(
-      resolveTailscaleLocalTarget({ ...baseState, devUrl: "http://192.168.1.10:5733/" }),
-    ).toEqual({ localPort: 5_733, localHost: "192.168.1.10" });
+    expect(resolveLocalTarget({ ...target, devUrl: new URL("http://192.168.1.10:5733/") })).toEqual(
+      { localPort: 5_733, localHost: "192.168.1.10" },
+    );
     // URL.hostname keeps IPv6 brackets, so the serve target stays valid.
     expect(
-      resolveTailscaleLocalTarget({ ...baseState, devUrl: "http://[fd7a:115c::1]:5733/" }),
+      resolveLocalTarget({ ...target, devUrl: new URL("http://[fd7a:115c::1]:5733/") }),
     ).toEqual({ localPort: 5_733, localHost: "[fd7a:115c::1]" });
   });
 
   it("rejects HTTPS dev URLs, which tailscale serve cannot proxy", () => {
     expect(
-      resolveTailscaleLocalTarget({ ...baseState, devUrl: "https://localhost:5733/" }),
+      resolveLocalTarget({ ...target, devUrl: new URL("https://localhost:5733/") }),
     ).toBeInstanceOf(DevServerNotProxiableError);
   });
 
   it("proxies the backend port directly otherwise", () => {
-    expect(resolveTailscaleLocalTarget(baseState)).toEqual({ localPort: 3_773 });
-    expect(resolveTailscaleLocalTarget({ ...baseState, host: "0.0.0.0" })).toEqual({
+    expect(resolveLocalTarget(target)).toEqual({ localPort: 3_773 });
+    expect(resolveLocalTarget({ ...target, host: "0.0.0.0" })).toEqual({
       localPort: 3_773,
     });
-    expect(resolveTailscaleLocalTarget({ ...baseState, host: "192.168.1.42" })).toEqual({
+    expect(resolveLocalTarget({ ...target, host: "192.168.1.42" })).toEqual({
       localPort: 3_773,
       localHost: "192.168.1.42",
     });
@@ -142,6 +149,259 @@ const withDescriptorServer = <A, E, R>(run: (origin: string) => Effect.Effect<A,
     },
     (server) => Effect.sync(() => server.close()),
   );
+
+const TAILNET_HOST = "pair-test.tail.ts.net";
+const TAILNET_PORT = 6768;
+const TAILNET_ORIGIN = `https://${TAILNET_HOST}:${TAILNET_PORT}`;
+
+// Replace only the daemon and its HTTPS transport; descriptor requests use real local HTTP.
+function makeTailscaleHarness(): {
+  readonly mappings: Map<number, string>;
+  readonly fetch: typeof globalThis.fetch;
+  readonly layer: Layer.Layer<ChildProcessSpawner.ChildProcessSpawner>;
+} {
+  const mappings = new Map<number, string>();
+  const fetch: typeof globalThis.fetch = async (input, init) => {
+    const url = new URL(input instanceof Request ? input.url : input);
+    if (url.hostname !== TAILNET_HOST) {
+      // @effect-diagnostics-next-line globalFetch:off - Exercise the configured Fetch implementation against the real HTTP fixture.
+      return globalThis.fetch(input, init);
+    }
+    const target = mappings.get(Number(url.port) || 443);
+    if (target === undefined) {
+      return new Response("Bad Gateway", { status: 502 });
+    }
+    try {
+      // @effect-diagnostics-next-line globalFetch:off - Stand in for Tailscale's HTTPS proxy while keeping its backend real.
+      return await globalThis.fetch(new URL(`${url.pathname}${url.search}`, target), init);
+    } catch {
+      return new Response("Bad Gateway", { status: 502 });
+    }
+  };
+  const spawner = ChildProcessSpawner.make((command) => {
+    if (command._tag !== "StandardCommand" || command.command !== "tailscale") {
+      return Effect.die("Unexpected process in Tailscale pairing test");
+    }
+    const args = command.args;
+    let stdout = "";
+    if (args[0] === "status") {
+      stdout = JSON.stringify({ Self: { DNSName: `${TAILNET_HOST}.` } });
+    } else if (args[0] === "serve") {
+      const servePort = Number(args.find((arg) => arg.startsWith("--https="))?.split("=")[1]);
+      const target = args.at(-1);
+      if (target === "off") {
+        mappings.delete(servePort);
+      } else if (target?.startsWith("http://")) {
+        mappings.set(servePort, target);
+      } else {
+        return Effect.die("Unexpected Tailscale Serve target");
+      }
+    } else {
+      return Effect.die("Unexpected Tailscale command");
+    }
+    return Effect.succeed(
+      ChildProcessSpawner.makeHandle({
+        pid: ChildProcessSpawner.ProcessId(1),
+        exitCode: Effect.succeed(ChildProcessSpawner.ExitCode(0)),
+        isRunning: Effect.succeed(false),
+        kill: () => Effect.void,
+        unref: Effect.succeed(Effect.void),
+        stdin: Sink.drain,
+        stdout: Stream.make(new TextEncoder().encode(stdout)),
+        stderr: Stream.empty,
+        all: Stream.empty,
+        getInputFd: () => Sink.drain,
+        getOutputFd: () => Stream.empty,
+      }),
+    );
+  });
+  return {
+    mappings,
+    fetch,
+    layer: Layer.mergeAll(
+      Layer.succeed(ChildProcessSpawner.ChildProcessSpawner, spawner),
+      Layer.succeed(HostProcessPlatform, "linux"),
+    ),
+  };
+}
+
+function restartFlags(baseDir: string, port: number): CliServerFlags {
+  return {
+    mode: Option.none(),
+    port: Option.some(port),
+    host: Option.some("127.0.0.1"),
+    baseDir: Option.some(baseDir),
+    cwd: Option.none(),
+    devUrl: Option.none(),
+    noBrowser: Option.none(),
+    bootstrapFd: Option.none(),
+    autoBootstrapProjectFromCwd: Option.none(),
+    logWebSocketEvents: Option.none(),
+    tailscaleServeEnabled: Option.none(),
+    tailscaleServePort: Option.none(),
+  };
+}
+
+const tailscaleRuntimeLayer = (layer: Layer.Layer<ChildProcessSpawner.ChildProcessSpawner>) =>
+  Layer.mergeAll(CliRuntimeLayer, layer, ConfigProvider.layer(ConfigProvider.fromEnv({ env: {} })));
+
+describe("Tailscale pairing across restarts", () => {
+  it.effect("restores a remembered custom HTTPS port to the new backend port", () => {
+    const tailscale = makeTailscaleHarness();
+    return Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const baseDir = yield* fs.makeTempDirectoryScoped({ prefix: "t3-pair-restart-" });
+      const statePath = NodePath.join(baseDir, "userdata", "server-runtime.json");
+      yield* withDescriptorServer((origin) =>
+        Effect.gen(function* () {
+          yield* persistServerRuntimeState({
+            path: statePath,
+            state: yield* makePersistedServerRuntimeState({
+              config: { host: "127.0.0.1", devUrl: undefined },
+              port: Number(new URL(origin).port),
+            }),
+          });
+          const output = yield* captureStdout(
+            runCli([
+              "pair",
+              "--base-dir",
+              baseDir,
+              "--tailscale",
+              "--tailscale-serve-port",
+              String(TAILNET_PORT),
+            ]).pipe(Effect.provide(tailscale.layer)),
+          );
+          assert.include(output, `Pairing URL: ${TAILNET_ORIGIN}/pair#token=`);
+          assert.equal(
+            (yield* Effect.promise(() =>
+              tailscale.fetch(`${TAILNET_ORIGIN}/.well-known/t3/environment`),
+            )).status,
+            200,
+          );
+        }),
+      );
+
+      assert.equal(
+        (yield* Effect.promise(() =>
+          tailscale.fetch(`${TAILNET_ORIGIN}/.well-known/t3/environment`),
+        )).status,
+        502,
+      );
+      yield* withDescriptorServer((origin) =>
+        Effect.gen(function* () {
+          const config = yield* resolveServerConfig(
+            restartFlags(baseDir, Number(new URL(origin).port)),
+            Option.none(),
+          );
+          assert.isTrue(config.tailscaleServeEnabled);
+          assert.equal(config.tailscaleServePort, TAILNET_PORT);
+          const service = yield* TailscaleServe.TailscaleServe;
+          yield* service.publish({
+            port: config.port,
+            host: config.host,
+            devUrl: config.devUrl,
+            servePort: config.tailscaleServePort,
+          });
+          const response = yield* Effect.promise(() =>
+            tailscale.fetch(`${TAILNET_ORIGIN}/.well-known/t3/environment`),
+          );
+          assert.equal(response.status, 200);
+          assert.deepEqual(yield* Effect.promise(() => response.json()), testDescriptor);
+        }),
+      );
+    }).pipe(
+      Effect.provideService(FetchHttpClient.Fetch, tailscale.fetch),
+      Effect.provide(
+        TailscaleServe.layer.pipe(Layer.provideMerge(tailscaleRuntimeLayer(tailscale.layer))),
+      ),
+    );
+  });
+
+  it.effect("remembers a route that already reaches this environment", () => {
+    const tailscale = makeTailscaleHarness();
+    return withDescriptorServer((origin) =>
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem;
+        const baseDir = yield* fs.makeTempDirectoryScoped({ prefix: "t3-pair-reuse-" });
+        tailscale.mappings.set(TAILNET_PORT, origin);
+        yield* persistServerRuntimeState({
+          path: NodePath.join(baseDir, "userdata", "server-runtime.json"),
+          state: yield* makePersistedServerRuntimeState({
+            config: { host: "127.0.0.1", devUrl: undefined },
+            port: Number(new URL(origin).port),
+          }),
+        });
+        yield* captureStdout(
+          runCli([
+            "pair",
+            "--base-dir",
+            baseDir,
+            "--tailscale",
+            "--tailscale-serve-port",
+            String(TAILNET_PORT),
+          ]).pipe(Effect.provide(tailscale.layer)),
+        );
+        const config = yield* resolveServerConfig(
+          restartFlags(baseDir, Number(new URL(origin).port)),
+          Option.none(),
+        );
+        assert.isTrue(config.tailscaleServeEnabled);
+        assert.equal(config.tailscaleServePort, TAILNET_PORT);
+      }),
+    ).pipe(
+      Effect.provideService(FetchHttpClient.Fetch, tailscale.fetch),
+      Effect.provide(tailscaleRuntimeLayer(tailscale.layer)),
+    );
+  });
+
+  it.effect("disables the remembered route and stops restoring it", () => {
+    const tailscale = makeTailscaleHarness();
+    return withDescriptorServer((origin) =>
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem;
+        const baseDir = yield* fs.makeTempDirectoryScoped({ prefix: "t3-pair-disable-" });
+        yield* persistServerRuntimeState({
+          path: NodePath.join(baseDir, "userdata", "server-runtime.json"),
+          state: yield* makePersistedServerRuntimeState({
+            config: { host: "127.0.0.1", devUrl: undefined },
+            port: Number(new URL(origin).port),
+          }),
+        });
+        yield* captureStdout(
+          runCli([
+            "pair",
+            "--base-dir",
+            baseDir,
+            "--tailscale",
+            "--tailscale-serve-port",
+            String(TAILNET_PORT),
+          ]).pipe(Effect.provide(tailscale.layer)),
+        );
+        const output = yield* captureStdout(
+          runCli(["pair", "--base-dir", baseDir, "--tailscale=false"]).pipe(
+            Effect.provide(tailscale.layer),
+          ),
+        );
+        assert.include(output, "Tailscale HTTPS disabled");
+        assert.notInclude(output, "Pairing URL:");
+        assert.equal(
+          (yield* Effect.promise(() =>
+            tailscale.fetch(`${TAILNET_ORIGIN}/.well-known/t3/environment`),
+          )).status,
+          502,
+        );
+        const config = yield* resolveServerConfig(
+          restartFlags(baseDir, Number(new URL(origin).port)),
+          Option.none(),
+        );
+        assert.isFalse(config.tailscaleServeEnabled);
+      }),
+    ).pipe(
+      Effect.provideService(FetchHttpClient.Fetch, tailscale.fetch),
+      Effect.provide(tailscaleRuntimeLayer(tailscale.layer)),
+    );
+  });
+});
 
 describe("t3 pair", () => {
   it.effect("mints a token and prints a QR pairing URL for a live server", () =>

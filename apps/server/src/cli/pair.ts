@@ -20,7 +20,6 @@ import * as OtelEnvironment from "@t3tools/shared/otelEnvironment";
 import {
   buildTailscaleHttpsBaseUrl,
   DEFAULT_TAILSCALE_SERVE_PORT,
-  ensureTailscaleServe,
   readTailscaleStatus,
 } from "@t3tools/tailscale";
 import * as Config from "effect/Config";
@@ -42,6 +41,7 @@ import {
 
 import * as EnvironmentAuth from "../auth/EnvironmentAuth.ts";
 import * as ServerConfig from "../config.ts";
+import * as TailscaleServe from "../environment/TailscaleServe.ts";
 import { resolveBaseDir } from "../os-jank.ts";
 import {
   type PersistedServerRuntimeState,
@@ -50,9 +50,7 @@ import {
 } from "../serverRuntimeState.ts";
 import {
   buildPairingUrl,
-  formatHostForUrl,
   isLoopbackHost,
-  isWildcardHost,
   renderTerminalQrCode,
   resolveHeadlessConnectionString,
 } from "../startupAccess.ts";
@@ -136,44 +134,6 @@ export class ServePortOccupiedError extends Schema.TaggedError<ServePortOccupied
 /** The URL a browser or phone should pair through, absent Tailscale. */
 export const resolveDirectPairingBaseUrl = (state: PersistedServerRuntimeState): string =>
   state.devUrl ?? resolveHeadlessConnectionString(state.host, state.port);
-
-export class DevServerNotProxiableError extends Schema.TaggedError<DevServerNotProxiableError>()(
-  "DevServerNotProxiableError",
-  { devUrl: Schema.String },
-) {
-  override get message(): string {
-    return `Tailscale Serve can only proxy plain-HTTP local targets, and this dev server runs at ${this.devUrl}. Pair without --tailscale instead.`;
-  }
-}
-
-const isDevServerNotProxiableError = Schema.is(DevServerNotProxiableError);
-
-/**
- * The local endpoint Tailscale Serve should proxy to. Dev servers are
- * single-origin, so the web dev server's port is the one to publish; the
- * backend rides along behind Vite's proxy. Serve targets are always plain
- * HTTP, so an HTTPS dev URL cannot be proxied and is rejected.
- */
-export const resolveTailscaleLocalTarget = (
-  state: PersistedServerRuntimeState,
-): { readonly localPort: number; readonly localHost?: string } | DevServerNotProxiableError => {
-  if (state.devUrl !== undefined) {
-    const devUrl = new URL(state.devUrl);
-    if (devUrl.protocol !== "http:") {
-      return new DevServerNotProxiableError({ devUrl: state.devUrl });
-    }
-    const localPort = devUrl.port.length > 0 ? Number.parseInt(devUrl.port, 10) : 80;
-    return isLoopbackHost(devUrl.hostname)
-      ? { localPort }
-      : { localPort, localHost: devUrl.hostname };
-  }
-  // A server bound to one specific interface does not answer on loopback, so
-  // the proxy has to target that interface directly.
-  if (state.host !== undefined && !isWildcardHost(state.host) && !isLoopbackHost(state.host)) {
-    return { localPort: state.port, localHost: formatHostForUrl(state.host) };
-  }
-  return { localPort: state.port };
-};
 
 const formatPairOutput = (input: {
   readonly serverLabel: string;
@@ -396,21 +356,24 @@ const resolveTailscalePairingBase = Effect.fn("pair.resolveTailscalePairingBase"
       return yield* new ServePortOccupiedError({ servePort: input.servePort });
     }
 
-    const localTarget = resolveTailscaleLocalTarget(input.target.state);
-    if (isDevServerNotProxiableError(localTarget)) {
-      return yield* localTarget;
-    }
-    yield* ensureTailscaleServe({
-      localPort: localTarget.localPort,
-      servePort: input.servePort,
-      ...(localTarget.localHost !== undefined ? { localHost: localTarget.localHost } : {}),
-    }).pipe(
-      Effect.mapError(
-        (cause) => new TailscaleServeFailedError({ servePort: input.servePort, cause }),
-      ),
-    );
+    const tailscaleServe = yield* TailscaleServe.TailscaleServe;
+    yield* tailscaleServe
+      .publish({
+        port: input.target.state.port,
+        host: input.target.state.host,
+        devUrl:
+          input.target.state.devUrl !== undefined ? new URL(input.target.state.devUrl) : undefined,
+        servePort: input.servePort,
+      })
+      .pipe(
+        Effect.mapError((cause) =>
+          cause._tag === "DevServerNotProxiableError"
+            ? cause
+            : new TailscaleServeFailedError({ servePort: input.servePort, cause }),
+        ),
+      );
     notes.push(
-      `Tailscale Serve now maps ${baseUrl} to this server and persists across restarts. Remove it with \`tailscale serve --https=${String(input.servePort)} off\`.`,
+      `Tailscale Serve now maps ${baseUrl} to this server. T3 Code will restore it on restart. Remove it with \`t3 pair --tailscale=false\`.`,
     );
 
     const probed = yield* awaitEnvironmentDescriptor(baseUrl);
@@ -465,15 +428,15 @@ const labelFlag = Flag.String("label").pipe(
 
 const tailscaleFlag = Flag.Boolean("tailscale").pipe(
   Flag.withDescription(
-    "Publish the server over Tailscale Serve HTTPS and pair through the tailnet URL.",
+    "Publish and remember Tailscale HTTPS access. Pass --tailscale=false to remove it.",
   ),
-  Flag.withDefault(false),
+  Flag.optional,
 );
 
 const tailscaleServePortFlag = Flag.Int("tailscale-serve-port").pipe(
   Flag.withSchema(PortSchema),
   Flag.withDescription("HTTPS port for Tailscale Serve when --tailscale is enabled."),
-  Flag.withDefault(DEFAULT_TAILSCALE_SERVE_PORT),
+  Flag.optional,
 );
 
 export const pairCommand = Command.make("pair", {
@@ -494,14 +457,31 @@ export const pairCommand = Command.make("pair", {
       const logLevel = Option.getOrElse(cliLogLevel, () => "Warn" as const);
 
       const target = yield* discoverPairTarget(Option.getOrUndefined(flags.baseDir));
+      const config = yield* makePairServerConfig({ target, logLevel });
+      const tailscaleServe = yield* TailscaleServe.TailscaleServe;
+      if (Option.isSome(flags.tailscale) && !flags.tailscale.value) {
+        yield* tailscaleServe.disable({
+          stateDir: config.stateDir,
+          ...(Option.isSome(flags.tailscaleServePort)
+            ? { servePort: flags.tailscaleServePort.value }
+            : {}),
+        });
+        yield* Console.log(`Tailscale HTTPS disabled for ${target.descriptor.label}.`);
+        return;
+      }
 
       const notes: Array<string> = [];
       let pairingBaseUrl: string;
-      if (flags.tailscale) {
+      if (Option.getOrElse(flags.tailscale, () => false)) {
+        const servePort = Option.getOrElse(
+          flags.tailscaleServePort,
+          () => DEFAULT_TAILSCALE_SERVE_PORT,
+        );
         const resolved = yield* resolveTailscalePairingBase({
           target,
-          servePort: flags.tailscaleServePort,
+          servePort,
         });
+        yield* tailscaleServe.remember(config.stateDir, servePort);
         pairingBaseUrl = resolved.baseUrl;
         notes.push(...resolved.notes);
       } else {
@@ -518,7 +498,6 @@ export const pairCommand = Command.make("pair", {
         }
       }
 
-      const config = yield* makePairServerConfig({ target, logLevel });
       const issued = yield* mintPairingLink({ config, ttl: flags.ttl, label: flags.label });
       const pairingUrl = buildPairingUrl(pairingBaseUrl, issued.credential);
 
@@ -532,6 +511,6 @@ export const pairCommand = Command.make("pair", {
           notes,
         }),
       );
-    }).pipe(Effect.provide(FetchHttpClient.layer)),
+    }).pipe(Effect.provide(Layer.mergeAll(TailscaleServe.layer, FetchHttpClient.layer))),
   ),
 );

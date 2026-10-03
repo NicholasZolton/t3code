@@ -97,12 +97,17 @@ For an already-running server:
 t3 pair --tailscale
 ```
 
+On Linux, the account running T3 Code needs permission to manage Tailscale Serve.
+If Tailscale reports access denied, grant that account access with
+`sudo tailscale set --operator="$USER"`.
+
 The pairing link uses an address such as `https://machine.tailnet.ts.net/`.
-The mapping created by `pair --tailscale` persists across restarts. Remove its
-default-port mapping with:
+T3 Code remembers the HTTPS port used by `pair --tailscale` and restores its
+forwarding rule on restart, even if the server's local port changes. To remove
+the route and stop restoring it:
 
 ```bash
-tailscale serve --https=443 off
+t3 pair --tailscale=false
 ```
 
 If that port is already in use, choose another with

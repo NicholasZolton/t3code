@@ -175,7 +175,8 @@ import {
 import { orchestrationHttpApiLayer } from "./orchestration/http.ts";
 import * as NetService from "@t3tools/shared/Net";
 import * as RelayClient from "@t3tools/shared/relayClient";
-import { disableTailscaleServe, ensureTailscaleServe } from "@t3tools/tailscale";
+import { disableTailscaleServe } from "@t3tools/tailscale";
+import * as TailscaleServe from "./environment/TailscaleServe.ts";
 import { forkParked, ServerActivation } from "./serverActivation.ts";
 
 // MCP handoff thread IDs include escaped provenance and can exceed find-my-way's
@@ -710,26 +711,30 @@ const makeServerLayer = Layer.unwrap(
               }
 
               const localPort = address.port;
-              return yield* ensureTailscaleServe({
-                localPort,
-                servePort: config.tailscaleServePort,
-                localHost: "127.0.0.1",
-              }).pipe(
-                Effect.as({ localPort, servePort: config.tailscaleServePort }),
-                Effect.tap(() =>
-                  Effect.logInfo("Tailscale Serve configured", {
-                    localPort,
-                    servePort: config.tailscaleServePort,
-                  }),
-                ),
-                Effect.catch((cause) =>
-                  Effect.logWarning("Failed to configure Tailscale Serve", {
-                    cause,
-                    localPort,
-                    servePort: config.tailscaleServePort,
-                  }).pipe(Effect.as(null)),
-                ),
-              );
+              const tailscaleServe = yield* TailscaleServe.TailscaleServe;
+              return yield* tailscaleServe
+                .publish({
+                  port: localPort,
+                  servePort: config.tailscaleServePort,
+                  host: config.host,
+                  devUrl: config.devUrl,
+                })
+                .pipe(
+                  Effect.as({ localPort, servePort: config.tailscaleServePort }),
+                  Effect.tap(() =>
+                    Effect.logInfo("Tailscale Serve configured", {
+                      localPort,
+                      servePort: config.tailscaleServePort,
+                    }),
+                  ),
+                  Effect.catch((cause) =>
+                    Effect.logWarning("Failed to configure Tailscale Serve", {
+                      cause,
+                      localPort,
+                      servePort: config.tailscaleServePort,
+                    }).pipe(Effect.as(null)),
+                  ),
+                );
             }),
             (configured) =>
               configured
@@ -986,7 +991,7 @@ const makeServerLayer = Layer.unwrap(
       routesLayer,
       httpListeningLayer,
       runtimeStateLayer.pipe(Layer.provide(launcherLayer)),
-      tailscaleServeLayer,
+      tailscaleServeLayer.pipe(Layer.provide(TailscaleServe.layer)),
       cloudDesiredLinkReconcileLayer,
       HeapSnapshot.layer,
     );

@@ -300,13 +300,13 @@ describe("ssh tunnel scripts", () => {
     assert.include(launch, "resolve_default_runtime_port()");
     assert.include(launch, 'DEFAULT_RUNTIME_INFO="$(resolve_default_runtime_port');
     assert.include(launch, "if (!Number.isInteger(pid) || pid <= 0 || !Number.isInteger(port))");
-    assert.include(launch, 'PID_TO_STOP="${REMOTE_PID:-$DEFAULT_RUNTIME_PID}"');
+    assert.include(launch, 'PID_TO_STOP="$REMOTE_PID"');
     assert.include(launch, 'REMOTE_PORT="$DEFAULT_REMOTE_PORT"');
     assert.include(launch, 'rm -f "$PID_FILE"');
     assert.include(launch, "printf 'external\\n' >\"$MANAGED_FILE\"");
     assert.include(launch, 'if [ -z "$REMOTE_PORT" ]; then');
     assert.isBelow(
-      launch.indexOf('if [ "$REMOTE_MANAGED" = "managed" ]'),
+      launch.indexOf('if [ "$REMOTE_MANAGED" = "managed" ] && [ -n "$REMOTE_PID" ]'),
       launch.indexOf("printf 'external\\n' >\"$MANAGED_FILE\""),
     );
     assert.isBelow(

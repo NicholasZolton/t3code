@@ -21,6 +21,7 @@ import { DEFAULT_SIGNAL_EXPORT } from "@t3tools/shared/observability";
 import * as OtelEnvironment from "@t3tools/shared/otelEnvironment";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { deriveServerPaths } from "../config.ts";
+import * as TailscaleServe from "../environment/TailscaleServe.ts";
 import { resolveServerConfig } from "./config.ts";
 
 const deriveExplicitServerPaths = (baseDir: string, devUrl: URL | undefined) =>
@@ -1012,6 +1013,40 @@ it.layer(NodeServices.layer)("cli config resolution", (it) => {
     tailscaleServeEnabled: Option.none<boolean>(),
     tailscaleServePort: Option.none<number>(),
   });
+
+  it.effect("explicit startup settings override remembered Tailscale pairing", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const baseDir = yield* fs.makeTempDirectoryScoped({ prefix: "t3-cli-tailscale-settings-" });
+      const paths = yield* deriveExplicitServerPaths(baseDir, undefined);
+      const tailscale = yield* TailscaleServe.TailscaleServe;
+      yield* tailscale.remember(paths.stateDir, 6768);
+      const resolve = (
+        overrides: Partial<ReturnType<typeof minimalWebFlags>>,
+        env: Record<string, string> = {},
+      ) =>
+        resolveServerConfig({ ...minimalWebFlags(baseDir), ...overrides }, Option.none()).pipe(
+          Effect.provide(
+            Layer.mergeAll(NetService.layer, ConfigProvider.layer(ConfigProvider.fromEnv({ env }))),
+          ),
+        );
+      const remembered = yield* resolve({});
+      expect(remembered.tailscaleServeEnabled).toBe(true);
+      expect(remembered.tailscaleServePort).toBe(6768);
+
+      const disabledByFlag = yield* resolve({ tailscaleServeEnabled: Option.some(false) });
+      expect(disabledByFlag.tailscaleServeEnabled).toBe(false);
+      const disabledByEnv = yield* resolve({}, { T3CODE_TAILSCALE_SERVE: "false" });
+      expect(disabledByEnv.tailscaleServeEnabled).toBe(false);
+      const portOverride = yield* resolve({ tailscaleServePort: Option.some(8443) });
+      expect(portOverride.tailscaleServePort).toBe(8443);
+
+      const fd = yield* openBootstrapFd(makeDesktopBootstrap());
+      const desktop = yield* resolve({ bootstrapFd: Option.some(fd) });
+      expect(desktop.tailscaleServeEnabled).toBe(false);
+      expect(desktop.tailscaleServePort).toBe(443);
+    }).pipe(Effect.provide(TailscaleServe.layer)),
+  );
 
   it.effect(
     "resolves each signal's endpoint through T3CODE_OTLP_*_URL, an OTEL endpoint, the bootstrap envelope, and persisted Settings, in that order",

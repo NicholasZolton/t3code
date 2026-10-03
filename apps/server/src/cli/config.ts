@@ -7,6 +7,7 @@ import {
 import * as OtelEnvironment from "@t3tools/shared/otelEnvironment";
 import { parsePersistedServerObservabilitySettings } from "@t3tools/shared/serverSettings";
 import { DesktopBackendBootstrap, PortSchema } from "@t3tools/contracts";
+import { DEFAULT_TAILSCALE_SERVE_PORT } from "@t3tools/tailscale";
 import * as Config from "effect/Config";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
@@ -22,6 +23,7 @@ import { Argument, Flag } from "effect/unstable/cli";
 
 import { readBootstrapEnvelope } from "../bootstrap.ts";
 import * as ServerConfig from "../config.ts";
+import * as TailscaleServe from "../environment/TailscaleServe.ts";
 import { expandHomePath, resolveBaseDir } from "../os-jank.ts";
 
 const modeFlag = Flag.Literals("mode", ServerConfig.RuntimeMode.literals).pipe(
@@ -329,6 +331,16 @@ export const resolveServerConfig = (
       baseDirIsExplicit: Option.isSome(explicitBaseDir),
     });
     yield* ServerConfig.ensureServerDirectories(derivedPaths);
+    const tailscaleServe = yield* TailscaleServe.TailscaleServe;
+    const persistedTailscaleSettings = yield* tailscaleServe
+      .readSettings(derivedPaths.stateDir)
+      .pipe(
+        Effect.catch((cause) =>
+          Effect.logWarning("Failed to read Tailscale Serve settings", { cause }).pipe(
+            Effect.as(Option.none()),
+          ),
+        ),
+      );
     const persistedObservabilitySettings = yield* loadPersistedObservabilitySettings(
       derivedPaths.settingsPath,
     );
@@ -370,6 +382,7 @@ export const resolveServerConfig = (
         normalizedFlags.tailscaleServeEnabled,
         Option.fromUndefinedOr(env.tailscaleServeEnabled),
         Option.fromUndefinedOr(bootstrap?.tailscaleServeEnabled),
+        Option.isSome(persistedTailscaleSettings) ? Option.some(true) : Option.none(),
       ),
       () => false,
     );
@@ -378,8 +391,9 @@ export const resolveServerConfig = (
         normalizedFlags.tailscaleServePort,
         Option.fromUndefinedOr(env.tailscaleServePort),
         Option.fromUndefinedOr(bootstrap?.tailscaleServePort),
+        Option.map(persistedTailscaleSettings, (settings) => settings.servePort),
       ),
-      () => 443,
+      () => DEFAULT_TAILSCALE_SERVE_PORT,
     );
     const staticDir = devUrl ? undefined : yield* ServerConfig.resolveStaticDir();
     const host = Option.getOrElse(
@@ -461,7 +475,7 @@ export const resolveServerConfig = (
     };
 
     return config;
-  });
+  }).pipe(Effect.provide(TailscaleServe.layer));
 
 export const resolveCliAuthConfig = (
   flags: CliAuthLocationFlags,
