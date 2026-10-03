@@ -14,6 +14,8 @@ import {
 import type * as GitManager from "../git/GitManager.ts";
 import type * as SourceControlProviderRegistry from "../sourceControl/SourceControlProviderRegistry.ts";
 import * as JjProcess from "../vcs/JjProcess.ts";
+import { parseReviewNumstat } from "../vcs/GitVcsDriverCore.ts";
+import { JJ_CONFLICT_PATHSPECS } from "../vcs/JjCheckpoints.ts";
 import { localBookmarkRevset, remoteBookmarkRevset } from "../vcs/JjRevset.ts";
 import type { JjSegmentRow, JjVcsDriverShape } from "../vcs/JjVcsDriver.ts";
 import type * as VcsProcess from "../vcs/VcsProcess.ts";
@@ -329,9 +331,42 @@ export const makeJjStatus = (deps: JjStatusDeps): Effect.Effect<JjStatusOps> =>
           driver.resolveDefaultBookmark(input.cwd).pipe(Effect.orElseSucceed(() => null)),
         ]);
 
+        // The snapshot of @ includes untracked files. Read only numstat from the
+        // colocated store, keeping the status poll's two-jj-command budget.
+        const branchChanges =
+          defaultBookmark === null
+            ? null
+            : yield* Effect.gen(function* () {
+                const paths = yield* driver.repoPaths(input.cwd);
+                if (paths.gitDir === null) return null;
+                const result = yield* JjProcess.colocatedGitCommand(
+                  process,
+                  "JjStatus.branchChanges",
+                  { gitDir: paths.gitDir, cwd: input.cwd },
+                  [
+                    "diff",
+                    "--no-ext-diff",
+                    "--no-textconv",
+                    "--numstat",
+                    "-z",
+                    `${defaultBookmark}...${readings.value.change.commitId}`,
+                    "--",
+                    ...JJ_CONFLICT_PATHSPECS,
+                  ],
+                  { maxOutputBytes: 16 * 1024 * 1024 },
+                );
+                const stats = parseReviewNumstat(result.stdout);
+                return {
+                  baseRef: defaultBookmark,
+                  insertions: stats.reduce((sum, file) => sum + file.additions, 0),
+                  deletions: stats.reduce((sum, file) => sum + file.deletions, 0),
+                };
+              }).pipe(Effect.orElseSucceed(() => null));
+
         return {
           isRepo: true,
           vcs: { kind: "jj" as const },
+          ...(branchChanges === null ? {} : { branchChanges }),
           ...(provider ? { sourceControlProvider: provider } : {}),
           hasPrimaryRemote: remoteNames.length > 0,
           isDefaultRef: refName !== null && refName === defaultBookmark,

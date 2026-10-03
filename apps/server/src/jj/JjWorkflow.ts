@@ -33,7 +33,7 @@ import { refNameToRevset } from "../vcs/JjRevset.ts";
 import type { JjWorkspace } from "../vcs/JjVcsDriver.ts";
 import { workspaceNameForRef } from "./JjWorkspaceNaming.ts";
 import { detectPrTemplate } from "../sourceControl/PrTemplateDetection.ts";
-import { workspaceSettings } from "../project/WorkspaceSettings.ts";
+import { workspaceSettings, makeWorkspaceQueries } from "../project/WorkspaceSettings.ts";
 
 const RANGE_COMMIT_SUMMARY_MAX_OUTPUT_BYTES = 64 * 1024;
 const RANGE_DIFF_SUMMARY_MAX_OUTPUT_BYTES = 64 * 1024;
@@ -42,6 +42,9 @@ const RANGE_DIFF_PATCH_MAX_OUTPUT_BYTES = 1024 * 1024;
 export class JjWorkflow extends Context.Service<
   JjWorkflow,
   VcsWorkflowOps & {
+    readonly deleteLocalBranch: (
+      input: GitVcsDriver.GitDeleteLocalBranchInput,
+    ) => Effect.Effect<void, GitCommandError>;
     readonly branchPullRequest: GitManager.GitManager["Service"]["branchPullRequest"];
     readonly registeredWorkspaces: (
       cwd: string,
@@ -70,6 +73,7 @@ export class JjWorkflow extends Context.Service<
 
 /** @public Service construction is part of the canonical Effect module API. */
 export const make = Effect.gen(function* () {
+  const withWorkspaceQueries = yield* makeWorkspaceQueries;
   const config = yield* ServerConfig;
   const crypto = yield* Crypto.Crypto;
   const driver = yield* JjVcsDriver.JjVcsDriver;
@@ -88,6 +92,7 @@ export const make = Effect.gen(function* () {
     effect: Effect.Effect<A, E, ChangeRequestStepServices>,
   ): Effect.Effect<A, E> =>
     effect.pipe(
+      withWorkspaceQueries,
       Effect.provideService(Crypto.Crypto, crypto),
       Effect.provideService(ServerSettings.ServerSettingsService, serverSettingsService),
       Effect.provideService(FileSystem.FileSystem, fileSystem),
@@ -343,6 +348,7 @@ export const make = Effect.gen(function* () {
   });
 
   return JjWorkflow.of({
+    deleteLocalBranch: (input) => refs.deleteLocalBranch(input),
     branchPullRequest: (input, options) =>
       Effect.gen(function* () {
         const paths = yield* driver
@@ -471,6 +477,7 @@ export const make = Effect.gen(function* () {
     resolvePullRequest: pullRequestThread.resolvePullRequest,
     preparePullRequestThread: (input) =>
       workspaceSettings(input).pipe(
+        withWorkspaceQueries,
         Effect.provideService(ServerSettings.ServerSettingsService, serverSettingsService),
         Effect.mapError((cause) =>
           jjFailure(

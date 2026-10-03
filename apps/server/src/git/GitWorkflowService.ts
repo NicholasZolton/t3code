@@ -40,7 +40,7 @@ import { ServerSettingsService } from "../serverSettings.ts";
 import { makeWorkspaceOwnership, type WorkspaceKind } from "../vcs/WorkspaceOwnership.ts";
 import { inspectWorkspaceFiles } from "../vcs/WorkspaceFileSafety.ts";
 import { workspaceNameForRef } from "../jj/JjWorkspaceNaming.ts";
-import { workspaceSettings } from "../project/WorkspaceSettings.ts";
+import { workspaceSettings, makeWorkspaceQueries } from "../project/WorkspaceSettings.ts";
 
 export interface WorkspaceCleanupInspection {
   readonly revision: string;
@@ -123,6 +123,7 @@ export interface VcsWorkflowOps {
     input: VcsSwitchRefInput,
   ) => Effect.Effect<VcsSwitchRefResult, GitCommandError>;
   readonly renameBranch: (input: {
+    readonly exactName?: boolean;
     readonly cwd: string;
     readonly oldBranch: string;
     readonly newBranch: string;
@@ -135,6 +136,9 @@ type WorkflowKind = "git" | "jj";
 export class GitWorkflowService extends Context.Service<
   GitWorkflowService,
   VcsWorkflowOps & {
+    readonly deleteLocalBranch: (
+      input: GitVcsDriver.GitDeleteLocalBranchInput,
+    ) => Effect.Effect<void, GitCommandError>;
     readonly ensureWorkspace: (
       input: VcsCreateWorktreeInput & { readonly path: string },
       options?: GitVcsDriver.CreateWorktreeOptions,
@@ -195,6 +199,7 @@ function nonRepositoryListRefs(): VcsListRefsResult {
 
 /** @public Service construction is part of the canonical Effect module API. */
 export const make = Effect.gen(function* () {
+  const withWorkspaceQueries = yield* makeWorkspaceQueries;
   const settingsService = yield* ServerSettingsService;
   const registry = yield* VcsDriverRegistry.VcsDriverRegistry;
   const git = yield* GitVcsDriver.GitVcsDriver;
@@ -285,6 +290,7 @@ export const make = Effect.gen(function* () {
       options?: GitVcsDriver.CreateWorktreeOptions,
     ) {
       const settings = yield* workspaceSettings(input).pipe(
+        withWorkspaceQueries,
         Effect.provideService(ServerSettingsService, settingsService),
       );
       const result = yield* workspaceOps[kind].createWorktree(input, {
@@ -603,6 +609,12 @@ export const make = Effect.gen(function* () {
       git: git.pruneWorktrees,
       jj: jjWorkflow.pruneWorktrees,
     }),
+    deleteLocalBranch: (input) =>
+      route("GitWorkflowService.deleteLocalBranch", commandRouting, {
+        git: git.deleteLocalBranch,
+        jj: (request: GitVcsDriver.GitDeleteLocalBranchInput) =>
+          jjWorkflow.deleteLocalBranch(request),
+      })(input),
     createRef: route("GitWorkflowService.createRef", commandRouting, {
       git: git.createRef,
       jj: jjWorkflow.createRef,

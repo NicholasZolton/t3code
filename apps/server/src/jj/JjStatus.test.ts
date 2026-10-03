@@ -197,6 +197,25 @@ describeJj("JjStatus.localStatus", () => {
     ),
   );
 
+  it.effect("counts committed and working-copy changes against the base bookmark", () =>
+    withRepo({}, ({ fileSystem, path, root, status }) =>
+      Effect.gen(function* () {
+        yield* runJj(root, ["new", 'bookmarks(exact:"main")']);
+        yield* fileSystem.writeFileString(path.join(root, "committed.txt"), "committed\n");
+        yield* runJj(root, ["commit", "-m", "feature"]);
+        yield* runJj(root, ["bookmark", "create", "feature", "-r", "@-"]);
+        yield* fileSystem.writeFileString(path.join(root, "untracked.txt"), "working\n");
+        const local = yield* status.localStatus({ cwd: root });
+        assert.equal(local.workingTree.insertions, 1);
+        assert.deepStrictEqual(local.branchChanges, {
+          baseRef: "main",
+          insertions: 2,
+          deletions: 0,
+        });
+      }),
+    ),
+  );
+
   it.effect("costs two jj subprocesses once the repository caches are warm", () => {
     const jjCalls = { count: 0 };
     return Effect.gen(function* () {

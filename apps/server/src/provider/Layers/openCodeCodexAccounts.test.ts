@@ -7,7 +7,8 @@ import * as NodePath from "node:path";
 import * as NodeSqlite from "node:sqlite";
 
 import * as Effect from "effect/Effect";
-import { OpenCode } from "@opencode/client";
+import * as OpenCode2Client from "../opencode2/OpenCode2Client.ts";
+import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
 import { it } from "@effect/vitest";
 import { afterEach } from "vite-plus/test";
 
@@ -156,11 +157,10 @@ it.effect("activates only an existing OpenAI login through OpenCode's V2 client"
       Effect.gen(function* () {
         const address = server.address();
         NodeAssert.ok(address && typeof address !== "string");
-        const client = OpenCode.make({
+        const api = yield* OpenCode2Client.make;
+        const { client } = yield* api.connect({
           baseUrl: `http://127.0.0.1:${address.port}`,
-          headers: {
-            Authorization: `Basic ${Buffer.from("opencode:password").toString("base64")}`,
-          },
+          password: "password",
         });
         yield* activateOpenCodeCredential({ dataHome: home, credentialId: "work/id", client });
         NodeAssert.deepEqual(requests, ["POST /api/credential/work%2Fid/activate"]);
@@ -177,5 +177,5 @@ it.effect("activates only an existing OpenAI login through OpenCode's V2 client"
             server.close((error) => (error ? reject(error) : resolve())),
           ),
       ),
-  );
+  ).pipe(Effect.provide(FetchHttpClient.layer));
 });

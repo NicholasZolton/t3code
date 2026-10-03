@@ -1,5 +1,11 @@
 # Wiki update log
 
+## 2026-10-03
+
+- **Integration candidate**: Updated [upstream integration](upstream-integration.md) for the full V2 merge through `65731f986b`, the accepted legacy-history boundary, and retained fork features. Fork `main` remains at `0a5b85436b`; deployment and main integration are pending.
+
+- **Review**: Refreshed [upstream integration](upstream-integration.md) against fork `main` at `0a5b85436b` and upstream `65731f986b`: 60 commits remain unmerged, with 105 full-merge conflicts. Recorded V2 legacy-history and protocol rollout decisions, new upstream native OpenCode 2 support, and the fork compatibility protections still required.
+
 ## 2026-10-02
 
 - **Integration**: [PR #27](https://github.com/NicholasZolton/t3code/pull/27) reached fork `main` at `60e0650513`. Refreshed [upstream integration](upstream-integration.md): all 50 reviewed commits through `99e08526e5` are incorporated, with zero remaining ancestry gap against that tip.

@@ -65,6 +65,8 @@ export function shouldShowEnvironmentIndicator(input: {
 }
 
 export function shouldShowComposerContextStrip(input: {
+  isDraftHeroState: boolean;
+  persistInActiveThreads: boolean;
   hasActiveProject: boolean;
   isGitRepo: boolean;
   showEnvironmentIndicator: boolean;
@@ -73,6 +75,7 @@ export function shouldShowComposerContextStrip(input: {
 }): boolean {
   return (
     input.hasActiveProject &&
+    (input.isDraftHeroState || input.persistInActiveThreads) &&
     (input.isGitRepo || input.showEnvironmentIndicator || input.hostsRestingComposerControls)
   );
 }
@@ -126,6 +129,13 @@ export function resolveLockedWorkspaceLabel(
   return effectiveEnvMode === "worktree"
     ? resolveEnvModeLabel("worktree", terminology)
     : `Local ${terminology.currentRefFallback}`;
+}
+
+export function resolveWorkspaceDisplayName(path: string | null): string | null {
+  if (!path) return null;
+  const normalizedPath = path.replace(/[\\/]+$/, "");
+  if (normalizedPath.length === 0) return path;
+  return normalizedPath.split(/[\\/]/).at(-1) ?? normalizedPath;
 }
 
 export interface PreviousWorktreeSeed {
@@ -234,7 +244,7 @@ export function resolveBranchTriggerLabel(input: {
   resolvedActiveBranch: string | null;
   resolvedActiveBranchIsRemote: boolean | null;
   startFromOrigin: boolean;
-  terminology: VcsTerminology;
+  terminology?: VcsTerminology;
 }): string {
   const {
     activeWorktreePath,
@@ -242,7 +252,7 @@ export function resolveBranchTriggerLabel(input: {
     resolvedActiveBranch,
     resolvedActiveBranchIsRemote,
     startFromOrigin,
-    terminology,
+    terminology = DEFAULT_VCS_TERMINOLOGY,
   } = input;
   if (!resolvedActiveBranch) {
     return `Select ${terminology.refNoun}`;

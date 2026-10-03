@@ -1,22 +1,43 @@
 ---
 type: Integration Record
 title: Upstream integration
-description: Completed upstream integration boundaries and fork compatibility exceptions.
+description: Completed upstream integration boundaries, latest review, and fork compatibility exceptions.
 tags: [upstream, fork, integration]
 status: stable
 generated:
-  by: opencode/gpt-6.1-sol
-  at: 2026-10-02T06:34:41Z
+  by: codex/gpt-6.1-sol
+  at: 2026-10-03T19:19:25Z
 verified:
-  - by: opencode/gpt-6.1-sol
-    at: 2026-10-02T06:34:41Z
+  - by: codex/gpt-6.1-sol
+    at: 2026-10-03T19:19:25Z
 snapshot:
-  at: 2026-10-02T06:34:41Z
-  fork_main: 60e0650513868e092b20dde6bfcf3e27fa719180
-  upstream_main: 99e08526e5ec84f294940cba5929841518c52fec
+  at: 2026-10-03T19:19:25Z
+  fork_main: 0a5b85436bc8fcd26b2ddb126b8c6e6c5818f190
+  upstream_main: 65731f986ba2175063b0182deb6a143f8f323b74
   shared_baseline: 99e08526e5ec84f294940cba5929841518c52fec
   last_main_integration: 24d2e49fd91aa8779992b187a3d3395a51de9138
 sources:
+  - id: reviewed-fork-main
+    resource: https://github.com/NicholasZolton/t3code/commit/0a5b85436bc8fcd26b2ddb126b8c6e6c5818f190
+    title: Fork main at the October 3 review
+  - id: reviewed-upstream-main
+    resource: https://github.com/pingdotgg/t3code/commit/65731f986ba2175063b0182deb6a143f8f323b74
+    title: Upstream main at the October 3 review
+  - id: latest-review-git
+    resource: "Local Git review at 2026-10-03T17:37:58Z: fork 0a5b85436bc8fcd26b2ddb126b8c6e6c5818f190; upstream 65731f986ba2175063b0182deb6a143f8f323b74; merge base 99e08526e5ec84f294940cba5929841518c52fec; 60 missing upstream commits; git merge-tree reports 105 unmerged paths; 21 independent patches apply cleanly in a cumulative simulation"
+    title: Verified unmerged review boundary and textual merge feasibility
+  - id: upstream-v2
+    resource: https://github.com/pingdotgg/t3code/commit/de343914273eceb852a1d1d739cd1d38df7796ee
+    title: Upstream orchestrator V2 cutover
+  - id: upstream-v1-cutover
+    resource: https://github.com/pingdotgg/t3code/blob/65731f986ba2175063b0182deb6a143f8f323b74/apps/server/src/orchestration-v2/legacy/LegacyV1Cutover.integration.test.ts
+    title: Messages-only legacy import and fresh-session continuation
+  - id: upstream-protocol
+    resource: https://github.com/pingdotgg/t3code/blob/65731f986ba2175063b0182deb6a143f8f323b74/packages/contracts/src/environment.ts
+    title: Orchestration wire protocol version 2
+  - id: upstream-current-manifest
+    resource: https://github.com/pingdotgg/t3code/blob/65731f986ba2175063b0182deb6a143f8f323b74/apps/server/src/provider/model-manifest.json
+    title: OpenCode version policy at the reviewed upstream tip
   - id: main-integration
     resource: https://github.com/NicholasZolton/t3code/pull/27
     title: Completed full upstream integration into fork main
@@ -57,6 +78,11 @@ sources:
 
 # Upstream integration
 
+**Latest review: fork `main` at `0a5b85436b` is 60 commits behind
+upstream `65731f986b`. No integration from this reviewed range has
+landed.** The shared baseline remains `99e08526e5`; the last completed
+sync is still PR #27.[^latest-review-git]
+
 **Fork `main` includes all reviewed upstream history through `99e08526e5`,
 with zero remaining ancestry gap against that tip.**
 [PR #27](https://github.com/NicholasZolton/t3code/pull/27) merged at October 2,
@@ -67,7 +93,31 @@ This is a revision-pinned snapshot, not a claim about newer upstream work.
 Refresh it after the next review or integration using the
 [maintenance guidance](maintenance.md).
 
-## Latest upstream sync
+## October 3 integration candidate
+
+The branch `NicholasZolton/review-upstream-changes-2` integrates the full reviewed
+range through `65731f986ba2175063b0182deb6a143f8f323b74`, preserving upstream
+ancestry. It uses upstream orchestrator V2, the native OpenCode 2 adapter, and the
+new thread/project MCP tools. Fork `main` at `0a5b85436b` still awaits this
+integration; the last completed main sync remains PR #27.[^reviewed-fork-main][^reviewed-upstream-main]
+
+The maintainer chose upstream's legacy import: old messages and metadata survive,
+but pre-upgrade checkpoints, tool history, and native sessions do not. First
+continuation starts a fresh provider session with bounded handoff context. Rewind
+and edit-with-files-kept apply to new V2 turns. Protocol 2 requires matching web,
+desktop, mobile, and server versions; coordinate the SSH server restart with active
+remote turns.[^upstream-v1-cutover][^upstream-protocol]
+
+Retained fork behavior includes provider-configured OpenCode permissions, model
+defaults, account switching and quota weights, none/project/environment agent
+thread access, reusable prompts, Vim, mixed Git/Jujutsu recovery and checkpoints,
+Crit/Portless, phone pairing identity, and SSH release handoff. Upstream now owns
+native OpenCode 2 and thread management; removed V1 adapters and the old plural
+thread toolkit are replaced by those upstream services. The legacy worktree prefix
+migrates to upstream branch naming while preserving temporary branch names. No
+live database or remote server was changed while preparing this candidate.
+
+## Latest completed upstream sync
 
 `24d2e49fd9` has parents fork `b469d18b16` and upstream `99e08526e5`.
 Both parents are incorporated into fork `main`. The
@@ -81,7 +131,7 @@ Default to upstream implementations. Retain fork code for explicit features
 or fixes upstream does not provide. This sync combines upstream fresh catalog
 rescans and race protection with the fork's automatic catalog freshness and
 invalidation, and routes Scratch preparation through the existing shared
-[thread dispatcher](../apps/server/src/orchestration/ThreadCommandDispatcher.ts)
+[V1 thread dispatcher](https://github.com/NicholasZolton/t3code/blob/24d2e49fd91aa8779992b187a3d3395a51de9138/apps/server/src/orchestration/ThreadCommandDispatcher.ts)
 used by WebSocket and MCP. Native OpenCode v2, saved prompts, Vim clipboard
 undo, and mixed Git/Jujutsu recovery remain fork exceptions.[^integration-commit]
 
@@ -129,15 +179,20 @@ sending, mobile improvements, managed ChatGPT/Codex authentication, Codex 0.159
 bindings, Sonnet 5.5 metadata, Bitbucket credentials, keyboard latency work,
 OpenCode Go account deduplication, and releases 0.0.43 and 0.0.44.
 
-## Compatibility exception to retain
+## OpenCode compatibility boundary
 
-Upstream at `99e08526e5` still marks OpenCode v2 incompatible, following
-[#14198](https://github.com/pingdotgg/t3code/pull/14198). This fork supports v2
-natively and removed that advisory in [fork #18](https://github.com/NicholasZolton/t3code/pull/18).
-A newer upstream manifest does not establish incompatibility for this fork.
-The fork's [`ModelManifest.ts`](https://github.com/NicholasZolton/t3code/blob/60e0650513868e092b20dde6bfcf3e27fa719180/apps/server/src/provider/ModelManifest.ts)
-also filters the upstream OpenCode advisory from remote metadata. PR #27
-retains both protections.[^main-integration][^integration-commit]
+At the completed `99e08526e5` sync, upstream marked OpenCode v2
+incompatible while this fork supported it natively. Fork #18 removed that
+advisory, and PR #27 retained the bundled policy and remote metadata filter.
+That protection still matters at the newly reviewed tip.[^main-integration][^integration-commit]
+
+Upstream `65731f986b` supplies the native OpenCode 2 implementation, tested
+against 2.0.18. This candidate adopts its 2.0.18+ baseline, including the installed
+2.0.22 CLI, and removes the obsolete fork V2 adapter. The bundled policy enables
+that baseline starting at this fork's package version 0.0.45, rather than waiting
+for upstream's 0.0.46 threshold. Remote compatibility metadata still cannot replace
+the bundled OpenCode policy. Older 2.x versions are outside the supported baseline.
+[^upstream-current-manifest][^reviewed-upstream-main]
 
 ## Jujutsu migration boundary
 
@@ -199,3 +254,17 @@ git log --reverse --oneline origin/main..upstream/main
 [^upstream-jujutsu]: Original upstream support, used as the selective-port source.
 
 [^fork-jujutsu]: Durable backend ownership, recovery behavior, and supported Jujutsu baseline.
+
+[^reviewed-fork-main]: Exact fork main revision fetched for this review.
+
+[^reviewed-upstream-main]: Exact upstream main revision fetched for this review.
+
+[^latest-review-git]: Pinned ancestry, commit counts, and merge-tree simulations; no integration landed.
+
+[^upstream-v2]: V2 replacement and the new provider/orchestration boundaries.
+
+[^upstream-v1-cutover]: Legacy import intentionally excludes checkpoints, tool items, and native sessions; continuation uses bounded context in a new session.
+
+[^upstream-protocol]: Protocol version 2 and client/server negotiation metadata.
+
+[^upstream-current-manifest]: Version-scoped OpenCode advisory at the reviewed tip.

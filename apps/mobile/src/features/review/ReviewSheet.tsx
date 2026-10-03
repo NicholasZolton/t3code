@@ -130,14 +130,8 @@ function ReviewHeader(
                     id: "sections",
                     inline: true,
                     items: [
-                      sectionAction(
-                        props.sectionMenu.workingTree,
-                        props.vcsTerminology.workingTreeNounTitle,
-                      ),
-                      sectionAction(
-                        props.sectionMenu.branchChanges,
-                        `${props.vcsTerminology.refNounTitle} changes`,
-                      ),
+                      sectionAction(props.sectionMenu.branchChanges, "Changes"),
+                      sectionAction(props.sectionMenu.workingTree, "Uncommitted"),
                       sectionAction(props.sectionMenu.latestTurn, "Latest turn"),
                     ],
                   },

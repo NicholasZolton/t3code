@@ -19,7 +19,7 @@ import {
   type SourceControlRepositoryLookupInput,
 } from "@t3tools/contracts";
 
-import { ServerConfig } from "../config.ts";
+import * as ServerConfig from "../config.ts";
 import * as JjWorkflow from "../jj/JjWorkflow.ts";
 import { expandHomePathWith } from "../pathExpansion.ts";
 import {
@@ -157,7 +157,7 @@ function selectRemoteUrl(
 
 /** @public Service construction is part of the canonical Effect module API. */
 export const make = Effect.gen(function* () {
-  const config = yield* ServerConfig;
+  const config = yield* ServerConfig.ServerConfig;
   const fileSystem = yield* FileSystem.FileSystem;
   const git = yield* GitVcsDriver.GitVcsDriver;
   const path = yield* Path.Path;
