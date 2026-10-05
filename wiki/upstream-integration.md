@@ -6,17 +6,27 @@ tags: [upstream, fork, integration]
 status: stable
 generated:
   by: opencode/gpt-6.1-sol
-  at: 2026-10-05T14:53:52Z
+  at: 2026-10-05T17:27:39Z
 verified:
-  - by: codex/gpt-6.1-sol
-    at: 2026-10-03T20:02:01Z
+  - by: opencode/gpt-6.1-sol
+    at: 2026-10-05T17:31:14Z
 snapshot:
-  at: 2026-10-03T20:02:01Z
-  fork_main: a9b81ef5c5017cc8268a7ca408ddb8430cc370c5
-  upstream_main: 65731f986ba2175063b0182deb6a143f8f323b74
+  at: 2026-10-05T17:27:39Z
+  fork_main: 75c7b1b95c9df64a239c6ffa06ef1e7a694008a0
+  upstream_main: 1604ccc9d79f5270fb8e14d60664184bf142c4cb
   shared_baseline: 65731f986ba2175063b0182deb6a143f8f323b74
   last_main_integration: 696fd65db117198476ad840ca41c4af031b086c4
+  candidate_integration: ab7e864a1aa3ce44d99454b8e363297227475ead
 sources:
+  - id: october-5-candidate
+    resource: "Local Git object ab7e864a1aa3ce44d99454b8e363297227475ead on NicholasZolton/review-upstream-diff; parents 9064bb3d8e1ef9e586a33fa4333551a50a922940 and 1604ccc9d79f5270fb8e14d60664184bf142c4cb"
+    title: Unmerged full upstream integration through October 5
+  - id: october-5-candidate-decisions
+    resource: "Local candidate tree at ab7e864a1aa3ce44d99454b8e363297227475ead: MCP directory and restored OpenCode helper tests match upstream 1604ccc9d79f5270fb8e14d60664184bf142c4cb; custom agent thread access policy and settings removed; workspace freshness and invalidation combined with incomplete-discovery retries"
+    title: Verified upstream-first conflict resolutions
+  - id: upstream-mcp-targeting
+    resource: https://github.com/pingdotgg/t3code/commit/06e627448b
+    title: Upstream explicit MCP targets, external callers, and permission ceilings
   - id: current-integration
     resource: https://github.com/NicholasZolton/t3code/commit/696fd65db117198476ad840ca41c4af031b086c4
     title: Completed V2 integration with preserved upstream ancestry
@@ -30,14 +40,14 @@ sources:
     resource: "Local Git verification: fork main a9b81ef5c5017cc8268a7ca408ddb8430cc370c5 contains integration 696fd65db117198476ad840ca41c4af031b086c4 and upstream 65731f986ba2175063b0182deb6a143f8f323b74; merge base is the pinned upstream tip and the remaining ancestry gap is zero"
     title: Verified completed V2 integration boundary
   - id: reviewed-fork-main
-    resource: https://github.com/NicholasZolton/t3code/commit/0a5b85436bc8fcd26b2ddb126b8c6e6c5818f190
-    title: Fork main at the October 3 review
+    resource: https://github.com/NicholasZolton/t3code/commit/75c7b1b95c9df64a239c6ffa06ef1e7a694008a0
+    title: Fork main at the October 5 integration verification
   - id: reviewed-upstream-main
-    resource: https://github.com/pingdotgg/t3code/commit/65731f986ba2175063b0182deb6a143f8f323b74
-    title: Upstream main at the October 3 review
+    resource: https://github.com/pingdotgg/t3code/commit/1604ccc9d79f5270fb8e14d60664184bf142c4cb
+    title: Upstream main at the October 5 review
   - id: latest-review-git
-    resource: "Local Git review at 2026-10-03T17:37:58Z: fork 0a5b85436bc8fcd26b2ddb126b8c6e6c5818f190; upstream 65731f986ba2175063b0182deb6a143f8f323b74; merge base 99e08526e5ec84f294940cba5929841518c52fec; 60 missing upstream commits; git merge-tree reports 105 unmerged paths; 21 independent patches apply cleanly in a cumulative simulation"
-    title: Verified unmerged review boundary and textual merge feasibility
+    resource: "Local Git verification at 2026-10-05T17:27:39Z: fork main 75c7b1b95c9df64a239c6ffa06ef1e7a694008a0; upstream 1604ccc9d79f5270fb8e14d60664184bf142c4cb; merge base 65731f986ba2175063b0182deb6a143f8f323b74; 114 missing upstream commits on main, zero on the candidate branch; original merge required 13 textual conflict resolutions; branch 771996961f572372dde1f51ffc432341b72d5118 also incorporates the docs-only fork main update"
+    title: Verified candidate ancestry and remaining main integration gap
   - id: upstream-v2
     resource: https://github.com/pingdotgg/t3code/commit/de343914273eceb852a1d1d739cd1d38df7796ee
     title: Upstream orchestrator V2 cutover
@@ -48,7 +58,7 @@ sources:
     resource: https://github.com/pingdotgg/t3code/blob/65731f986ba2175063b0182deb6a143f8f323b74/packages/contracts/src/environment.ts
     title: Orchestration wire protocol version 2
   - id: upstream-current-manifest
-    resource: https://github.com/pingdotgg/t3code/blob/65731f986ba2175063b0182deb6a143f8f323b74/apps/server/src/provider/model-manifest.json
+    resource: https://github.com/pingdotgg/t3code/blob/1604ccc9d79f5270fb8e14d60664184bf142c4cb/apps/server/src/provider/model-manifest.json
     title: OpenCode version policy at the reviewed upstream tip
   - id: main-integration
     resource: https://github.com/NicholasZolton/t3code/pull/27
@@ -96,8 +106,13 @@ sources:
 
 # Upstream integration
 
-**Fork `main` includes all 60 reviewed upstream commits through `65731f986b`,
-with zero remaining ancestry gap against that tip.**
+**The local candidate includes all 114 newer upstream commits through `1604ccc9d7`;
+fork `main` has not received that sync.** Fork `main` at `75c7b1b95c` still has
+shared baseline `65731f986b`, so the gap against the newly reviewed tip remains
+114 commits.[^october-5-candidate][^latest-review-git]
+
+The last completed sync includes all 60 reviewed commits through `65731f986b`,
+with zero gap against that older tip.
 [PR #32](https://github.com/NicholasZolton/t3code/pull/32) merged on October 3,
 2026, at 19:59:31 UTC, landing at `a9b81ef5c5`. The shared baseline is now
 `65731f986b`.[^current-main-integration][^current-git-history]
@@ -105,6 +120,28 @@ with zero remaining ancestry gap against that tip.**
 This is a revision-pinned snapshot, not a claim about newer upstream work.
 Refresh it after the next review or integration using the
 [maintenance guidance](maintenance.md).
+
+## Current integration candidate
+
+Merge `ab7e864a1aa3ce44d99454b8e363297227475ead` preserves upstream ancestry,
+with fork parent `9064bb3d8e` and upstream parent `1604ccc9d7`. The branch also
+incorporates fork `main`'s docs-only remote-deployment update. It remains a local
+candidate until merged into fork `main`.[^october-5-candidate][^latest-review-git]
+
+The maintainer chose upstream's MCP implementation in full: explicit targets,
+external callers, cross-project access, and caller permission ceilings replace
+the fork's none/project/environment access policy and its settings. Future syncs
+should not restore that parallel policy. Command discovery keeps the fork's
+catalog freshness and invalidation while adopting upstream's incomplete-discovery
+detection and retries on web, desktop, and mobile. Upstream OpenCode parser and
+permission helper tests replace the overlapping fork-only attachment test.
+[^upstream-mcp-targeting][^october-5-candidate-decisions]
+
+Unrelated fork behavior remains: Jujutsu, reusable prompts, Vim, configured
+OpenCode permissions, accounts and defaults, quota weights, Crit/Portless,
+worktree configuration, and remembered Tailscale publication. The OpenCode
+compatibility exception below remains necessary; the Jujutsu source PR is still
+closed without merging into upstream `main`.[^october-5-candidate-decisions][^upstream-jujutsu]
 
 ## Latest completed upstream sync
 
@@ -122,7 +159,7 @@ and edit-with-files-kept apply to new V2 turns. Protocol 2 requires matching web
 desktop, mobile, and server versions; coordinate the SSH server restart with active
 remote turns.[^upstream-v1-cutover][^upstream-protocol]
 
-Retained fork behavior includes provider-configured OpenCode permissions, model
+That sync retained provider-configured OpenCode permissions, model
 defaults, account switching and quota weights, none/project/environment agent
 thread access, reusable prompts, Vim, mixed Git/Jujutsu recovery and checkpoints,
 Crit/Portless, phone pairing identity, and SSH release handoff. Upstream now owns
@@ -233,6 +270,7 @@ absent.
 git rev-parse origin/main upstream/main
 git merge-base origin/main upstream/main
 git merge-base --is-ancestor 696fd65db1 origin/main
+git merge-base --is-ancestor ab7e864a1a origin/main
 git merge-base --is-ancestor a8df093eb6 origin/main
 git rev-list --count origin/main..upstream/main
 git log --reverse --oneline origin/main..upstream/main
@@ -270,7 +308,13 @@ git log --reverse --oneline origin/main..upstream/main
 
 [^reviewed-upstream-main]: Exact upstream main revision fetched for this review.
 
-[^latest-review-git]: Historical pre-integration review: pinned ancestry, commit counts, and merge-tree simulations.
+[^latest-review-git]: October 5 candidate and main ancestry checks, commit counts, and original textual conflicts.
+
+[^october-5-candidate]: Local upstream merge and its exact parents; not yet incorporated into main.
+
+[^october-5-candidate-decisions]: Source comparison of the candidate's conflict resolutions and retained fork features.
+
+[^upstream-mcp-targeting]: Upstream MCP caller/target redesign selected instead of the fork access policy.
 
 [^upstream-v2]: V2 replacement and the new provider/orchestration boundaries.
 

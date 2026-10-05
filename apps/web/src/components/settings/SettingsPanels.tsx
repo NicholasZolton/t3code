@@ -7,7 +7,6 @@ import type { CSSProperties, ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   type BackgroundActivityProfile,
-  type AgentThreadAccess,
   type DesktopUpdateChannel,
   ProviderDriverKind,
   type ProviderInstanceId,
@@ -53,6 +52,7 @@ import * as Duration from "effect/Duration";
 import * as Equal from "effect/Equal";
 import * as Schema from "effect/Schema";
 import { APP_VERSION, HOSTED_APP_CHANNEL, HOSTED_APP_CHANNEL_LABEL } from "../../branding";
+import { IS_NIGHTLY_BUILD, NightlyMobileBetaRow } from "../NightlyMobileBeta";
 import {
   canCheckForUpdate,
   getDesktopUpdateButtonTooltip,
@@ -179,12 +179,6 @@ const RESPONSE_STREAMING_MODE_LABELS: Record<ResponseStreamingMode, string> = {
   paragraph: "Show finished paragraphs",
 };
 
-const AGENT_THREAD_ACCESS_LABELS: Record<AgentThreadAccess, string> = {
-  none: "No thread access",
-  project: "Current project",
-  environment: "All projects in this environment",
-};
-
 const RESPONSE_STREAMING_MODE_DESCRIPTIONS: Record<ResponseStreamingMode, string> = {
   turn: "Text appears once the agent finishes its turn.",
   paragraph: "Each paragraph or code block appears as soon as it is complete.",
@@ -289,6 +283,9 @@ function AboutVersionSection() {
   const hasDesktopBridge = typeof window !== "undefined" && Boolean(window.desktopBridge);
   const selectedUpdateChannel = updateState?.channel ?? "latest";
   const selectedHostedAppChannel = hasDesktopBridge ? null : HOSTED_APP_CHANNEL;
+  // Show the beta app links as soon as someone picks Nightly, before the update installs.
+  const showNightlyMobileBeta =
+    IS_NIGHTLY_BUILD || (hasDesktopBridge && selectedUpdateChannel === "nightly");
 
   const handleUpdateChannelChange = useCallback(
     (channel: DesktopUpdateChannel) => {
@@ -509,6 +506,7 @@ function AboutVersionSection() {
           }
         />
       ) : null}
+      {showNightlyMobileBeta ? <NightlyMobileBetaRow /> : null}
     </>
   );
 }
@@ -2202,7 +2200,6 @@ export function GeneralSettingsPanel() {
   const hasServerTargets = connectedEnvironments.length > 0;
   const [backgroundActivityDialogOpen, setBackgroundActivityDialogOpen] = useState(false);
   const mixedResponseStreamingMode = useScopedSettingsMixed(["responseStreamingMode"]);
-  const mixedAgentThreadAccess = useScopedSettingsMixed(["agentThreadAccess"]);
   const lastEnabledProjectGroupingMode = useRef<SidebarProjectGroupingMode>(
     readLastEnabledProjectGroupingMode(),
   );
@@ -2592,50 +2589,6 @@ export function GeneralSettingsPanel() {
                 </SelectItem>
                 <SelectItem hideIndicator value="paragraph">
                   {RESPONSE_STREAMING_MODE_LABELS.paragraph}
-                </SelectItem>
-              </SelectPopup>
-            </Select>
-          }
-        />
-        <SettingsRow
-          serverScoped
-          settingKeys={["agentThreadAccess"]}
-          {...searchableSetting("agent-thread-access")}
-          description="Choose whether agents can manage threads with T3 Code thread tools, and in which projects. Applies to active agent sessions."
-          mixed={mixedAgentThreadAccess}
-          resetAction={
-            scope.kind !== "project" &&
-            scope.kind !== "checkout" &&
-            settings.agentThreadAccess !== DEFAULT_UNIFIED_SETTINGS.agentThreadAccess ? (
-              <SettingResetButton
-                label="agent thread access"
-                onClick={() =>
-                  updateSettings({ agentThreadAccess: DEFAULT_UNIFIED_SETTINGS.agentThreadAccess })
-                }
-              />
-            ) : null
-          }
-          control={
-            <Select
-              value={mixedAgentThreadAccess ? null : settings.agentThreadAccess}
-              onValueChange={(value) => {
-                if (value === "none" || value === "project" || value === "environment") {
-                  updateSettings({ agentThreadAccess: value });
-                }
-              }}
-            >
-              <SelectTrigger size="sm" className="w-full sm:w-64" aria-label="Agent thread access">
-                <SelectValue>
-                  {(value: AgentThreadAccess | null) =>
-                    value === null ? "Mixed" : AGENT_THREAD_ACCESS_LABELS[value]
-                  }
-                </SelectValue>
-              </SelectTrigger>
-              <SelectPopup align="end" alignItemWithTrigger={false}>
-                <SelectItem value="none">{AGENT_THREAD_ACCESS_LABELS.none}</SelectItem>
-                <SelectItem value="project">{AGENT_THREAD_ACCESS_LABELS.project}</SelectItem>
-                <SelectItem value="environment">
-                  {AGENT_THREAD_ACCESS_LABELS.environment}
                 </SelectItem>
               </SelectPopup>
             </Select>
@@ -3554,10 +3507,13 @@ export function GeneralSettingsPanel() {
         {isElectron || HOSTED_APP_CHANNEL ? (
           <AboutVersionSection />
         ) : (
-          <SettingsRow
-            title={<AboutVersionTitle />}
-            description="Current version of the application."
-          />
+          <>
+            <SettingsRow
+              title={<AboutVersionTitle />}
+              description="Current version of the application."
+            />
+            {IS_NIGHTLY_BUILD ? <NightlyMobileBetaRow /> : null}
+          </>
         )}
       </SettingsSection>
       <SettingsSection title="Diagnostics">
