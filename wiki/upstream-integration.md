@@ -5,8 +5,8 @@ description: Completed upstream integration boundaries, latest review, and fork 
 tags: [upstream, fork, integration]
 status: stable
 generated:
-  by: codex/gpt-6.1-sol
-  at: 2026-10-03T20:02:01Z
+  by: opencode/gpt-6.1-sol
+  at: 2026-10-05T14:53:52Z
 verified:
   - by: codex/gpt-6.1-sol
     at: 2026-10-03T20:02:01Z
@@ -80,6 +80,12 @@ sources:
   - id: ssh-deployment
     resource: ../scripts/deploy-ssh-runtime.sh
     title: Fork SSH runtime deployment and release handoff
+  - id: remote-deployment-checks
+    resource: ../AGENTS.md#remote-deployment-checks
+    title: Persistent tailnet publication and remote deployment verification
+  - id: tailscale-persistence
+    resource: ../apps/server/src/cli/pair.ts
+    title: Pairing with the running server and remembering Tailscale Serve settings
   - id: upstream-jujutsu
     resource: https://github.com/pingdotgg/t3code/pull/13816
     title: Upstream Jujutsu support selectively ported into the fork
@@ -208,7 +214,14 @@ previous runtime version, for example `bash scripts/deploy-ssh-runtime.sh
 <host> <project-directory> 0.0.42` when installing 0.0.44. It updates only the
 managed launcher whose process uses that exact installed runtime, preserves
 the previous archive, and restores the launcher if startup fails. Coordinate
-the restart with active remote turns.[^ssh-deployment]
+the restart with active remote turns. Its readiness check covers loopback only,
+not the phone-facing Tailscale endpoint.[^ssh-deployment]
+
+Tailnet publication must be remembered in the running server's state directory
+so restarts restore forwarding to its actual listener. A standalone Tailscale
+Serve mapping is not sufficient. Follow the [remote deployment checks](../AGENTS.md#remote-deployment-checks)
+and require the original HTTPS endpoint to return the same environment ID after
+deployment or rollback.[^remote-deployment-checks][^tailscale-persistence]
 
 ## Rechecking the boundary
 
@@ -244,6 +257,10 @@ git log --reverse --oneline origin/main..upstream/main
 [^git-history]: Ancestry checks and commit counts against the pinned revisions.
 
 [^ssh-deployment]: Deployment helper's release handoff and startup rollback.
+
+[^remote-deployment-checks]: Agent instructions for preserving and verifying the phone-facing endpoint.
+
+[^tailscale-persistence]: `pair --tailscale` discovers the live server and remembers its HTTPS port for startup restoration.
 
 [^upstream-jujutsu]: Original upstream support, used as the selective-port source.
 
