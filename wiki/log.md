@@ -1,5 +1,9 @@
 # Wiki update log
 
+## 2026-10-05
+
+- **Maintenance**: Clarified the [SSH runtime handoff](upstream-integration.md#ssh-runtime-release-handoff) constraint: loopback readiness does not verify phone access. Remote deployments must preserve remembered Tailscale publication and verify the original HTTPS environment identity after deployment or rollback.
+
 ## 2026-10-03
 
 - **Integration**: [PR #32](https://github.com/NicholasZolton/t3code/pull/32) reached fork `main` at `a9b81ef5c5`. Refreshed [upstream integration](upstream-integration.md): all 60 reviewed commits through `65731f986b` are incorporated, with zero ancestry gap. The completed V2 sync retains the accepted legacy-history and protocol 2 boundaries.
