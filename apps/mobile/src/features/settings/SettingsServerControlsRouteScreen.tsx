@@ -1,10 +1,8 @@
 import { useNavigation } from "@react-navigation/native";
 import { SettingsRow } from "./components/SettingsRow";
 import { ScreenScrollView as ScrollView } from "../../components/ScreenScrollView";
-import { SymbolView } from "../../components/AppSymbol";
 import { AppText as Text, AppTextInput } from "../../components/AppText";
 import {
-  type AgentThreadAccess,
   type ResponseStreamingMode,
   type ServerSettings,
   type ServerSettingsPatch,
@@ -19,7 +17,7 @@ import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import { worktreeSettingsPatchApplied } from "@t3tools/shared/serverSettings";
 import { useRef, useState } from "react";
-import { Alert, Platform, Pressable, View } from "react-native";
+import { Alert, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { RUNTIME_MODE_CHOICES } from "../threads/thread-settings-options";
@@ -124,28 +122,6 @@ const STREAMING_CHOICES: ReadonlyArray<{
     mode: "paragraph",
     label: "Finished paragraphs",
     description: "Show each paragraph or code block as it completes.",
-  },
-];
-
-const THREAD_ACCESS_CHOICES: ReadonlyArray<{
-  readonly mode: AgentThreadAccess;
-  readonly label: string;
-  readonly description: string;
-}> = [
-  {
-    mode: "none",
-    label: "No thread access",
-    description: "Agents cannot use T3 Code thread tools.",
-  },
-  {
-    mode: "project",
-    label: "Current project",
-    description: "Agents can manage threads in their own project.",
-  },
-  {
-    mode: "environment",
-    label: "All projects in this environment",
-    description: "Agents can manage threads across this server's projects.",
   },
 ];
 
@@ -468,31 +444,6 @@ function ServerSettingsDetail(props: { readonly page: SettingsPage }) {
                       onValueChange={(value) => write({ enableAgentBrowserAccess: value })}
                     />
                   </SettingsSection>
-                  {!projectSelected ? (
-                    <SettingsSection
-                      title="Agent thread access"
-                      trailing={
-                        pendingWrites === 0 && isMixed("agentThreadAccess") ? (
-                          <MixedValuesLabel projectSelected={false} />
-                        ) : null
-                      }
-                    >
-                      {THREAD_ACCESS_CHOICES.map((choice, index) => (
-                        <ChoiceRow
-                          key={choice.mode}
-                          label={choice.label}
-                          description={choice.description}
-                          selected={
-                            !isMixed("agentThreadAccess") &&
-                            uniform("agentThreadAccess") === choice.mode
-                          }
-                          separated={index > 0}
-                          disabled={disabledFor("agentThreadAccess")}
-                          onPress={() => write({ agentThreadAccess: choice.mode })}
-                        />
-                      ))}
-                    </SettingsSection>
-                  ) : null}
                 </>
               ) : null}
 
@@ -558,49 +509,6 @@ function ServerSettingsDetail(props: { readonly page: SettingsPage }) {
         </ScrollView>
       </SettingsScreen>
     </>
-  );
-}
-
-function ChoiceRow(props: {
-  readonly label: string;
-  readonly description: string;
-  readonly selected: boolean;
-  readonly separated: boolean;
-  readonly disabled: boolean;
-  readonly onPress: () => void;
-}) {
-  return (
-    <Pressable
-      accessibilityRole="radio"
-      accessibilityState={{ checked: props.selected, disabled: props.disabled }}
-      className={
-        props.separated
-          ? "flex-row items-center gap-4 border-t border-border-subtle p-4 active:opacity-70"
-          : "flex-row items-center gap-4 p-4 active:opacity-70"
-      }
-      disabled={props.disabled}
-      onPress={props.onPress}
-    >
-      <View className="min-w-0 flex-1 gap-1">
-        <Text
-          className={
-            Platform.OS === "android" ? "text-base text-foreground" : "text-lg text-foreground"
-          }
-        >
-          {props.label}
-        </Text>
-        <Text className="text-sm leading-normal text-foreground-muted">{props.description}</Text>
-      </View>
-      {props.selected ? (
-        <SymbolView
-          name="checkmark"
-          size={18}
-          tintColorClassName="accent-icon"
-          type="monochrome"
-          weight="semibold"
-        />
-      ) : null}
-    </Pressable>
   );
 }
 

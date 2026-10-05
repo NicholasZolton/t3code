@@ -63,7 +63,7 @@ import {
   writeProviderStatusCache,
 } from "../providerStatusCache.ts";
 import { COMPACT_SLASH_COMMAND } from "../providerSnapshot.ts";
-import type { ProviderInstance } from "../ProviderDriver.ts";
+import type { ProviderInstance, ProviderWorkspaceSnapshot } from "../ProviderDriver.ts";
 import * as ProviderInstanceRegistry from "../Services/ProviderInstanceRegistry.ts";
 import * as ProviderRegistry from "../Services/ProviderRegistry.ts";
 import { makeManualOnlyProviderMaintenanceCapabilities } from "../providerMaintenance.ts";
@@ -641,6 +641,34 @@ it.layer(Layer.mergeAll(TestNodeServices, ServerSettingsModule.layerTest(), Test
             skills: scopedSnapshot.skills,
           },
         ]);
+
+        const pendingSnapshot = {
+          ...scopedSnapshot,
+          slashCommands: [COMPACT_SLASH_COMMAND],
+          slashCommandsPending: true,
+        } satisfies ProviderWorkspaceSnapshot;
+        const partial = upsertProviderWorkspaceSnapshot(result, "/project", pendingSnapshot);
+        assert.deepStrictEqual(partial.workspaceSnapshots?.[0]?.slashCommands, [
+          { name: "project" },
+        ]);
+        assert.strictEqual(partial.workspaceSnapshots?.[0]?.slashCommandsPending, true);
+        const otherProject = upsertProviderWorkspaceSnapshot(
+          partial,
+          "/other-project",
+          pendingSnapshot,
+        );
+        assert.deepStrictEqual(otherProject.workspaceSnapshots?.[1]?.slashCommands, [
+          COMPACT_SLASH_COMMAND,
+        ]);
+        const recovered = upsertProviderWorkspaceSnapshot(partial, "/project", {
+          ...scopedSnapshot,
+          slashCommands: [COMPACT_SLASH_COMMAND, { name: "replacement" }],
+        });
+        assert.deepStrictEqual(recovered.workspaceSnapshots?.[0]?.slashCommands, [
+          COMPACT_SLASH_COMMAND,
+          { name: "replacement" },
+        ]);
+        assert.strictEqual(recovered.workspaceSnapshots?.[0]?.slashCommandsPending, undefined);
       });
 
       it("preserves previously discovered provider models when a refresh returns none", () => {
@@ -1573,7 +1601,12 @@ it.layer(Layer.mergeAll(TestNodeServices, ServerSettingsModule.layerTest(), Test
             slashCommands: [],
           } as const satisfies ServerProvider;
           const snapshotCalls = yield* Ref.make(0);
-          const scopedResult = yield* Ref.make<ServerProvider>(scopedProvider);
+          const scopedResult = yield* Ref.make<ProviderWorkspaceSnapshot>({
+            ...scopedProvider,
+            status: "error",
+            slashCommands: [COMPACT_SLASH_COMMAND],
+            slashCommandsPending: true,
+          });
           const cacheInvalidations = yield* Ref.make(0);
           const scanGate = yield* Ref.make<{
             readonly started: Deferred.Deferred<void>;
@@ -1702,8 +1735,27 @@ it.layer(Layer.mergeAll(TestNodeServices, ServerSettingsModule.layerTest(), Test
               providers[0]?.workspaceSnapshots?.[0]?.checkedAt,
               DateTime.formatIso(yield* DateTime.now),
             );
+            assert.deepStrictEqual(providers[0]?.workspaceSnapshots?.[0]?.slashCommands, [
+              COMPACT_SLASH_COMMAND,
+            ]);
+            assert.strictEqual(providers[0]?.workspaceSnapshots?.[0]?.slashCommandsPending, true);
+            yield* Ref.set(scopedResult, {
+              ...scopedProvider,
+              status: "error",
+              slashCommandsPending: false,
+            });
             yield* registry.refreshWorkspaceSnapshot({ instanceId, cwd: "/workspace" });
-            assert.strictEqual(yield* Ref.get(snapshotCalls), 2);
+            assert.strictEqual(yield* Ref.get(snapshotCalls), 3);
+            assert.deepStrictEqual(
+              (yield* registry.getProviders)[0]?.workspaceSnapshots?.[0]?.slashCommands,
+              scopedProvider.slashCommands,
+            );
+            assert.strictEqual(
+              (yield* registry.getProviders)[0]?.workspaceSnapshots?.[0]?.slashCommandsPending,
+              undefined,
+            );
+            yield* registry.refreshWorkspaceSnapshot({ instanceId, cwd: "/workspace" });
+            assert.strictEqual(yield* Ref.get(snapshotCalls), 3);
             const newSkills = [
               ...scopedProvider.skills,
               { name: "added", path: "/workspace/added/SKILL.md", enabled: true },
@@ -1714,7 +1766,7 @@ it.layer(Layer.mergeAll(TestNodeServices, ServerSettingsModule.layerTest(), Test
               cwd: "/workspace",
               fresh: true,
             });
-            assert.strictEqual(yield* Ref.get(snapshotCalls), 3);
+            assert.strictEqual(yield* Ref.get(snapshotCalls), 4);
             assert.strictEqual(yield* Ref.get(cacheInvalidations), 1);
             assert.deepStrictEqual(
               (yield* registry.getProviders)[0]?.workspaceSnapshots?.map((s) => s.skills),
@@ -1755,7 +1807,7 @@ it.layer(Layer.mergeAll(TestNodeServices, ServerSettingsModule.layerTest(), Test
             yield* Ref.set(scopedResult, { ...scopedProvider, skills: updatedSkills });
             yield* TestClock.adjust("29 seconds");
             yield* registry.refreshWorkspaceSnapshot({ instanceId, cwd: "/workspace" });
-            assert.strictEqual(yield* Ref.get(snapshotCalls), 5);
+            assert.strictEqual(yield* Ref.get(snapshotCalls), 6);
             yield* TestClock.adjust("2 seconds");
             yield* Ref.set(returnPendingSnapshot, true);
             yield* registry.refreshWorkspaceSnapshot({ instanceId, cwd: "/workspace" });
@@ -1769,7 +1821,7 @@ it.layer(Layer.mergeAll(TestNodeServices, ServerSettingsModule.layerTest(), Test
               (yield* registry.getProviders)[0]?.workspaceSnapshots?.[0]?.skills,
               updatedSkills,
             );
-            assert.strictEqual(yield* Ref.get(snapshotCalls), 7);
+            assert.strictEqual(yield* Ref.get(snapshotCalls), 8);
 
             const newlyAddedSkills = [
               ...updatedSkills,
@@ -1783,7 +1835,7 @@ it.layer(Layer.mergeAll(TestNodeServices, ServerSettingsModule.layerTest(), Test
               (yield* registry.getProviders)[0]?.workspaceSnapshots?.[0]?.skills,
               newlyAddedSkills,
             );
-            assert.strictEqual(yield* Ref.get(snapshotCalls), 8);
+            assert.strictEqual(yield* Ref.get(snapshotCalls), 9);
 
             yield* Ref.set(instancesRef, [rebuiltInstance]);
             yield* PubSub.publish(registryChanges, undefined);

@@ -1126,6 +1126,7 @@ import {
   formatProviderSkillDisplayName,
   getProviderSlashCommandsForSlashMenu,
   getProviderSkillsForSlashMenu,
+  hasCompleteProviderWorkspaceSnapshot,
   resolveProviderSkillsForCwd,
   resolveProviderSlashCommandsForCwd,
 } from "@t3tools/client-runtime/providerSkills";
@@ -2189,7 +2190,33 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     reportFailure: false,
   });
   const workspaceRefreshKeyRef = useRef<string | null>(null);
-  const workspaceRefreshRetryRef = useRef<{ key: string; notBefore: number } | null>(null);
+  const [workspaceRefreshRetry, setWorkspaceRefreshRetry] = useState<{
+    key: string;
+    notBefore: number;
+  } | null>(null);
+  const workspaceRefreshScopeKey =
+    gitCwd && selectedProviderEntry
+      ? `${environmentId}:${selectedProviderEntry.instanceId}:${gitCwd}`
+      : null;
+  const workspaceSlashCommandsPending =
+    selectedProviderStatus?.workspaceSnapshots?.some(
+      (snapshot) => snapshot.cwd === gitCwd && snapshot.slashCommandsPending === true,
+    ) ?? false;
+  useEffect(() => {
+    if (
+      !workspaceSlashCommandsPending ||
+      !workspaceRefreshRetry ||
+      workspaceRefreshRetry.key !== workspaceRefreshScopeKey
+    )
+      return;
+    const timeout = setTimeout(
+      () => {
+        setWorkspaceRefreshRetry((current) => (current === workspaceRefreshRetry ? null : current));
+      },
+      Math.max(0, workspaceRefreshRetry.notBefore - Date.now()),
+    );
+    return () => clearTimeout(timeout);
+  }, [workspaceRefreshRetry, workspaceRefreshScopeKey, workspaceSlashCommandsPending]);
   const hadWorkspaceSnapshotRef = useRef(false);
   const selectedProviderModels = useMemo<ReadonlyArray<ServerProvider["models"][number]>>(
     () => selectedProviderEntry?.models ?? [],
@@ -2292,40 +2319,45 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     resetTrigger: resetComposerTrigger,
   } = useComposerTriggerState(() => detectComposerTrigger(prompt, prompt.length));
   useEffect(() => {
-    const hasWorkspaceSnapshot = Boolean(
-      gitCwd &&
-      selectedProviderStatus?.workspaceSnapshots?.some((snapshot) => snapshot.cwd === gitCwd),
+    const hasWorkspaceSnapshot = hasCompleteProviderWorkspaceSnapshot(
+      selectedProviderStatus,
+      gitCwd,
     );
     if (hadWorkspaceSnapshotRef.current && !hasWorkspaceSnapshot) {
       workspaceRefreshKeyRef.current = null;
-      workspaceRefreshRetryRef.current = null;
+      setWorkspaceRefreshRetry(null);
     }
     hadWorkspaceSnapshotRef.current = hasWorkspaceSnapshot;
   }, [gitCwd, selectedProviderStatus]);
   useEffect(() => {
-    if (!gitCwd || !selectedProviderEntry) return;
+    if (!gitCwd || !selectedProviderEntry || !workspaceRefreshScopeKey) return;
     const snapshot = selectedProviderStatus?.workspaceSnapshots?.find(
       (candidate) => candidate.cwd === gitCwd,
     );
     const isSkillMenuOpen =
       composerTrigger?.kind === "skill" || composerTrigger?.kind === "slash-command";
+    const hasWorkspaceSnapshot = hasCompleteProviderWorkspaceSnapshot(
+      selectedProviderStatus,
+      gitCwd,
+    );
     if (
+      hasWorkspaceSnapshot &&
       snapshot &&
       (!isSkillMenuOpen || !isProviderWorkspaceCatalogStale(snapshot.checkedAt, Date.now()))
     )
       return;
-    const key = `${environmentId}:${selectedProviderEntry.instanceId}:${gitCwd}:${snapshot?.checkedAt ?? ""}`;
+    const key = `${workspaceRefreshScopeKey}:${hasWorkspaceSnapshot ? snapshot?.checkedAt : ""}`;
     if (workspaceRefreshKeyRef.current === key) return;
-    const retry = workspaceRefreshRetryRef.current;
-    if (retry?.key === key && Date.now() < retry.notBefore) return;
+    const retry = workspaceRefreshRetry;
+    if (retry?.key === workspaceRefreshScopeKey && Date.now() < retry.notBefore) return;
     workspaceRefreshKeyRef.current = key;
     const retryLater = () => {
       if (workspaceRefreshKeyRef.current !== key) return;
       workspaceRefreshKeyRef.current = null;
-      workspaceRefreshRetryRef.current = {
-        key,
+      setWorkspaceRefreshRetry({
+        key: workspaceRefreshScopeKey,
         notBefore: Date.now() + WORKSPACE_SNAPSHOT_RETRY_COOLDOWN_MS,
-      };
+      });
     };
     void refreshProviders({
       environmentId,
@@ -2337,7 +2369,12 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
               .find((provider) => provider.instanceId === selectedProviderEntry.instanceId)
               ?.workspaceSnapshots?.find((candidate) => candidate.cwd === gitCwd)
           : undefined;
-      if (!updatedSnapshot || updatedSnapshot.checkedAt === snapshot?.checkedAt) retryLater();
+      if (
+        !updatedSnapshot ||
+        updatedSnapshot.slashCommandsPending ||
+        (hasWorkspaceSnapshot && updatedSnapshot.checkedAt === snapshot?.checkedAt)
+      )
+        retryLater();
     }, retryLater);
   }, [
     composerTrigger,
@@ -2346,6 +2383,8 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     refreshProviders,
     selectedProviderEntry,
     selectedProviderStatus,
+    workspaceRefreshRetry,
+    workspaceRefreshScopeKey,
   ]);
   const [composerHighlightedItemId, setComposerHighlightedItemId] = useState<string | null>(null);
   const composerSuggestionId = useId();
