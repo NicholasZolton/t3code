@@ -96,7 +96,7 @@ An empty database is a bad test. Seed your worktree's `.t3` with a copy of real 
 ## Verifying
 
 - On Nicholas's Mac, after the final commit, run `pnpm run dist:desktop:artifact --platform mac --target dir --arch arm64` from the repo root. `/Applications/T3 Code (Alpha).app` links to `release/T3 Code (Alpha).app`.
-- When changes also affect the remote server or SSH launch behavior, separately run `bash scripts/deploy-ssh-runtime.sh nicholas-dev-maxai /home/ubuntu/Documents/Projects/monorepo` after the final commit. It installs this checkout's Linux server and briefly restarts the SSH-managed T3 server; coordinate with Nicholas before interrupting active remote T3 turns. Frontend-only changes do not need this command.
+- When changes also affect the remote server or SSH launch behavior, separately run `bash scripts/deploy-ssh-runtime.sh nicholas-dev-maxai /home/ubuntu/Documents/Projects/monorepo` after the final commit. It installs this checkout's Linux server and briefly restarts the SSH-managed T3 server; coordinate with Nicholas before interrupting active remote T3 turns and follow the [remote deployment checks](#remote-deployment-checks). Frontend-only changes do not need this command.
 - Smallest proof that the change works. `vp test run <files>` for the tests you touched, targeted lint and typecheck for the scope you changed.
 - Test meaningful logic or observable behavior. Do not render components to static markup to assert props or attributes, or add tests that merely assert callback wiring or mirror the implementation.
 - **Do not run repo-wide checks.** No `vp check`, no `vp run -r test`, no `vp run -r typecheck` unless I ask. CI owns the full suite.
@@ -105,6 +105,15 @@ An empty database is a bad test. Seed your worktree's `.t3` with a copy of real 
 - Upon request, user-visible frontend changes should get one integrated pass in a real client: `test-t3-app` for web, `test-t3-mobile` for mobile. The primary agent does this once after integrating. Subagents do not launch their own dev servers. Ask permission before doing computer use or spinning up browsers.
 
 For authorized mobile verification, a missing or outdated native client is a build step, not a blocker. Run `node scripts/mobile-native-client.ts ensure <ios|android> <device-id>` on the simulator host before starting Metro. It checks the local Expo fingerprint and builds/installs when needed. See `test-t3-mobile` for the full workflow.
+
+### Remote deployment checks
+
+The deployment helper checks only loopback readiness. Desktop SSH can work while the phone's Tailscale proxy points at a dead port; the helper's success is not proof that remote clients can connect.
+
+1. **Record the existing connection before restarting.** On the remote host, inspect `tailscale serve status`, the managed launcher's port, and `~/.t3/userdata/server-runtime.json`. Confirm the live listener with `ss -H -ltnp` and fetch its `/.well-known/t3/environment` descriptor. Record the environment ID and existing tailnet HTTPS origin; preserve the T3 home and public HTTPS port rather than assuming a backend port or choosing a new phone URL.
+2. **Make existing Tailscale publication persistent.** Confirm `tailscale-serve.json` in the running server's state directory remembers that HTTPS port. If missing or incorrect, use the installed runtime's `pair --base-dir "$HOME/.t3" --tailscale --tailscale-serve-port <existing-https-port> >/dev/null` on the remote host. This attaches to the running server and remembers the forwarding rule for subsequent restarts; verify the settings file afterward. Suppress pairing output because it contains credentials. A bare `tailscale serve --bg` repair alone does not tell T3 Code to restore the mapping.
+3. **Keep one daily-driver server.** Use the deployment helper's managed backend port; when changing versions, pass the currently running archive version as its third argument. Do not start a second `t3 serve` or `npx t3` to repair pairing: automatic port fallback can publish a temporary server on a different port. Keep dev-server publication on a separate HTTPS port, and never reset all Tailscale Serve configuration or overwrite another environment's live handler.
+4. **Verify both paths after deployment or rollback.** Fetch `/.well-known/t3/environment` through loopback and the original tailnet HTTPS origin using bounded-time HTTP requests, without opening a browser or consuming a pairing link. Require HTTP 200 and the same environment ID recorded before deployment. If HTTPS returns 502 or targets a dead port, repair this environment's publication with the persistent pairing command above and recheck; do not report deployment success based only on `__ssh-helper wait-ready`.
 
 ## Pull requests
 
