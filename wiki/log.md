@@ -2,6 +2,8 @@
 
 ## 2026-10-05
 
+- **Integration**: [PR #34](https://github.com/NicholasZolton/t3code/pull/34) reached fork `main` at `2586800144`. Refreshed [upstream integration](upstream-integration.md): all 114 newer commits through `1604ccc9d7` are incorporated, with zero ancestry gap and the accepted upstream MCP replacement.
+
 - **Integration candidate**: Recorded local full merge `ab7e864a1a` through upstream `1604ccc9d7` in [upstream integration](upstream-integration.md). All 114 newer commits are on the branch; fork `main` at `75c7b1b95c` still awaits them. The candidate replaces the fork MCP policy with upstream targeting and combines catalog freshness with discovery retries.
 
 - **Maintenance**: Clarified the [SSH runtime handoff](upstream-integration.md#ssh-runtime-release-handoff) constraint: loopback readiness does not verify phone access. Remote deployments must preserve remembered Tailscale publication and verify the original HTTPS environment identity after deployment or rollback.
