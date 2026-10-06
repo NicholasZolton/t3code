@@ -6,7 +6,7 @@ tags: [upstream, fork, integration]
 status: stable
 generated:
   by: opencode/gpt-6.1-sol
-  at: 2026-10-05T20:00:49Z
+  at: 2026-10-06T03:40:07Z
 verified:
   - by: opencode/gpt-6.1-sol
     at: 2026-10-05T20:00:49Z
@@ -101,6 +101,15 @@ sources:
   - id: tailscale-persistence
     resource: ../apps/server/src/cli/pair.ts
     title: Pairing with the running server and remembering Tailscale Serve settings
+  - id: ssh-recovery-candidate
+    resource: ../packages/ssh/src/tunnel.ts
+    title: Local SSH recovery candidate on fork base 170fc9874f37eb7d91c605ace73584eec07fbb95, checked 2026-10-06T03:40:07Z
+  - id: upstream-ssh-recovery
+    resource: https://github.com/pingdotgg/t3code/blob/3a9c1a6df1b71d8ba73d287be90443e8e874802f/packages/ssh/src/tunnel.ts
+    title: Upstream still stops servers during stale-tunnel cleanup and failed reuse probes at the October 6 SSH review
+  - id: ssh-recovery-issue
+    resource: https://github.com/pingdotgg/t3code/issues/15608
+    title: Upstream report of remote work stopping on disconnect and stale-tunnel recovery
   - id: upstream-jujutsu
     resource: https://github.com/pingdotgg/t3code/pull/13816
     title: Upstream Jujutsu support selectively ported into the fork
@@ -266,6 +275,18 @@ Serve mapping is not sufficient. Follow the [remote deployment checks](../AGENTS
 and require the original HTTPS endpoint to return the same environment ID after
 deployment or rollback.[^remote-deployment-checks][^tailscale-persistence]
 
+## SSH recovery exception
+
+The local candidate on fork base `170fc9874f` is not yet on `main`. It separates
+stale-tunnel cleanup from remote shutdown and preserves an existing server's
+ownership when readiness times out, rather than killing it or launching a competing
+server against the same T3 home. Explicit Disconnect, desktop shutdown, and requested
+runner changes retain their existing behavior.[^ssh-recovery-candidate]
+
+At the focused October 6 review, upstream `3a9c1a6df1` still has both destructive
+recovery paths; issue #15608 remains open. Preserve this boundary during later syncs
+unless upstream supplies equivalent recovery behavior.[^upstream-ssh-recovery][^ssh-recovery-issue]
+
 ## Rechecking the boundary
 
 After fetching `origin main` and `upstream main`, use ancestry to identify the
@@ -305,6 +326,12 @@ git log --reverse --oneline origin/main..upstream/main
 [^remote-deployment-checks]: Agent instructions for preserving and verifying the phone-facing endpoint.
 
 [^tailscale-persistence]: `pair --tailscale` discovers the live server and remembers its HTTPS port for startup restoration.
+
+[^ssh-recovery-candidate]: Local branch SSH implementation; not a completed main integration.
+
+[^upstream-ssh-recovery]: Exact upstream source reviewed on October 6.
+
+[^ssh-recovery-issue]: Open upstream issue and its stale-tunnel reconnect reproduction.
 
 [^upstream-jujutsu]: Original upstream support, used as the selective-port source.
 

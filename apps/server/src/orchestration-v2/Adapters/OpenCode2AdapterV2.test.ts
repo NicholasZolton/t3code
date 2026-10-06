@@ -20,6 +20,7 @@ import {
   type OrchestrationV2AppThread,
   type OrchestrationV2ProviderThread,
   type OrchestrationV2ProviderTurn,
+  type OrchestrationV2Subagent,
   type ProviderReplayEntry,
 } from "@t3tools/contracts";
 import * as Cause from "effect/Cause";
@@ -38,6 +39,7 @@ import { TestClock } from "effect/testing";
 import { describe } from "vite-plus/test";
 
 import type {
+  ProviderAdapterV2Error,
   ProviderAdapterV2Event,
   ProviderAdapterV2SessionRuntime,
 } from "../ProviderAdapter.ts";
@@ -64,11 +66,21 @@ const reply = (operation: string, data: unknown): ProviderReplayEntry => ({
   frame: { type: "sdk.response", operation, data },
 });
 const replyData = (operation: string, data: unknown) => reply(operation, { data });
-const event = (type: string, data: Record<string, unknown>): ProviderReplayEntry => ({
+const event = (
+  type: string,
+  data: Record<string, unknown>,
+  version: number = durable.durable.version,
+): ProviderReplayEntry => ({
   type: "emit_inbound",
   frame: {
     type: "sdk.event",
-    event: { id: `evt_${type.replaceAll(".", "")}0000`, created: 1, type, data, ...durable },
+    event: {
+      id: `evt_${type.replaceAll(".", "")}0000`,
+      created: 1,
+      type,
+      data,
+      durable: { ...durable.durable, version },
+    },
   },
 });
 const durable = { durable: { aggregateID: SESSION, seq: 1, version: 1 } };
@@ -833,6 +845,752 @@ describe("OpenCode2 adapter", () => {
         ["completed", "completed"],
       );
     }).pipe(Effect.scoped),
+  );
+
+  const backgroundContinuation = (
+    child: string,
+    background: boolean = true,
+    delivered: boolean = true,
+  ): ReadonlyArray<ProviderReplayEntry> => {
+    const tool = toolOf(SESSION, "call-continued");
+    return [
+      event("session.tool.input.started", { ...tool, name: "subagent" }),
+      event("session.tool.called", {
+        ...tool,
+        name: "subagent",
+        input: {
+          description: "Continue audit",
+          prompt: "Continue the audit",
+          sessionID: child,
+          background,
+        },
+        executed: false,
+      }),
+      event("session.tool.progress", {
+        ...tool,
+        metadata: { sessionID: child, status: "running" },
+      }),
+      out("session.update", { sessionID: child, permissions: "<any>" }),
+      reply("session.update", null),
+      event("session.inbox.enqueued", {
+        sessionID: child,
+        inboxID: "msg_child_continuation",
+        item: { type: "user", payload: { text: "Continue the audit" }, delivery: "steer" },
+      }),
+      ...(delivered
+        ? [
+            event("session.inbox.delivered", {
+              sessionID: child,
+              inboxID: "msg_child_continuation",
+            }),
+          ]
+        : []),
+      event(
+        "session.tool.success",
+        {
+          ...tool,
+          executed: true,
+          content: [{ type: "text", text: "The subagent is working in the background." }],
+          metadata: { sessionID: child, status: "running" },
+        },
+        2,
+      ),
+    ];
+  };
+
+  const backgroundReport = (
+    child: string,
+    inboxID: string,
+    state: "completed" | "error" | "cancelled",
+    result: string,
+  ): ProviderReplayEntry =>
+    event("session.inbox.enqueued", {
+      inboxID,
+      sessionID: SESSION,
+      item: {
+        type: "synthetic",
+        payload: {
+          text: `<subagent sessionID="${child}" state="${state}">\n${result}\n</subagent>`,
+          metadata: { source: "subagent", childID: child, state },
+        },
+        delivery: "steer",
+      },
+    });
+
+  const latestSubagents = (
+    events: ReadonlyArray<ProviderAdapterV2Event>,
+  ): ReadonlyArray<OrchestrationV2Subagent> => [
+    ...new Map(
+      events.flatMap((event) =>
+        event.type === "subagent.updated" ? [[event.subagent.id, event.subagent] as const] : [],
+      ),
+    ).values(),
+  ];
+
+  const backgroundTurnEvents = (
+    runtime: ProviderAdapterV2SessionRuntime,
+    thread: OrchestrationV2ProviderThread,
+  ): Effect.Effect<ReadonlyArray<ProviderAdapterV2Event>, ProviderAdapterV2Error, Scope.Scope> =>
+    Effect.gen(function* () {
+      const collected = yield* runtime.events.pipe(
+        Stream.takeUntil((event) => event.type === "turn.terminal"),
+        Stream.runCollect,
+        Effect.forkScoped,
+      );
+      yield* runtime.startTurn(withLineage(thread));
+      return yield* Fiber.join(collected);
+    });
+
+  const reusedBeforeReport = (background: boolean = true): ReadonlyArray<ProviderReplayEntry> => [
+    ...backgroundLaunch(CHILD),
+    event("session.execution.started", { sessionID: CHILD }),
+    event("session.execution.succeeded", { sessionID: CHILD }),
+    ...backgroundContinuation(CHILD, background),
+    event("session.execution.started", { sessionID: CHILD }),
+  ];
+
+  it.effect(
+    "does not let a cancellation report during cleanup finish an undelivered continuation",
+    () =>
+      Effect.gen(function* () {
+        const { runtime, thread } = yield* resumed([
+          ...backgroundLaunch(CHILD),
+          event("session.execution.started", { sessionID: CHILD }),
+          ...backgroundContinuation(CHILD, true, false),
+          // Job.cancel resolves its report before the execution's interrupted event.
+          backgroundReport(CHILD, "msg_old_report", "cancelled", "OLD_CANCELLED"),
+          event("session.inbox.delivered", { sessionID: SESSION, inboxID: "msg_old_report" }),
+          event("session.execution.interrupted", { sessionID: CHILD, reason: "user" }),
+          event("session.execution.started", { sessionID: CHILD }),
+          event("session.inbox.delivered", { sessionID: CHILD, inboxID: "msg_child_continuation" }),
+          event("session.execution.succeeded", { sessionID: SESSION }),
+        ]);
+        const events = yield* backgroundTurnEvents(runtime, thread);
+        assert.deepEqual(
+          latestSubagents(events).map((agent) => ({ status: agent.status, result: agent.result })),
+          [
+            { status: "interrupted", result: null },
+            { status: "running", result: null },
+          ],
+        );
+        assert.isTrue(yield* runtime.hasPendingBackgroundWorkForThread!(thread));
+      }).pipe(Effect.scoped),
+  );
+
+  it.effect("does not require two reports when a shared job spans successor executions", () =>
+    Effect.gen(function* () {
+      const { runtime, thread } = yield* resumed([
+        ...backgroundLaunch(CHILD),
+        event("session.execution.started", { sessionID: CHILD }),
+        // The settled hook published success, but Job.start still joins its running job.
+        event("session.execution.succeeded", { sessionID: CHILD }),
+        ...backgroundContinuation(CHILD, true, false),
+        event("session.execution.started", { sessionID: CHILD }),
+        event("session.inbox.delivered", { sessionID: CHILD, inboxID: "msg_child_continuation" }),
+        backgroundReport(CHILD, "msg_shared_report", "completed", "SHARED_RESULT"),
+        event("session.inbox.delivered", { sessionID: SESSION, inboxID: "msg_shared_report" }),
+        event("session.execution.succeeded", { sessionID: CHILD }),
+        event("session.execution.succeeded", { sessionID: SESSION }),
+      ]);
+      const events = yield* backgroundTurnEvents(runtime, thread);
+      assert.deepEqual(
+        latestSubagents(events).map((agent) => ({ status: agent.status, result: agent.result })),
+        [
+          { status: "completed", result: null },
+          { status: "completed", result: null },
+        ],
+      );
+      assert.isFalse(yield* runtime.hasPendingBackgroundWork!);
+      assert.isFalse(yield* runtime.hasPendingBackgroundWorkForThread!(thread));
+    }).pipe(Effect.scoped),
+  );
+
+  it.effect.each([false, true])(
+    "settles a reused child that finishes before its tool return (report first=%s)",
+    (reportFirst) =>
+      Effect.gen(function* () {
+        // The early-report case also covers a foreground call backgrounded externally.
+        const continuation = backgroundContinuation(CHILD, !reportFirst);
+        const returned = continuation.at(-1)!;
+        const reported = backgroundReport(CHILD, "msg_new_report", "completed", "NEW_RESULT");
+        const { runtime, thread } = yield* resumed([
+          ...backgroundLaunch(CHILD),
+          event("session.execution.started", { sessionID: CHILD }),
+          event("session.execution.succeeded", { sessionID: CHILD }),
+          ...continuation.slice(0, -1),
+          event("session.execution.started", { sessionID: CHILD }),
+          event("session.execution.succeeded", { sessionID: CHILD }),
+          ...(reportFirst ? [reported, returned] : [returned, reported]),
+          event("session.inbox.delivered", { sessionID: SESSION, inboxID: "msg_new_report" }),
+          event("session.execution.succeeded", { sessionID: SESSION }),
+        ]);
+        const events = yield* backgroundTurnEvents(runtime, thread);
+        assert.deepEqual(
+          latestSubagents(events).map((agent) => agent.status),
+          ["completed", "completed"],
+        );
+        assert.isFalse(yield* runtime.hasPendingBackgroundWork!);
+      }).pipe(Effect.scoped),
+  );
+
+  it.effect("fences reuse after Stop removed the old call but before native cleanup ends", () =>
+    Effect.gen(function* () {
+      const { runtime, thread } = yield* resumed([
+        ...backgroundLaunch(CHILD),
+        event("session.execution.started", { sessionID: CHILD }),
+        event("session.execution.succeeded", { sessionID: SESSION }),
+        out("session.interrupt", { sessionID: CHILD }),
+        reply("session.interrupt", { interrupted: true }),
+        out("session.prompt", { sessionID: SESSION, text: "<any>" }),
+        promptAccepted,
+        event("session.execution.started", { sessionID: SESSION }),
+        ...backgroundContinuation(CHILD, true, false),
+        backgroundReport(CHILD, "msg_stop_report", "cancelled", "OLD_CANCELLED"),
+        event("session.inbox.delivered", { sessionID: SESSION, inboxID: "msg_stop_report" }),
+        event("session.execution.interrupted", { sessionID: CHILD, reason: "user" }),
+        event("session.execution.started", { sessionID: CHILD }),
+        event("session.inbox.delivered", { sessionID: CHILD, inboxID: "msg_child_continuation" }),
+        event("session.execution.succeeded", { sessionID: SESSION }),
+      ]);
+      const firstEnded = yield* Deferred.make<void>();
+      const events: Array<ProviderAdapterV2Event> = [];
+      const collected = yield* runtime.events.pipe(
+        Stream.tap((event) =>
+          Effect.sync(() => events.push(event)).pipe(
+            Effect.andThen(
+              event.type === "turn.terminal"
+                ? Deferred.succeed(firstEnded, undefined)
+                : Effect.void,
+            ),
+          ),
+        ),
+        Stream.filter((event) => event.type === "turn.terminal"),
+        Stream.take(2),
+        Stream.runDrain,
+        Effect.forkScoped,
+      );
+      yield* runtime.startTurn(withLineage(thread));
+      yield* Deferred.await(firstEnded);
+      yield* runtime.interruptTurn({
+        providerThread: thread,
+        providerTurnId: yield* providerTurnId,
+        requestRuntimeRestart: true,
+      });
+      yield* runtime.startTurn({
+        ...withLineage(thread),
+        ...secondTurn(thread),
+        appThread: withLineage(thread).appThread,
+      });
+      yield* Fiber.join(collected);
+      assert.deepEqual(
+        latestSubagents(events).map((agent) => ({ status: agent.status, result: agent.result })),
+        [
+          { status: "interrupted", result: null },
+          { status: "running", result: null },
+        ],
+      );
+      assert.isTrue(yield* runtime.hasPendingBackgroundWorkForThread!(thread));
+    }).pipe(Effect.scoped),
+  );
+
+  it.effect("does not wait for a background report from a foreground continuation", () =>
+    Effect.gen(function* () {
+      const { runtime, thread } = yield* resumed([
+        ...backgroundLaunch(CHILD),
+        event("session.execution.started", { sessionID: CHILD }),
+        event("session.execution.succeeded", { sessionID: CHILD }),
+        backgroundReport(CHILD, "msg_old_report", "completed", "OLD_RESULT"),
+        event("session.inbox.delivered", { sessionID: SESSION, inboxID: "msg_old_report" }),
+        ...backgroundContinuation(CHILD, false).slice(0, -1),
+        event("session.execution.started", { sessionID: CHILD }),
+        event("session.execution.succeeded", { sessionID: CHILD }),
+        event(
+          "session.tool.success",
+          {
+            ...toolOf(SESSION, "call-continued"),
+            executed: true,
+            content: [{ type: "text", text: "NEW_RESULT" }],
+            metadata: { sessionID: CHILD, status: "completed" },
+          },
+          2,
+        ),
+        event("session.execution.succeeded", { sessionID: SESSION }),
+      ]);
+      const events = yield* backgroundTurnEvents(runtime, thread);
+      assert.deepEqual(
+        latestSubagents(events).map((agent) => ({ status: agent.status, result: agent.result })),
+        [
+          { status: "completed", result: "OLD_RESULT" },
+          { status: "completed", result: "NEW_RESULT" },
+        ],
+      );
+      assert.isFalse(yield* runtime.hasPendingBackgroundWork!);
+      assert.isFalse(yield* runtime.hasPendingBackgroundWorkForThread!(thread));
+    }).pipe(Effect.scoped),
+  );
+
+  it.effect.each([
+    [false, false],
+    [true, false],
+    [true, true],
+  ] as const)(
+    "recovers a reused child's input delivery from history after a stream gap (cleanup=%s, start missed=%s)",
+    ([overlap, missedStart]) =>
+      Effect.gen(function* () {
+        const { runtime, thread } = yield* resumed([
+          ...backgroundLaunch(CHILD),
+          event("session.execution.started", { sessionID: CHILD }),
+          ...(overlap ? [] : [event("session.execution.succeeded", { sessionID: CHILD })]),
+          ...backgroundContinuation(CHILD, true, false),
+          ...(overlap
+            ? [
+                backgroundReport(CHILD, "msg_old_report", "cancelled", "OLD_CANCELLED"),
+                event("session.inbox.delivered", { sessionID: SESSION, inboxID: "msg_old_report" }),
+                event("session.execution.interrupted", { sessionID: CHILD, reason: "user" }),
+              ]
+            : []),
+          ...(missedStart ? [] : [event("session.execution.started", { sessionID: CHILD })]),
+          { type: "runtime_exit", status: "success" } as const,
+          out("event.subscribe"),
+          out("session.active"),
+          replyData("session.active", {
+            [SESSION]: { type: "running" },
+            [CHILD]: { type: "running" },
+          }),
+          out("message.list", { sessionID: CHILD, order: "desc", limit: "50" }),
+          reply("message.list", {
+            data: [
+              {
+                id: "msg_child_continuation",
+                time: { created: 2 },
+                text: "Continue the audit",
+                type: "user",
+              },
+            ],
+            cursor: {},
+          }),
+          out("message.list", { sessionID: SESSION, order: "desc", limit: "50" }),
+          reply("message.list", {
+            data: [{ id: PROMPT_ID, time: { created: 1 }, text: "hi", type: "user" }],
+            cursor: {},
+          }),
+          ...openRequests([]),
+          out("permission.list", { sessionID: CHILD }),
+          replyData("permission.list", []),
+          out("session.form.list", { sessionID: CHILD }),
+          replyData("session.form.list", []),
+          // Its missing delivery event is proven by the persisted user message.
+          event("session.execution.succeeded", { sessionID: CHILD }),
+          event("session.execution.succeeded", { sessionID: SESSION }),
+        ]);
+        const events = yield* backgroundTurnEvents(runtime, thread);
+        assert.deepEqual(
+          latestSubagents(events).map((agent) => agent.status),
+          [overlap ? "interrupted" : "completed", "completed"],
+        );
+        assert.isFalse(yield* runtime.hasPendingBackgroundWork!);
+      }).pipe(Effect.scoped),
+  );
+
+  it.live.each([
+    [false, false, "ready"],
+    [true, false, "ready"],
+    [false, true, "ready"],
+    [false, false, "error"],
+    [false, false, "timeout"],
+  ] as const)(
+    "reconciles missed child admission (pending=%s, attachment missed=%s, inbox=%s)",
+    ([pendingInput, missedAttachment, inboxState]) =>
+      Effect.gen(function* () {
+        const { runtime, thread } = yield* resumed([
+          ...backgroundLaunch(CHILD),
+          event("session.inbox.enqueued", {
+            sessionID: CHILD,
+            inboxID: "msg_child_initial",
+            item: { type: "user", payload: { text: "sleep" }, delivery: "steer" },
+          }),
+          event("session.execution.started", { sessionID: CHILD }),
+          ...backgroundContinuation(CHILD, true, false).slice(0, missedAttachment ? 2 : -2),
+          backgroundReport(CHILD, "msg_old_report", "cancelled", "OLD_CANCELLED"),
+          event("session.inbox.delivered", { sessionID: SESSION, inboxID: "msg_old_report" }),
+          // Old terminal, new admission/start/delivery and tool return all happen in the gap.
+          { type: "runtime_exit", status: "success" } as const,
+          out("event.subscribe"),
+          out("session.active"),
+          replyData("session.active", {
+            [SESSION]: { type: "running" },
+            [CHILD]: { type: "running" },
+          }),
+          ...(missedAttachment
+            ? []
+            : [
+                out("message.list", { sessionID: CHILD, order: "desc", limit: "50" }),
+                reply("message.list", {
+                  data: [
+                    ...(pendingInput
+                      ? []
+                      : [
+                          {
+                            id: "msg_child_continuation",
+                            time: { created: 4 },
+                            text: "Continue the audit",
+                            type: "user",
+                          },
+                        ]),
+                    {
+                      id: "msg_child_idle",
+                      time: { created: 3 },
+                      type: "idle",
+                      outcome: "interrupted",
+                    },
+                    { id: "msg_child_initial", time: { created: 2 }, text: "sleep", type: "user" },
+                  ],
+                  cursor: {},
+                }),
+              ]),
+          out("message.list", { sessionID: SESSION, order: "desc", limit: "50" }),
+          reply("message.list", {
+            data: [
+              {
+                id: "msg_assistant_continued",
+                time: { created: 2 },
+                type: "assistant",
+                agent: "build",
+                model: { id: "big-pickle", providerID: "opencode", variant: "default" },
+                content: [
+                  {
+                    type: "tool",
+                    id: "call-continued",
+                    name: "subagent",
+                    executed: true,
+                    state: {
+                      status: "completed",
+                      input: {
+                        description: "Continue audit",
+                        prompt: "Continue the audit",
+                        sessionID: CHILD,
+                        background: true,
+                      },
+                      content: [
+                        { type: "text", text: "The subagent is working in the background." },
+                      ],
+                      metadata: { sessionID: CHILD, status: "running" },
+                    },
+                    time: { created: 2, ran: 2, completed: 3 },
+                  },
+                ],
+                finish: "stop",
+              },
+              {
+                id: `msg_t3_turn_${SESSION}:attempt:opencode2-adapter`,
+                time: { created: 1 },
+                text: "hi",
+                type: "user",
+              },
+            ],
+            cursor: {},
+          }),
+          ...(missedAttachment
+            ? [
+                out("session.update", { sessionID: CHILD, permissions: "<any>" }),
+                reply("session.update", null),
+              ]
+            : []),
+          out("session.inbox.list", { sessionID: CHILD }),
+          inboxState === "error"
+            ? reply("session.inbox.list", {
+                status: 500,
+                body: { _tag: "UnknownError", message: "Inbox unavailable" },
+              })
+            : inboxState === "timeout"
+              ? reply("session.inbox.list", "<hang>")
+              : replyData(
+                  "session.inbox.list",
+                  pendingInput
+                    ? [
+                        {
+                          id: "msg_child_continuation",
+                          sessionID: CHILD,
+                          time: { created: 4 },
+                          type: "user",
+                          payload: { text: "Continue the audit" },
+                          delivery: "queue",
+                        },
+                      ]
+                    : [],
+                ),
+          ...(inboxState !== "ready"
+            ? [{ type: "runtime_exit", status: "success" } as const]
+            : [
+                ...openRequests([]),
+                out("permission.list", { sessionID: CHILD }),
+                replyData("permission.list", []),
+                out("session.form.list", { sessionID: CHILD }),
+                replyData("session.form.list", []),
+                event(
+                  pendingInput ? "session.execution.interrupted" : "session.execution.succeeded",
+                  {
+                    sessionID: CHILD,
+                    ...(pendingInput ? { reason: "user" } : {}),
+                  },
+                ),
+                event("session.execution.succeeded", { sessionID: SESSION }),
+              ]),
+        ]);
+        if (inboxState !== "ready") {
+          const collected = yield* runtime.events.pipe(Stream.runCollect, Effect.forkScoped);
+          yield* runtime.startTurn(withLineage(thread));
+          const events = yield* Fiber.join(collected);
+          assert.isTrue(latestSubagents(events).every((agent) => agent.status !== "running"));
+          assert.equal(latestSubagents(events).at(-1)?.status, "failed");
+          assert.isTrue(
+            events.some(
+              (event) =>
+                event.type === "turn.terminal" &&
+                event.status === "failed" &&
+                event.threadDisposition === "broken",
+            ),
+          );
+          assert.isFalse(yield* runtime.hasPendingBackgroundWork!);
+          assert.isFalse(yield* runtime.hasPendingBackgroundWorkForThread!(thread));
+          return;
+        }
+        const events = yield* backgroundTurnEvents(runtime, thread);
+        assert.deepEqual(
+          latestSubagents(events).map((agent) => agent.status),
+          pendingInput
+            ? ["interrupted", "running"]
+            : [missedAttachment ? "cancelled" : "completed", "completed"],
+        );
+        assert.equal(yield* runtime.hasPendingBackgroundWork!, pendingInput);
+      }).pipe(Effect.scoped, Effect.provide(Logger.layer([], { mergeWithExisting: false }))),
+  );
+
+  it.effect.each([
+    ["completed", "completed"],
+    ["error", "failed"],
+    ["cancelled", "cancelled"],
+  ] as const)(
+    "settles calls that join a running background subagent when it reports %s",
+    ([state, status]) =>
+      Effect.gen(function* () {
+        const continuedTitle = "Continue audit";
+        const result = "CHILD_RESULT";
+        const reportId = "msg_joined_report";
+        const { runtime, thread } = yield* resumed([
+          ...backgroundLaunch(CHILD),
+          event("session.execution.started", { sessionID: CHILD }),
+          // Resuming a busy child steers the same background job, not a new job.
+          ...backgroundContinuation(CHILD),
+          event("session.execution.succeeded", { sessionID: CHILD }),
+          // OpenCode sends one report for the job both calls joined.
+          backgroundReport(CHILD, reportId, state, result),
+          event("session.inbox.delivered", { sessionID: SESSION, inboxID: reportId }),
+          event("session.execution.succeeded", { sessionID: SESSION }),
+        ]);
+        const events: ReadonlyArray<ProviderAdapterV2Event> = yield* backgroundTurnEvents(
+          runtime,
+          thread,
+        );
+        const agents: ReadonlyArray<OrchestrationV2Subagent> = latestSubagents(events);
+        assert.deepEqual(
+          agents.map((agent) => ({
+            title: agent.title,
+            status: agent.status,
+            result: agent.result,
+          })),
+          [
+            { title: childCreated(CHILD).title, status, result },
+            { title: continuedTitle, status, result },
+          ],
+        );
+        assert.isTrue(agents.every((agent) => agent.completedAt !== null));
+        const parent: OrchestrationV2ProviderThread | undefined = events
+          .flatMap((event) =>
+            event.type === "provider_thread.updated" && event.providerThread.id === thread.id
+              ? [event.providerThread]
+              : [],
+          )
+          .at(-1);
+        assert.deepEqual(parent?.pendingBackgroundTasks, []);
+        assert.isFalse(yield* runtime.hasPendingBackgroundWork!);
+        assert.isFalse(yield* runtime.hasPendingBackgroundWorkForThread!(thread));
+      }).pipe(Effect.scoped),
+  );
+
+  it.effect.each(["completed", "error", "cancelled"] as const)(
+    "does not let an old %s report settle a reused child still running",
+    (state) =>
+      Effect.gen(function* () {
+        const reportId = "msg_old_report";
+        const { runtime, thread } = yield* resumed([
+          // Returned `running` metadata also covers a foreground call backgrounded externally.
+          ...reusedBeforeReport(state !== "cancelled"),
+          backgroundReport(CHILD, reportId, state, "OLD_RESULT"),
+          event("session.inbox.delivered", { sessionID: SESSION, inboxID: reportId }),
+          event("session.execution.succeeded", { sessionID: SESSION }),
+        ]);
+        const events: ReadonlyArray<ProviderAdapterV2Event> = yield* backgroundTurnEvents(
+          runtime,
+          thread,
+        );
+        const agents = latestSubagents(events);
+        assert.deepEqual(
+          agents.map((agent) => ({ status: agent.status, result: agent.result })),
+          [
+            { status: "completed", result: null },
+            { status: "running", result: null },
+          ],
+        );
+        assert.isNotNull(agents[0]?.completedAt);
+        assert.isNull(agents[1]?.completedAt);
+        const child = events
+          .flatMap((event) =>
+            event.type === "provider_thread.updated" &&
+            event.providerThread.nativeThreadRef?.nativeId === CHILD
+              ? [event.providerThread]
+              : [],
+          )
+          .at(-1);
+        assert.equal(child?.status, "active");
+        const parent = events
+          .flatMap((event) =>
+            event.type === "provider_thread.updated" && event.providerThread.id === thread.id
+              ? [event.providerThread]
+              : [],
+          )
+          .at(-1);
+        assert.deepEqual(
+          parent?.pendingBackgroundTasks?.map((task) => task.description),
+          ["Continue audit"],
+        );
+        assert.isTrue(yield* runtime.hasPendingBackgroundWork!);
+        assert.isTrue(yield* runtime.hasPendingBackgroundWorkForThread!(thread));
+      }).pipe(Effect.scoped),
+  );
+
+  it.effect.each([
+    ["completed", false],
+    ["completed", true],
+    ["failed", false],
+    ["failed", true],
+    ["interrupted", false],
+    ["interrupted", true],
+  ] as const)(
+    "settles an ambiguous reused child's own %s execution without trusting report order (reversed=%s)",
+    ([status, reversed]) =>
+      Effect.gen(function* () {
+        const reports: ReadonlyArray<ProviderReplayEntry> = [
+          backgroundReport(CHILD, "msg_old_report", "error", "OLD_ERROR"),
+          backgroundReport(CHILD, "msg_new_report", "cancelled", "NEW_CANCELLED"),
+        ];
+        const terminal: ProviderReplayEntry =
+          status === "failed"
+            ? event("session.execution.failed", {
+                sessionID: CHILD,
+                error: { type: "provider", message: "New child failed" },
+              })
+            : event(
+                status === "completed"
+                  ? "session.execution.succeeded"
+                  : "session.execution.interrupted",
+                {
+                  sessionID: CHILD,
+                  ...(status === "interrupted" && reversed ? { reason: "future-reason" } : {}),
+                },
+              );
+        const { runtime, thread } = yield* resumed([
+          ...reusedBeforeReport(),
+          terminal,
+          ...(reversed ? reports.toReversed() : reports),
+          event("session.inbox.delivered", { sessionID: SESSION, inboxID: "msg_old_report" }),
+          event("session.inbox.delivered", { sessionID: SESSION, inboxID: "msg_new_report" }),
+          event("session.execution.succeeded", { sessionID: SESSION }),
+        ]);
+        const events: ReadonlyArray<ProviderAdapterV2Event> = yield* backgroundTurnEvents(
+          runtime,
+          thread,
+        );
+        assert.deepEqual(
+          latestSubagents(events).map((agent) => ({ status: agent.status, result: agent.result })),
+          [
+            { status: "completed", result: null },
+            { status, result: null },
+          ],
+        );
+        assert.isFalse(yield* runtime.hasPendingBackgroundWork!);
+        assert.isFalse(yield* runtime.hasPendingBackgroundWorkForThread!(thread));
+      }).pipe(Effect.scoped),
+  );
+
+  it.effect("keeps early ambiguous reports from settling the child's unfinished execution", () =>
+    Effect.gen(function* () {
+      const { runtime, thread } = yield* resumed([
+        ...reusedBeforeReport(),
+        backgroundReport(CHILD, "msg_old_report", "error", "OLD_ERROR"),
+        backgroundReport(CHILD, "msg_new_report", "cancelled", "NEW_CANCELLED"),
+        event("session.inbox.delivered", { sessionID: SESSION, inboxID: "msg_old_report" }),
+        event("session.inbox.delivered", { sessionID: SESSION, inboxID: "msg_new_report" }),
+        event("session.execution.succeeded", { sessionID: CHILD }),
+        event("session.execution.succeeded", { sessionID: SESSION }),
+      ]);
+      const events = yield* backgroundTurnEvents(runtime, thread);
+      const continuation = events.flatMap((event) =>
+        event.type === "subagent.updated" && event.subagent.title === "Continue audit"
+          ? [event.subagent]
+          : [],
+      );
+      assert.deepEqual(
+        [...new Set(continuation.map((agent) => agent.status))],
+        ["running", "completed"],
+      );
+      assert.isTrue(continuation.every((agent) => agent.result === null));
+      assert.isFalse(yield* runtime.hasPendingBackgroundWork!);
+    }).pipe(Effect.scoped),
+  );
+
+  it.effect.each([false, true])(
+    "keeps ambiguous reports owed after calls finish, but drops the debt on reconnect (%s)",
+    (reconnect) =>
+      Effect.gen(function* () {
+        const { runtime, thread } = yield* resumed([
+          ...reusedBeforeReport(),
+          event("session.execution.succeeded", { sessionID: CHILD }),
+          event("session.execution.succeeded", { sessionID: SESSION }),
+          ...(reconnect
+            ? [
+                { type: "runtime_exit", status: "success" } as const,
+                out("event.subscribe"),
+                out("session.active"),
+                replyData("session.active", {}),
+                // A post-reconciliation event is the synchronization boundary.
+                event("session.model.selected", {
+                  sessionID: CHILD,
+                  model: { id: "after-reconnect", providerID: "opencode", variant: "default" },
+                }),
+              ]
+            : []),
+        ]);
+        const collected = yield* runtime.events.pipe(
+          Stream.takeUntil((event) =>
+            reconnect
+              ? event.type === "provider_thread.updated" &&
+                event.providerThread.nativeMetadata?.modelSelection?.model ===
+                  "opencode/after-reconnect"
+              : event.type === "turn.terminal",
+          ),
+          Stream.runCollect,
+          Effect.forkScoped,
+        );
+        yield* runtime.startTurn(withLineage(thread));
+        const events: ReadonlyArray<ProviderAdapterV2Event> = yield* Fiber.join(collected);
+        assert.deepEqual(
+          latestSubagents(events).map((agent) => agent.status),
+          ["completed", "completed"],
+        );
+        assert.equal(yield* runtime.hasPendingBackgroundWork!, !reconnect);
+        assert.equal(yield* runtime.hasPendingBackgroundWorkForThread!(thread), !reconnect);
+      }).pipe(Effect.scoped),
   );
 
   it.effect("keeps a finished background subagent's queued report as pending work", () =>

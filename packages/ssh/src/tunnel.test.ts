@@ -589,6 +589,102 @@ describe("ssh tunnel scripts", () => {
     },
   );
 
+  it.effect.each(["ready", "unavailable"] as const)(
+    "preserves remote work when replacing a stale tunnel leaves the connection %s",
+    (replacement) =>
+      Effect.gen(function* () {
+        const staleProbe = yield* Deferred.make<void>();
+        const replacementProbe = yield* Deferred.make<void>();
+        let stale = false;
+        let localPort = 41_773;
+        let launches = 0;
+        let stops = 0;
+        let tunnelKills = 0;
+        let remoteRunning = false;
+        const httpClient = HttpClient.make((request) => {
+          if (stale && request.url.includes(":41773/")) {
+            return Deferred.succeed(staleProbe, undefined).pipe(Effect.andThen(Effect.never));
+          }
+          if (replacement === "unavailable" && request.url.includes(":41774/")) {
+            return Deferred.succeed(replacementProbe, undefined).pipe(Effect.andThen(Effect.never));
+          }
+          return Effect.succeed(
+            HttpClientResponse.fromWeb(request, new Response("", { status: 200 })),
+          );
+        });
+        const spawner = ChildProcessSpawner.make((command) =>
+          Effect.gen(function* () {
+            const args = commandArgs(command);
+            if (args.includes("-N"))
+              return makeRunningProcess(() => {
+                tunnelKills += 1;
+              });
+            if (args.includes("t3-portless-discovery")) return makeSuccessfulProcess("");
+            if (args.includes("sh") && args.includes("--")) {
+              launches += 1;
+              remoteRunning = true;
+              return makeSuccessfulProcess('{"remotePort":3773,"serverKind":"managed"}\n');
+            }
+            if (args.includes("sh")) {
+              const stdin = command._tag === "StandardCommand" ? command.options.stdin : undefined;
+              const script =
+                typeof stdin === "object" &&
+                stdin !== null &&
+                "stream" in stdin &&
+                stdin.stream !== undefined &&
+                typeof stdin.stream !== "string"
+                  ? yield* stdin.stream.pipe(Stream.decodeText(), Stream.mkString)
+                  : "";
+              if (script.includes("LOG_FILE=")) return makeSuccessfulProcess("");
+              stops += 1;
+              remoteRunning = false;
+              return makeSuccessfulProcess('{"stopped":true}\n');
+            }
+            return makeSuccessfulProcess("");
+          }),
+        );
+        const layer = Layer.mergeAll(
+          NodeServices.layer,
+          Layer.succeed(ChildProcessSpawner.ChildProcessSpawner, spawner),
+          Layer.succeed(HttpClient.HttpClient, httpClient),
+          Layer.succeed(
+            NetService.NetService,
+            NetService.NetService.of({
+              ...testNetService,
+              reserveLoopbackPort: () => Effect.sync(() => localPort++),
+            }),
+          ),
+          SshAuth.SshPasswordPrompt.disabledLayer,
+          SshTunnel.SshEnvironmentManager.layer({ resolveCliRunner: Effect.succeed(ARCHIVE) }),
+        );
+        yield* Effect.gen(function* () {
+          const manager = yield* SshTunnel.SshEnvironmentManager;
+          const target = { alias: "devbox", hostname: "devbox", username: null, port: null };
+          yield* manager.ensureEnvironment(target);
+          stale = true;
+          const reconnect = yield* Effect.forkChild(
+            Effect.result(manager.ensureEnvironment(target)),
+          );
+          yield* Deferred.await(staleProbe);
+          yield* TestClock.adjust("2 seconds");
+          if (replacement === "unavailable") {
+            yield* Deferred.await(replacementProbe);
+            yield* TestClock.adjust("20 seconds");
+          }
+          const result = yield* Fiber.join(reconnect);
+          assert.equal(Result.isSuccess(result), replacement === "ready");
+          assert.equal(launches, 2);
+          assert.equal(stops, 0);
+          assert.equal(tunnelKills, replacement === "ready" ? 1 : 2);
+          assert.isTrue(remoteRunning);
+
+          yield* manager.disconnectEnvironment(target);
+          assert.equal(stops, 1);
+          assert.isFalse(remoteRunning);
+        }).pipe(Effect.provide(layer));
+      }),
+  );
+
   it.effect("uses the sole forwarded Portless port and closes owned tunnels on shutdown", () => {
     const commands: Array<ReadonlyArray<string>> = [];
     let forwardKills = 0;

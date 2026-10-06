@@ -111,6 +111,7 @@ const operationOf = (
     }
     if (method === "DELETE" && rest === "/revert") return { type: "session.revert.clear", input };
     const inbox = /^\/inbox\/([^/]+)$/.exec(rest);
+    if (method === "GET" && rest === "/inbox") return { type: "session.inbox.list", input };
     if (method === "DELETE" && inbox !== null) {
       // T3's steer ids carry `:`, which the path encodes.
       const inboxID = decodeURIComponent(inbox[1] ?? "");
