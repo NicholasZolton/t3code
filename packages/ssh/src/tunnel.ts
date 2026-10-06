@@ -601,6 +601,14 @@ wait_ready() {
 @@T3_WAIT_READY_SCRIPT@@
 NODE
 }
+# A readiness timeout is not evidence that the existing server is dead.
+require_existing_server_ready() {
+  if wait_ready "@@T3_REUSE_READY_TIMEOUT_MS@@"; then
+    return
+  fi
+  printf 'Existing T3 server did not become ready on 127.0.0.1:%s. It was not stopped or replaced; retry the connection.\\n' "$REMOTE_PORT" >&2
+  exit 1
+}
 wait_for_pid_exit() {
   PID_TO_WAIT="$1"
   WAIT_COUNT=0
@@ -649,35 +657,25 @@ fi
 # below decides whether its runner changed. Adoption must never stop that PID.
 if [ -n "$DEFAULT_REMOTE_PORT" ] && { [ "$REMOTE_MANAGED" != "managed" ] || [ "$REMOTE_PID" != "$DEFAULT_RUNTIME_PID" ]; }; then
   REMOTE_PORT="$DEFAULT_REMOTE_PORT"
-  if wait_ready "@@T3_REUSE_READY_TIMEOUT_MS@@"; then
-    if [ "$REMOTE_MANAGED" = "managed" ] && [ -n "$REMOTE_PID" ] && [ "$REMOTE_PID" != "$DEFAULT_RUNTIME_PID" ]; then
-      PID_TO_STOP="$REMOTE_PID"
-      if [ -n "$PID_TO_STOP" ] && kill -0 "$PID_TO_STOP" 2>/dev/null; then
-        kill "$PID_TO_STOP" 2>/dev/null || true
-        wait_for_pid_exit "$PID_TO_STOP"
-      fi
-      REMOTE_PID=""
-      REMOTE_PORT="$DEFAULT_REMOTE_PORT"
-      REMOTE_MANAGED="external"
-      rm -f "$PID_FILE"
-      printf '%s\\n' "$REMOTE_PORT" >"$PORT_FILE"
-      printf 'external\\n' >"$MANAGED_FILE"
-    else
-      printf '%s\\n' "$REMOTE_PORT" >"$PORT_FILE"
-      printf 'external\\n' >"$MANAGED_FILE"
-      REMOTE_PID=""
-      REMOTE_MANAGED="external"
+  require_existing_server_ready
+  if [ "$REMOTE_MANAGED" = "managed" ] && [ -n "$REMOTE_PID" ] && [ "$REMOTE_PID" != "$DEFAULT_RUNTIME_PID" ]; then
+    PID_TO_STOP="$REMOTE_PID"
+    if [ -n "$PID_TO_STOP" ] && kill -0 "$PID_TO_STOP" 2>/dev/null; then
+      kill "$PID_TO_STOP" 2>/dev/null || true
+      wait_for_pid_exit "$PID_TO_STOP"
     fi
-  else
-    REMOTE_PID="$(cat "$PID_FILE" 2>/dev/null || true)"
-    REMOTE_PORT="$(cat "$PORT_FILE" 2>/dev/null || true)"
-    REMOTE_MANAGED="$(cat "$MANAGED_FILE" 2>/dev/null || true)"
+    rm -f "$PID_FILE"
   fi
+  printf '%s\\n' "$REMOTE_PORT" >"$PORT_FILE"
+  printf 'external\\n' >"$MANAGED_FILE"
+  REMOTE_PID=""
+  REMOTE_MANAGED="external"
 fi
 if [ "$REMOTE_MANAGED" = "external" ]; then
-  if [ -z "$REMOTE_PORT" ] || ! wait_ready "@@T3_REUSE_READY_TIMEOUT_MS@@"; then
+  if [ -n "$REMOTE_PORT" ]; then
+    require_existing_server_ready
+  else
     REMOTE_PID=""
-    REMOTE_PORT=""
     REMOTE_MANAGED=""
   fi
 elif [ -n "$REMOTE_PID" ] && [ -n "$REMOTE_PORT" ] && kill -0 "$REMOTE_PID" 2>/dev/null; then
@@ -687,12 +685,8 @@ elif [ -n "$REMOTE_PID" ] && [ -n "$REMOTE_PORT" ] && kill -0 "$REMOTE_PID" 2>/d
     REMOTE_PID=""
     REMOTE_PORT=""
     REMOTE_MANAGED=""
-  elif ! wait_ready "@@T3_REUSE_READY_TIMEOUT_MS@@"; then
-    kill "$REMOTE_PID" 2>/dev/null || true
-    wait_for_pid_exit "$REMOTE_PID"
-    REMOTE_PID=""
-    REMOTE_PORT=""
-    REMOTE_MANAGED=""
+  else
+    require_existing_server_ready
   fi
 else
   REMOTE_PID=""
@@ -1377,6 +1371,7 @@ const makeSshEnvironmentManager = Effect.fn("ssh/tunnel.SshEnvironmentManager.ma
 
   const closeTunnelEntry = Effect.fn("ssh/tunnel.closeTunnelEntry")(function* (
     entry: SshTunnelEntry,
+    remoteServer: "stop" | "preserve",
   ) {
     yield* Effect.logDebug("ssh.tunnel.close.start", {
       ...sshTargetLogFields(entry.target),
@@ -1384,6 +1379,10 @@ const makeSshEnvironmentManager = Effect.fn("ssh/tunnel.SshEnvironmentManager.ma
       localPort: entry.localPort,
       remotePort: entry.remotePort,
     });
+    // Release ownership before closing the scope so connection recovery cannot stop remote work.
+    if (remoteServer === "preserve" && tunnels.get(entry.key) === entry) {
+      tunnels.delete(entry.key);
+    }
     yield* Scope.close(entry.scope, Exit.void).pipe(Effect.ignore);
     yield* Effect.logInfo("ssh.tunnel.close.succeeded", {
       ...sshTargetLogFields(entry.target),
@@ -1400,7 +1399,7 @@ const makeSshEnvironmentManager = Effect.fn("ssh/tunnel.SshEnvironmentManager.ma
     portlessForwards.clear();
     portlessCandidates.clear();
     preferredPortlessForward = null;
-    yield* Effect.forEach([...tunnels.values()], closeTunnelEntry, {
+    yield* Effect.forEach([...tunnels.values()], (entry) => closeTunnelEntry(entry, "stop"), {
       concurrency: "unbounded",
     });
     authSecrets.clear();
@@ -1972,7 +1971,7 @@ PY`;
         remotePort: entry.remotePort,
         cause: readinessExit.cause,
       });
-      yield* closeTunnelEntry(entry);
+      yield* closeTunnelEntry(entry, "preserve");
     }
 
     return yield* createTunnelEntry({
@@ -2098,10 +2097,7 @@ PY`;
         });
         if (entry !== null) {
           // Explicit disconnect owns the remote stop so its failure reaches the caller.
-          yield* Effect.gen(function* () {
-            tunnels.delete(key);
-            yield* closeTunnelEntry(entry);
-          }).pipe(Effect.uninterruptible);
+          yield* closeTunnelEntry(entry, "preserve").pipe(Effect.uninterruptible);
         }
         yield* runWithSshAuth({
           key,

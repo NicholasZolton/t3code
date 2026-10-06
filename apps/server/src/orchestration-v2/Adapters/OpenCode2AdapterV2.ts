@@ -286,12 +286,21 @@ interface SubagentCall {
   title: string | null;
   agent: string | undefined;
   model: string | null;
-  /** The tool returned while the subagent runs on; the report OpenCode gives its parent settles it. */
+  /** The tool returned while the subagent runs on; normally its parent report settles it. */
   background: boolean;
   child: ThreadState | undefined;
   status: OrchestrationV2Subagent["status"];
   result: string | null;
   completedAt: DateTime.Utc | null;
+  /** The child's observed terminal, kept while a background call awaits its report. */
+  executionStatus: TurnTerminal["status"] | undefined;
+  /** Reused calls cannot own a terminal until their admitted child input was delivered. */
+  awaitingChildInput: boolean;
+  returnedInBackground: boolean;
+  observedSubagentReport: boolean;
+  childInputObserved: boolean;
+  readonly pendingChildInputs: Set<string>;
+  pendingExecutionStatus: TurnTerminal["status"] | undefined;
 }
 
 /**
@@ -349,6 +358,11 @@ interface ThreadState {
   readonly grants: Array<Rule>;
   /** The session's `subagent` calls still running, by tool call id. */
   readonly calls: Map<string, SubagentCall>;
+  /** Reuse or a stream gap can make this child's generationless reports uncorrelatable. */
+  ambiguousSubagentReports: boolean;
+  /** One notification wait for an ambiguous admission cohort, not one per execution. */
+  awaitingSubagentReport: boolean;
+  reusedSubagent: boolean;
   /**
    * Set on a subagent's session: the call that runs it and the thread it
    * shows in. Each of its executions is a runless turn there.
@@ -921,6 +935,9 @@ export const make = Effect.fn("OpenCode2Adapter.make")(function* (
       policy: input.runtimePolicy,
       grants: [],
       calls: new Map(),
+      ambiguousSubagentReports: false,
+      awaitingSubagentReport: false,
+      reusedSubagent: false,
       subagent,
       wakes: [],
       reports: new Map(),
@@ -954,6 +971,27 @@ export const make = Effect.fn("OpenCode2Adapter.make")(function* (
      */
     const runningCalls = (thread: ThreadState): ReadonlyArray<SubagentCall> =>
       sessionsOf(thread).flatMap((state) => [...state.calls.values()]);
+
+    const callsForChild = (child: ThreadState): ReadonlyArray<SubagentCall> =>
+      [...(child.subagent?.call.state.calls.values() ?? [])].filter((call) => call.child === child);
+
+    /** Tool return proves admission; delivered inbox entries prove the child consumed it. */
+    const releaseChildInput = (call: SubagentCall): void => {
+      if (
+        call.returnedInBackground &&
+        call.childInputObserved &&
+        call.pendingChildInputs.size === 0
+      ) {
+        call.awaitingChildInput = false;
+        call.executionStatus ??= call.pendingExecutionStatus;
+      }
+    };
+
+    const recordChildInputDelivery = (child: ThreadState, inboxId: string): void => {
+      callsForChild(child).forEach((call) => {
+        if (call.pendingChildInputs.delete(inboxId)) releaseChildInput(call);
+      });
+    };
 
     /** The `subagent` calls that lead to a session, from its own up to the thread's. */
     const callsAbove = (sessionId: string) => {
@@ -992,6 +1030,7 @@ export const make = Effect.fn("OpenCode2Adapter.make")(function* (
     const owesWork = (state: ThreadState) =>
       state.wakes.length > 0 ||
       state.reports.size > 0 ||
+      state.awaitingSubagentReport ||
       (state.subagent !== undefined && busy.has(state.sessionId)) ||
       [...state.calls.values()].some((call) => call.background);
 
@@ -1473,6 +1512,31 @@ export const make = Effect.fn("OpenCode2Adapter.make")(function* (
       // ran (each one's native id is its own), its grants and rules, and the
       // background work an earlier call left running, which Stop must reach.
       const previous = threads.get(childId);
+      if (previous !== undefined) {
+        previous.reusedSubagent = true;
+        call.awaitingChildInput = true;
+        const ended = callsForChild(previous).filter(
+          (candidate): candidate is SubagentCall & { executionStatus: TurnTerminal["status"] } =>
+            candidate.background && candidate.executionStatus !== undefined,
+        );
+        if (
+          ended.length > 0 ||
+          (previous.subagent !== undefined &&
+            !isOrchestrationV2WorkActive(previous.subagent.call.status))
+        ) {
+          // Reports carry only the session ID, not the job generation. Once
+          // reused ahead of its report, only execution terminals are safe.
+          previous.ambiguousSubagentReports = true;
+          yield* Effect.forEach(
+            ended,
+            (candidate) => settleCall(candidate, candidate.executionStatus),
+            { discard: true },
+          );
+        }
+        if (previous.ambiguousSubagentReports && call.background) {
+          previous.awaitingSubagentReport = true;
+        }
+      }
       const subagent = {
         call,
         appThread,
@@ -1526,13 +1590,21 @@ export const make = Effect.fn("OpenCode2Adapter.make")(function* (
       if (result !== undefined) call.result = result;
       call.state.calls.delete(call.toolId);
       const child = call.child;
-      if (child !== undefined) {
+      if (
+        child !== undefined &&
+        callsForChild(child).length === 0 &&
+        !(call.executionStatus !== undefined && busy.has(child.sessionId))
+      ) {
         // A snapshot: settling a call removes it from the map.
         for (const nested of Array.from(child.calls.values())) {
           if (nested.background && status !== "failed") continue;
           yield* settleCall(nested, status === "completed" ? "interrupted" : status);
         }
-        if (child.active !== undefined && status !== "completed") {
+        if (
+          child.active !== undefined &&
+          status !== "completed" &&
+          call.executionStatus === undefined
+        ) {
           yield* finishTurn(child, { status: "interrupted" });
         }
         child.providerThread = {
@@ -1547,6 +1619,22 @@ export const make = Effect.fn("OpenCode2Adapter.make")(function* (
         });
       }
       yield* emitSubagent(call);
+    });
+
+    /** Live and recovered tool returns share the same background admission boundary. */
+    const recordBackgroundReturn = Effect.fnUntraced(function* (call: SubagentCall) {
+      call.returnedInBackground = true;
+      releaseChildInput(call);
+      if (!call.background) {
+        call.background = true;
+        if (call.child?.ambiguousSubagentReports && !call.observedSubagentReport) {
+          call.child.awaitingSubagentReport = true;
+        }
+        yield* emitSubagent(call);
+      }
+      if (call.child?.ambiguousSubagentReports && call.executionStatus !== undefined) {
+        yield* settleCall(call, call.executionStatus);
+      }
     });
 
     /**
@@ -2160,6 +2248,13 @@ export const make = Effect.fn("OpenCode2Adapter.make")(function* (
         status: "running",
         result: null,
         completedAt: null,
+        executionStatus: undefined,
+        awaitingChildInput: false,
+        returnedInBackground: false,
+        observedSubagentReport: false,
+        childInputObserved: false,
+        pendingChildInputs: new Set(),
+        pendingExecutionStatus: undefined,
       };
       turn.usedSubagents = true;
       state.calls.set(toolId, call);
@@ -2221,8 +2316,10 @@ export const make = Effect.fn("OpenCode2Adapter.make")(function* (
           if (call !== undefined) {
             const childId = stringField(event.data.metadata, "sessionID");
             if (childId !== undefined) yield* attachChild(call, childId);
-            // A background call returns at launch; its report settles it.
-            if (event.data.metadata?.["status"] === "running") return;
+            // A foreground call can also be backgrounded by another OpenCode client.
+            if (event.data.metadata?.["status"] === "running") {
+              return yield* recordBackgroundReturn(call);
+            }
             return yield* settleCall(call, "completed", subagentOutput(textOf(event.data.content)));
           }
           const output = textOf(event.data.content);
@@ -2346,20 +2443,32 @@ export const make = Effect.fn("OpenCode2Adapter.make")(function* (
       yield* offerWake(state, wake);
     });
 
-    /** A background subagent's end, as OpenCode queues it for its parent. */
+    /** A report settles joined calls only while its child has no ambiguous reuse. */
     const onReport = Effect.fnUntraced(function* (
       state: ThreadState,
       inboxId: string,
       payload: {
         readonly text: string;
+        readonly description?: string | undefined;
         readonly metadata?: Readonly<Record<string, unknown>> | undefined;
       },
     ) {
       const childId = stringField(payload.metadata, "childID");
       if (stringField(payload.metadata, "source") !== "subagent" || childId === undefined) return;
-      const call = [...state.calls.values()].find(
+      const calls: ReadonlyArray<SubagentCall> = [...state.calls.values()].filter(
         (candidate) => candidate.child?.sessionId === childId,
       );
+      const call = calls[0];
+      const child = threads.get(childId);
+      calls.forEach((candidate) => {
+        candidate.observedSubagentReport = true;
+      });
+      if (
+        child?.reusedSubagent &&
+        calls.some((candidate) => candidate.executionStatus === undefined)
+      ) {
+        child.ambiguousSubagentReports = true;
+      }
       const outcome = reportOutcome(stringField(payload.metadata, "state"));
       state.reports.set(inboxId, {
         inboxId,
@@ -2367,23 +2476,61 @@ export const make = Effect.fn("OpenCode2Adapter.make")(function* (
         text: payload.text,
         report: {
           kind: "subagent",
-          label: call?.title ?? stringField(payload.metadata, "description"),
-          childThreadId: call?.child?.subagent?.appThread.id,
+          label: child?.ambiguousSubagentReports
+            ? payload.description
+            : (call?.title ?? payload.description ?? stringField(payload.metadata, "description")),
+          childThreadId: child?.subagent?.appThread.id,
           outcome,
         },
       });
-      if (call === undefined) return;
-      yield* settleCall(
-        call,
-        state.stoppedChildren.has(childId)
-          ? "interrupted"
-          : outcome === "failed"
-            ? "failed"
-            : outcome === "cancelled"
-              ? "cancelled"
-              : "completed",
-        subagentOutput(payload.text),
+      if (child?.ambiguousSubagentReports) {
+        child.awaitingSubagentReport = false;
+        yield* Effect.forEach(
+          calls,
+          (candidate) =>
+            candidate.executionStatus === undefined
+              ? Effect.void
+              : settleCall(candidate, candidate.executionStatus),
+          { discard: true },
+        );
+        return;
+      }
+      const status: OrchestrationV2Subagent["status"] = state.stoppedChildren.has(childId)
+        ? "interrupted"
+        : outcome === "failed"
+          ? "failed"
+          : outcome === "cancelled"
+            ? "cancelled"
+            : "completed";
+      const result: string = subagentOutput(payload.text);
+      yield* Effect.forEach(
+        calls,
+        (call: SubagentCall): Effect.Effect<void> => settleCall(call, status, result),
+        { discard: true },
       );
+    });
+
+    /** Ambiguous reports cannot settle calls, but the child's own execution can. */
+    const recordChildExecutionEnd = Effect.fnUntraced(function* (
+      child: ThreadState,
+      status: TurnTerminal["status"],
+    ) {
+      callsForChild(child)
+        .filter((call) => call.awaitingChildInput)
+        .forEach((call) => {
+          if (call.childInputObserved && call.pendingChildInputs.size === 0) {
+            call.pendingExecutionStatus = status;
+          }
+        });
+      const calls: ReadonlyArray<SubagentCall> = callsForChild(child).filter(
+        (call) => !call.awaitingChildInput,
+      );
+      calls.forEach((call) => {
+        call.executionStatus = status;
+      });
+      if (!child.ambiguousSubagentReports) return;
+      const background: ReadonlyArray<SubagentCall> = calls.filter((call) => call.background);
+      yield* Effect.forEach(background, (call) => settleCall(call, status), { discard: true });
     });
 
     /**
@@ -2482,14 +2629,24 @@ export const make = Effect.fn("OpenCode2Adapter.make")(function* (
       event: OpenCode2StreamEvent,
       sessionId: string | undefined,
     ) {
+      const terminalType =
+        event.type === "unreadable.execution.ended" ? event.executionType : event.type;
+      const executionStatus: TurnTerminal["status"] | undefined =
+        terminalType === "session.execution.succeeded"
+          ? "completed"
+          : terminalType === "session.execution.failed"
+            ? "failed"
+            : terminalType === "session.execution.interrupted"
+              ? "interrupted"
+              : undefined;
       // The end of the run a timed-out Stop left behind; no turn is its own.
-      const ended =
-        event.type === "unreadable.execution.ended" || executionEnd(event.type)
-          ? threads.get(sessionId ?? "")
-          : undefined;
+      const ended = executionStatus === undefined ? undefined : threads.get(sessionId ?? "");
       if (ended?.unsettled === true) {
         ended.unsettled = false;
         return;
+      }
+      if (ended?.subagent !== undefined && executionStatus !== undefined) {
+        yield* recordChildExecutionEnd(ended, executionStatus);
       }
       // Marks where a running turn's own execution begins; it never ends one.
       // With no turn running it is a subagent's or a follow-up's start, below.
@@ -2545,6 +2702,22 @@ export const make = Effect.fn("OpenCode2Adapter.make")(function* (
       if (sessionId === undefined) return;
       const state = threads.get(sessionId);
       if (state === undefined) return;
+      if (
+        state.subagent !== undefined &&
+        event.type === "session.inbox.enqueued" &&
+        event.data.item.type === "user"
+      ) {
+        callsForChild(state)
+          .filter((call) => call.awaitingChildInput)
+          .forEach((call) => {
+            call.childInputObserved = true;
+            call.pendingChildInputs.add(event.data.inboxID);
+            call.pendingExecutionStatus = undefined;
+          });
+      }
+      if (state.subagent !== undefined && event.type === "session.inbox.delivered") {
+        recordChildInputDelivery(state, event.data.inboxID);
+      }
       if (event.type === "session.model.selected" || event.type === "session.step.started") {
         if (event.type === "session.model.selected") state.model = event.data.model;
         const providerThread = withReportedModel(state.providerThread, event.data.model);
@@ -2627,6 +2800,7 @@ export const make = Effect.fn("OpenCode2Adapter.make")(function* (
     const failAll = Effect.fnUntraced(function* (message: string) {
       streamFailure = message;
       yield* Deferred.succeed(reconnected, undefined);
+      busy.clear();
       for (const state of threads.values()) {
         const failure = makeProviderFailure({ message, class: "transport_error" });
         yield* finishTurn(state, { status: "failed", failure }, "broken");
@@ -2636,6 +2810,7 @@ export const make = Effect.fn("OpenCode2Adapter.make")(function* (
         for (const call of runningCalls(state)) yield* settleCall(call, "failed");
         for (const wake of state.wakes.splice(0)) wake.dropped = true;
         state.reports.clear();
+        state.awaitingSubagentReport = false;
       }
       yield* setSessionStatus("error", message);
       yield* Queue.end(events);
@@ -2655,7 +2830,13 @@ export const make = Effect.fn("OpenCode2Adapter.make")(function* (
       const turn = state.active;
       if (turn === undefined) return undefined;
       const promptId = promptOf(turn.providerTurn);
-      const { before } = turn;
+      // A continuation admitted during cleanup has no turn-opening boundary yet.
+      const before =
+        turn.before !== undefined
+          ? turn.before
+          : callsForChild(state)
+              .flatMap((call) => [...call.pendingChildInputs])
+              .at(0);
       if (promptId === undefined && before === undefined) return undefined;
       const start = before !== undefined ? before : promptId;
       const read = yield* paginate(
@@ -2665,6 +2846,14 @@ export const make = Effect.fn("OpenCode2Adapter.make")(function* (
         Stream.takeUntil((message) => message.id === start),
         Stream.runCollect,
       );
+      // Persisted user messages prove deliveries whose live events were lost.
+      if (state.subagent !== undefined) {
+        read
+          .filter((message) => message.type === "user")
+          .forEach((message) => {
+            recordChildInputDelivery(state, message.id);
+          });
+      }
       // Without its start the history holds only earlier turns (the stream
       // dropped before the prompt landed): none of it is this turn's. A null
       // `before` is a command that started on an empty history.
@@ -2691,6 +2880,12 @@ export const make = Effect.fn("OpenCode2Adapter.make")(function* (
             tool.input = part.state.input as Record<string, unknown>;
           }
           if (part.state.status === "completed") {
+            const call = state.calls.get(part.id);
+            if (call !== undefined && part.state.metadata?.["status"] === "running") {
+              const childId = stringField(part.state.metadata, "sessionID");
+              if (childId !== undefined) yield* attachChild(call, childId);
+              yield* recordBackgroundReturn(call);
+            }
             yield* emitTool(state, turn, part.id, "completed", {
               output: textOf(part.state.content),
               metadata: part.state.metadata,
@@ -2733,17 +2928,32 @@ export const make = Effect.fn("OpenCode2Adapter.make")(function* (
     const reconcile = Effect.gen(function* () {
       // A subagent's turn ends before the turn that waits on it, so the
       // deepest sessions are read back first.
-      const running = [...threads]
-        .filter(([, state]) => state.active !== undefined)
-        .toSorted(([left], [right]) => callsAbove(right).length - callsAbove(left).length);
+      const running = [...threads].filter(([, state]) => state.active !== undefined);
       const background = [...threads.values()].filter(
         (state) => state.subagent === undefined && hasBackground(state),
       );
       if (running.length === 0 && background.length === 0 && busy.size === 0) return;
       const active = yield* client.session.active();
+      const resumedChildren = [...threads].filter(
+        ([sessionId, state]) =>
+          state.subagent !== undefined &&
+          state.active === undefined &&
+          sessionId in active &&
+          callsForChild(state).some((call) => call.awaitingChildInput),
+      );
+      yield* Effect.forEach(
+        resumedChildren,
+        ([sessionId, state]) => {
+          busy.add(sessionId);
+          return startChildTurn(state);
+        },
+        { discard: true },
+      );
       // An execution that ended while the stream was down never said so.
       for (const sessionId of busy) if (!(sessionId in active)) busy.delete(sessionId);
-      for (const [sessionId, state] of running) {
+      for (const [sessionId, state] of [...running, ...resumedChildren].toSorted(
+        ([left], [right]) => callsAbove(right).length - callsAbove(left).length,
+      )) {
         const turn = state.active;
         if (turn === undefined) continue;
         const ended = yield* backfill(sessionId, state);
@@ -2776,7 +2986,26 @@ export const make = Effect.fn("OpenCode2Adapter.make")(function* (
         for (const session of sessionsOf(state)) {
           for (const wake of session.wakes.splice(0)) wake.dropped = true;
           session.reports.clear();
+          session.awaitingSubagentReport = false;
+          if (session.subagent !== undefined) session.ambiguousSubagentReports = true;
         }
+      }
+      // A background tool return proves admission even if its inbox events were
+      // lost. The native inbox still lists every input not yet consumed.
+      for (const [sessionId, state] of threads) {
+        if (!(sessionId in active)) continue;
+        const calls = callsForChild(state).filter(
+          (call) => call.awaitingChildInput && call.returnedInBackground,
+        );
+        if (calls.length === 0) continue;
+        const inbox = yield* client.session.inbox.list({ sessionID: Session.ID.make(sessionId) });
+        const inputs = inbox.filter((item) => item.type === "user");
+        calls.forEach((call) => {
+          call.childInputObserved = true;
+          call.pendingChildInputs.clear();
+          inputs.forEach((item) => call.pendingChildInputs.add(item.id));
+          releaseChildInput(call);
+        });
       }
       // A request asked while the stream was down was never shown, and the
       // run waits on it; one T3 shows that OpenCode no longer lists was

@@ -1,5 +1,9 @@
 # Wiki update log
 
+## 2026-10-06
+
+- **Recovery exception**: Recorded the fork-side [SSH recovery boundary](upstream-integration.md#ssh-recovery-exception), which preserves remote work on connection timeouts. Upstream `3a9c1a6df1` still has the destructive recovery paths at the October 6 review.
+
 ## 2026-10-05
 
 - **Integration**: [PR #34](https://github.com/NicholasZolton/t3code/pull/34) reached fork `main` at `2586800144`. Refreshed [upstream integration](upstream-integration.md): all 114 newer commits through `1604ccc9d7` are incorporated, with zero ancestry gap and the accepted upstream MCP replacement.
