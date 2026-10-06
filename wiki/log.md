@@ -2,7 +2,7 @@
 
 ## 2026-10-06
 
-- **Recovery exception**: Recorded the pending [SSH recovery boundary](upstream-integration.md#ssh-recovery-exception), which preserves remote work on connection timeouts. The fix is a local branch candidate, not a main integration; upstream `3a9c1a6df1` still has the destructive recovery paths.
+- **Recovery exception**: Recorded the fork-side [SSH recovery boundary](upstream-integration.md#ssh-recovery-exception), which preserves remote work on connection timeouts. Upstream `3a9c1a6df1` still has the destructive recovery paths at the October 6 review.
 
 ## 2026-10-05
 

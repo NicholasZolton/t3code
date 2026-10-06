@@ -6,7 +6,7 @@ tags: [upstream, fork, integration]
 status: stable
 generated:
   by: opencode/gpt-6.1-sol
-  at: 2026-10-06T03:40:07Z
+  at: 2026-10-06T03:59:42Z
 verified:
   - by: opencode/gpt-6.1-sol
     at: 2026-10-05T20:00:49Z
@@ -101,9 +101,9 @@ sources:
   - id: tailscale-persistence
     resource: ../apps/server/src/cli/pair.ts
     title: Pairing with the running server and remembering Tailscale Serve settings
-  - id: ssh-recovery-candidate
+  - id: ssh-recovery
     resource: ../packages/ssh/src/tunnel.ts
-    title: Local SSH recovery candidate on fork base 170fc9874f37eb7d91c605ace73584eec07fbb95, checked 2026-10-06T03:40:07Z
+    title: Fork-side SSH recovery implementation, checked 2026-10-06T03:40:07Z
   - id: upstream-ssh-recovery
     resource: https://github.com/pingdotgg/t3code/blob/3a9c1a6df1b71d8ba73d287be90443e8e874802f/packages/ssh/src/tunnel.ts
     title: Upstream still stops servers during stale-tunnel cleanup and failed reuse probes at the October 6 SSH review
@@ -277,11 +277,11 @@ deployment or rollback.[^remote-deployment-checks][^tailscale-persistence]
 
 ## SSH recovery exception
 
-The local candidate on fork base `170fc9874f` is not yet on `main`. It separates
-stale-tunnel cleanup from remote shutdown and preserves an existing server's
-ownership when readiness times out, rather than killing it or launching a competing
-server against the same T3 home. Explicit Disconnect, desktop shutdown, and requested
-runner changes retain their existing behavior.[^ssh-recovery-candidate]
+Fork-side SSH recovery separates stale-tunnel cleanup from remote shutdown and
+preserves an existing server's ownership when readiness times out, rather than
+killing it or launching a competing server against the same T3 home. Explicit
+Disconnect, desktop shutdown, and requested runner changes retain their existing
+behavior.[^ssh-recovery]
 
 At the focused October 6 review, upstream `3a9c1a6df1` still has both destructive
 recovery paths; issue #15608 remains open. Preserve this boundary during later syncs
@@ -327,7 +327,7 @@ git log --reverse --oneline origin/main..upstream/main
 
 [^tailscale-persistence]: `pair --tailscale` discovers the live server and remembers its HTTPS port for startup restoration.
 
-[^ssh-recovery-candidate]: Local branch SSH implementation; not a completed main integration.
+[^ssh-recovery]: Fork-side SSH implementation and its focused readiness-recovery regressions.
 
 [^upstream-ssh-recovery]: Exact upstream source reviewed on October 6.
 
