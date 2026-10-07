@@ -6,7 +6,7 @@ tags: [upstream, fork, integration]
 status: stable
 generated:
   by: opencode/gpt-6.1-sol
-  at: 2026-10-06T03:59:42Z
+  at: 2026-10-07T15:01:49Z
 verified:
   - by: opencode/gpt-6.1-sol
     at: 2026-10-05T20:00:49Z
@@ -116,6 +116,9 @@ sources:
   - id: fork-jujutsu
     resource: https://github.com/NicholasZolton/t3code/commit/10f6b88380011b466e0be0355b76874e41db43a2
     title: Fork Jujutsu port with durable mixed-backend workspace recovery
+  - id: private-android-signing
+    resource: ../docs/operations/android-notifications.md#private-fork-apk-signing
+    title: Private fork APK signing with the repository's fnox local profile
 ---
 
 # Upstream integration
@@ -287,6 +290,15 @@ At the focused October 6 review, upstream `3a9c1a6df1` still has both destructiv
 recovery paths; issue #15608 remains open. Preserve this boundary during later syncs
 unless upstream supplies equivalent recovery behavior.[^upstream-ssh-recovery][^ssh-recovery-issue]
 
+## Private Android signing identity
+
+Installable private fork APKs use one persistent signing key, stored age-encrypted
+in the repository's fnox `local` profile. Preserve that key during future syncs;
+replacing it or shipping a debug-signed APK prevents in-place updates to existing
+private installations. The user-level age identity remains outside the repository,
+and official/EAS signing stays unchanged. See the [signing procedure](../docs/operations/android-notifications.md#private-fork-apk-signing).
+[^private-android-signing]
+
 ## Rechecking the boundary
 
 After fetching `origin main` and `upstream main`, use ancestry to identify the
@@ -336,6 +348,8 @@ git log --reverse --oneline origin/main..upstream/main
 [^upstream-jujutsu]: Original upstream support, used as the selective-port source.
 
 [^fork-jujutsu]: Durable backend ownership, recovery behavior, and supported Jujutsu baseline.
+
+[^private-android-signing]: Fork signing policy and the fnox-backed APK signing helper.
 
 [^reviewed-fork-main]: Exact fork main revision fetched for this review.
 

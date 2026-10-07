@@ -54,6 +54,20 @@ Using T3's existing production publishable key selects the maintainers' Clerk in
 
 Building with `APP_VARIANT=production` selects `com.t3tools.t3code` and its corresponding Clerk callback. Set the same variant during prebuild and bundling, and supply a Google services file that includes that package. Keep OTA updates disabled for a private binary. A locally signed build with this package cannot update an official installation signed by the maintainer or coexist with it; removing that installation also removes its app-local data. The development package remains a separate app.
 
+### Private fork APK signing
+
+The repository's fnox `local` profile stores a private Android signing key using Nicholas's user-level age provider. After building a bundled release APK, sign it with the same key for every update:
+
+```sh
+APKSIGNER="$ANDROID_HOME/build-tools/<version>/apksigner" \
+fnox exec --profile local --no-defaults -- \
+  bash scripts/sign-android-apk.sh \
+  apps/mobile/android/app/build/outputs/apk/release/app-release.apk \
+  release/t3-code-preview.apk
+```
+
+Run this from the repository root with a JDK available. The script resolves passwords from the environment, restores the keystore only in a permission-restricted temporary directory, and removes it after signing. Updates retain app-local data only when the application ID and signing key match and the version code does not decrease. This key cannot update a Play Store installation or an earlier debug-signed APK; do not replace it after installing a private build.
+
 ## Focused delivery check
 
 `infra/relay/scripts/android-push-smoke.ts` sends a message through the production FCM client implementation without provisioning the relay's database, Clerk integration, or Cloudflare queues. It verifies only Firebase-to-device delivery.
