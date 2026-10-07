@@ -1,5 +1,9 @@
 # Wiki update log
 
+## 2026-10-07
+
+- **Signing identity**: Recorded the persistent [private Android signing key](upstream-integration.md#private-android-signing-identity) and the requirement to preserve it across builds and upstream syncs.
+
 ## 2026-10-06
 
 - **Recovery exception**: Recorded the fork-side [SSH recovery boundary](upstream-integration.md#ssh-recovery-exception), which preserves remote work on connection timeouts. Upstream `3a9c1a6df1` still has the destructive recovery paths at the October 6 review.
