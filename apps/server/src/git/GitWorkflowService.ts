@@ -295,7 +295,7 @@ export const make = Effect.gen(function* () {
       );
       const result = yield* workspaceOps[kind].createWorktree(input, {
         ...options,
-        directory: options?.directory ?? settings.worktreeDirectory,
+        worktreesDirectory: options?.worktreesDirectory ?? settings.worktreesDirectory,
         projectFolders: options?.projectFolders ?? settings.worktreeProjectFolders,
         submodules: options?.submodules ?? settings.worktreeSubmodules,
       });

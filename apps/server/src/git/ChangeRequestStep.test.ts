@@ -4,9 +4,8 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 
 import { ProviderInstanceId, TextGenerationError } from "@t3tools/contracts";
-import { ChildProcessSpawner } from "effect/unstable/process";
 
-import * as ProviderRegistry from "../provider/Services/ProviderRegistry.ts";
+import * as ProviderRegistry from "../provider/ProviderRegistry.ts";
 import * as ServerSettings from "../serverSettings.ts";
 import * as SourceControlProvider from "../sourceControl/SourceControlProvider.ts";
 import * as SourceControlProviderRegistry from "../sourceControl/SourceControlProviderRegistry.ts";

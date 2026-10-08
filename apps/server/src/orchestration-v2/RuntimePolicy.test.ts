@@ -19,7 +19,7 @@ import type { ProviderInstance } from "../provider/ProviderDriver.ts";
 import * as ServerSettings from "../serverSettings.ts";
 import * as VcsDriver from "../vcs/VcsDriver.ts";
 import * as VcsDriverRegistry from "../vcs/VcsDriverRegistry.ts";
-import * as ProviderInstanceRegistry from "../provider/Services/ProviderInstanceRegistry.ts";
+import * as ProviderInstanceRegistry from "../provider/ProviderInstanceRegistry.ts";
 import * as ProjectStore from "./ProjectStore.ts";
 import * as RuntimePolicy from "./RuntimePolicy.ts";
 
@@ -80,7 +80,7 @@ const providerInstanceFor = (instanceId: ProviderInstanceId) =>
     },
   }) as ProviderInstance;
 
-const TestLayer = RuntimePolicy.layerFromProjectStore.pipe(
+const layerTest = RuntimePolicy.layerFromProjectStore.pipe(
   Layer.provide(
     Layer.succeed(ProviderInstanceRegistry.ProviderInstanceRegistry, {
       getInstance: (instanceId) => Effect.succeed(providerInstanceFor(instanceId)),
@@ -113,7 +113,7 @@ const TestLayer = RuntimePolicy.layerFromProjectStore.pipe(
   ),
 );
 
-it.layer(TestLayer)("RuntimePolicyV2", (it) => {
+it.layer(layerTest)("RuntimePolicyV2", (it) => {
   it.effect("uses the project root for local-checkout threads", () =>
     Effect.gen(function* () {
       const policy = yield* RuntimePolicy.RuntimePolicyV2;
@@ -212,6 +212,6 @@ it.effect("resolves VCS hints in the thread workspace and honors live settings",
       };
       assert.equal((yield* policy.resolve({ thread, modelSelection })).vcsAgentHint, undefined);
       assert.deepEqual(detected, ["/jj-workspace"]);
-    }).pipe(Effect.provide(TestLayer.pipe(Layer.provide(dependencies))));
+    }).pipe(Effect.provide(layerTest.pipe(Layer.provide(dependencies))));
   }),
 );

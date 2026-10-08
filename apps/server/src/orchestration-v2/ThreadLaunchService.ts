@@ -28,13 +28,17 @@ import * as Option from "effect/Option";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import * as Scope from "effect/Scope";
-import { buildTemporaryWorktreeBranchName, isTemporaryWorktreeBranch } from "@t3tools/shared/git";
+import {
+  buildTemporaryWorktreeBranchName,
+  flattenTemporaryWorktreeBranchName,
+  isTemporaryWorktreeBranch,
+} from "@t3tools/shared/git";
 
 import * as GitWorkflow from "../git/GitWorkflowService.ts";
 import * as ProjectService from "../project/ProjectService.ts";
 import * as ProjectSetupScriptRunner from "../project/ProjectSetupScriptRunner.ts";
 import * as ManagedProjectFolders from "../project/ManagedProjectFolders.ts";
-import * as ProviderRegistry from "../provider/Services/ProviderRegistry.ts";
+import * as ProviderRegistry from "../provider/ProviderRegistry.ts";
 import * as ServerSettings from "../serverSettings.ts";
 import * as TextGeneration from "../textGeneration/TextGeneration.ts";
 import * as CommandReceiptStore from "./CommandReceiptStore.ts";
@@ -299,19 +303,16 @@ const make = Effect.gen(function* () {
         });
 
       // The server owns worktree naming: without an explicit branch, provision
-      // under a temporary `t3code/<hash>` name so the worktree never waits on
+      // under a temporary `t3/<hash>` name so the worktree never waits on
       // name generation, then rename in the background below.
       const requestedBranch = input.workspaceStrategy.branch;
+      const temporaryBranchPrefix = (yield* serverSettings.getSettings).worktreeBranchPrefix;
       let branch: string | null;
       if (input.workspaceStrategy.type === "worktree" && requestedBranch === undefined) {
         const uuid = yield* randomUuidV4;
-        const settings = resolveProjectSettings(
-          yield* serverSettings.getSettings,
-          input.projectId,
-        ).settings;
         branch = buildTemporaryWorktreeBranchName(
           () => uuid.replaceAll("-", ""),
-          settings.worktreeBranchPrefix,
+          temporaryBranchPrefix,
         );
       } else {
         branch = requestedBranch ?? null;
@@ -370,6 +371,18 @@ const make = Effect.gen(function* () {
           }
         }
         if (startFromOrigin) yield* setupTracker.stageStatus(threadId, "fetch", "done");
+        if (
+          branch !== null &&
+          isTemporaryWorktreeBranch(branch, temporaryBranchPrefix) &&
+          (yield* git
+            .hasCommit({
+              cwd: project.workspaceRoot,
+              refName: `refs/heads/${temporaryBranchPrefix}`,
+            })
+            .pipe(Effect.mapError(mapError(input, "provision-worktree", threadId))))
+        ) {
+          branch = flattenTemporaryWorktreeBranchName(branch);
+        }
         yield* setupTracker.stageStatus(threadId, "checkout", "running");
         const worktree = yield* git
           .createWorktree(

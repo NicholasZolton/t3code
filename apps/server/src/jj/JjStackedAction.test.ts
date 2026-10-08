@@ -12,7 +12,7 @@ import {
 } from "@t3tools/contracts";
 
 import type { ChangeRequestStepServices, ChangeRequestVcsReads } from "../git/GitManager.ts";
-import * as ProviderRegistry from "../provider/Services/ProviderRegistry.ts";
+import * as ProviderRegistry from "../provider/ProviderRegistry.ts";
 import * as ServerSettings from "../serverSettings.ts";
 import * as SourceControlProviderRegistry from "../sourceControl/SourceControlProviderRegistry.ts";
 import * as TextGeneration from "../textGeneration/TextGeneration.ts";

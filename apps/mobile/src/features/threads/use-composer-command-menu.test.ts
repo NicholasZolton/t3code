@@ -3,6 +3,7 @@ import {
   EnvironmentId,
   ProviderDriverKind,
   ProviderInstanceId,
+  PROVIDER_WORKSPACE_SNAPSHOT_TTL_MS,
   type ServerProvider,
 } from "@t3tools/contracts";
 import { act, createElement } from "react";
@@ -22,7 +23,7 @@ vi.mock("../../state/use-composer-drafts", () => ({
 }));
 vi.mock("../../lib/uuid", () => ({ uuidv4: () => "context-id" }));
 vi.mock("../../state/server", async () => {
-  const { Atom } = await import("effect/unstable/reactivity");
+  const { Atom } = await import("effect/reactivity");
   const { DEFAULT_SERVER_SETTINGS } = await import("@t3tools/contracts");
   const settings = Atom.make(DEFAULT_SERVER_SETTINGS);
   return {
@@ -239,7 +240,7 @@ describe("workspace command discovery retry", () => {
         createElement(Probe, { cwd: "/project-a", status: complete, draftMessage: "ordinary" }),
       );
     });
-    await act(() => vi.advanceTimersByTimeAsync(31_000));
+    await act(() => vi.advanceTimersByTimeAsync(PROVIDER_WORKSPACE_SNAPSHOT_TTL_MS));
     const refreshed: ServerProvider = {
       ...complete,
       workspaceSnapshots: complete.workspaceSnapshots?.map((snapshot) => ({

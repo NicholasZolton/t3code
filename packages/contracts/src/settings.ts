@@ -1,4 +1,9 @@
 import { SshDeviceHostConfigs } from "./device.ts";
+import {
+  AuthSettingsWriteScope,
+  AuthProvidersManageScope,
+  type AuthEnvironmentScope,
+} from "./auth.ts";
 import * as Effect from "effect/Effect";
 import * as Duration from "effect/Duration";
 import * as Schema from "effect/Schema";
@@ -848,6 +853,29 @@ export const AntigravitySettings = makeProviderSettingsSchema(
 );
 export type AntigravitySettings = typeof AntigravitySettings.Type;
 
+export const MuseSettings = makeProviderSettingsSchema(
+  {
+    enabled: Schema.Boolean.pipe(
+      Schema.withDecodingDefault(Effect.succeed(false)),
+      Schema.annotateKey({ providerSettingsForm: { hidden: true } }),
+    ),
+    binaryPath: makeBinaryPathSetting("muse").pipe(
+      Schema.annotateKey({
+        title: "Binary path",
+        description:
+          "Path to the Muse Code binary on this environment. Sign in with muse login on that host.",
+        providerSettingsForm: { placeholder: "muse", clearWhenEmpty: "omit" },
+      }),
+    ),
+    customModels: Schema.Array(CustomModelSetting).pipe(
+      Schema.withDecodingDefault(Effect.succeed([])),
+      Schema.annotateKey({ providerSettingsForm: { hidden: true } }),
+    ),
+  },
+  { order: ["binaryPath"] },
+);
+export type MuseSettings = typeof MuseSettings.Type;
+
 export const PiSettings = makeProviderSettingsSchema(
   {
     // Off by default like Cursor and Grok. Users opt in from Settings.
@@ -886,6 +914,19 @@ export type AcpRegistryDistributionPreference = typeof AcpRegistryDistributionPr
 
 export const AcpRegistrySettings = makeProviderSettingsSchema(
   {
+    source: Schema.Literals(["registry", "local"]).pipe(
+      Schema.withDecodingDefault(Effect.succeed("registry")),
+      Schema.annotateKey({
+        title: "ACP source",
+        providerSettingsForm: {
+          control: "select",
+          options: [
+            { value: "registry", label: "ACP Registry" },
+            { value: "local", label: "Local command" },
+          ],
+        },
+      }),
+    ),
     enabled: Schema.Boolean.pipe(
       Schema.withDecodingDefault(Effect.succeed(true)),
       Schema.annotateKey({ providerSettingsForm: { hidden: true } }),
@@ -903,9 +944,13 @@ export const AcpRegistrySettings = makeProviderSettingsSchema(
       Schema.annotateKey({
         title: "Executable override",
         description:
-          "Optional local executable to use instead of installing the registry distribution. Registry arguments and environment are still applied.",
+          "Executable on this environment. For registry agents, this overrides the distribution executable while keeping its arguments and environment.",
         providerSettingsForm: { placeholder: "Registry default", clearWhenEmpty: "omit" },
       }),
+    ),
+    commandArgs: Schema.Array(Schema.String).pipe(
+      Schema.withDecodingDefault(Effect.succeed([])),
+      Schema.annotateKey({ providerSettingsForm: { hidden: true } }),
     ),
     authMethodId: TrimmedString.pipe(
       Schema.withDecodingDefault(Effect.succeed("")),
@@ -926,7 +971,7 @@ export const AcpRegistrySettings = makeProviderSettingsSchema(
     ),
   },
   {
-    order: ["agentId", "commandPath", "authMethodId"],
+    order: ["source", "agentId", "commandPath", "authMethodId"],
   },
 );
 export type AcpRegistrySettings = typeof AcpRegistrySettings.Type;
@@ -1028,6 +1073,37 @@ export const BitbucketSettings = Schema.Struct({
   apiToken: TrimmedString.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
 });
 export type BitbucketSettings = typeof BitbucketSettings.Type;
+
+/**
+ * Per-host choices for the GitHub CLI's logins. `account` pins one of the logins
+ * `gh` holds for the host instead of its active one; a disabled host gets no
+ * credential at all. A token saved here wins over `GH_TOKEN` and friends, which win over `gh`.
+ */
+/** A GitHub host name, lowercased on decode so `GitHub.com` and `github.com` are one entry. */
+export const GitHubHost = TrimmedNonEmptyString.pipe(
+  Schema.decodeTo(Schema.String, SchemaTransformation.toLowerCase()),
+);
+
+export const GitHubHostSettings = Schema.Struct({
+  account: Schema.optionalKey(TrimmedNonEmptyString),
+  enabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+});
+export type GitHubHostSettings = typeof GitHubHostSettings.Type;
+
+export const GitHubSettings = Schema.Struct({
+  /** Keyed by lowercased host, for example `github.com`. */
+  hosts: Schema.Record(GitHubHost, GitHubHostSettings).pipe(
+    Schema.withDecodingDefault(Effect.succeed({})),
+  ),
+  /**
+   * A token per host, used before `GH_TOKEN` and `gh`. The server keeps each one in its secret
+   * store; settings and clients only ever see a redaction marker for a saved token.
+   */
+  tokens: Schema.Record(GitHubHost, TrimmedString).pipe(
+    Schema.withDecodingDefault(Effect.succeed({})),
+  ),
+});
+export type GitHubSettings = typeof GitHubSettings.Type;
 
 export const ObservabilitySettings = Schema.Struct({
   otlpTracesUrl: TrimmedString.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
@@ -1142,10 +1218,7 @@ export type WorktreeCleanup = typeof WorktreeCleanup.Type;
 export const WorktreeBranchPrefix = TrimmedNonEmptyString.check(
   Schema.isPattern(/^[a-zA-Z0-9][a-zA-Z0-9_-]*(?:\/[a-zA-Z0-9][a-zA-Z0-9_-]*)*$/),
 );
-export const DEFAULT_WORKTREE_BRANCH_PREFIX = "t3code";
-export const WorktreeDirectory = TrimmedString.check(
-  Schema.isPattern(/^(?:$|~(?:[\\/]|$)|[\\/]|[a-zA-Z]:[\\/])/),
-);
+export const DEFAULT_WORKTREE_BRANCH_PREFIX = "t3";
 
 export const PROJECT_SCOPED_SERVER_SETTING_KEYS = [
   "worktreeCleanup",
@@ -1162,6 +1235,7 @@ export const PROJECT_SCOPED_SERVER_SETTING_KEYS = [
   "textGenerationModelSelection",
   "sourceControlWriterModelSelection",
   "sourceControlWritingStyle",
+  "removeAgentCreditsOnMerge",
   "branchNamingMode",
   "branchNamePrefix",
   "branchNameInstructions",
@@ -1194,6 +1268,7 @@ export const ProjectSettingsOverrides = Schema.Struct({
   textGenerationModelSelection: Schema.optionalKey(ModelSelection),
   sourceControlWriterModelSelection: Schema.optionalKey(Schema.NullOr(ModelSelection)),
   sourceControlWritingStyle: Schema.optionalKey(SourceControlWritingStyleSettings),
+  removeAgentCreditsOnMerge: Schema.optionalKey(Schema.Boolean),
   branchNamingMode: Schema.optionalKey(BranchNamingMode),
   branchNamePrefix: Schema.optionalKey(TrimmedString),
   branchNameInstructions: Schema.optionalKey(TrimmedString),
@@ -1248,6 +1323,18 @@ export const ServerSettings = Schema.Struct({
   worktreeCleanup: WorktreeCleanup.pipe(Schema.withDecodingDefault(Effect.succeed(null))),
   storageCleanup: StorageCleanupSettings.pipe(
     Schema.withDecodingDefault(Effect.succeed(Schema.decodeSync(StorageCleanupSettings)({}))),
+  ),
+  /**
+   * Absolute directory new worktrees are created under, e.g. `D:\worktrees`
+   * or `~/worktrees`. Empty uses `<T3 home>/worktrees`.
+   */
+  worktreesDirectory: TrimmedString.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
+  /**
+   * Custom locations used before the current one. Server-maintained so
+   * worktrees left there stay eligible for cleanup and review diffs.
+   */
+  previousWorktreesDirectories: Schema.Array(TrimmedString).pipe(
+    Schema.withDecodingDefault(Effect.succeed([])),
   ),
   responseStreamingMode: ResponseStreamingMode.pipe(
     Schema.withDecodingDefault(Effect.succeed("paragraph" as const)),
@@ -1374,7 +1461,6 @@ export const ServerSettings = Schema.Struct({
   newWorktreesStartFromOrigin: Schema.Boolean.pipe(
     Schema.withDecodingDefault(Effect.succeed(true)),
   ),
-  worktreeDirectory: WorktreeDirectory.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
   worktreeProjectFolders: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
   enableVcsAgentHints: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
   worktreeBranchPrefix: WorktreeBranchPrefix.pipe(
@@ -1406,8 +1492,9 @@ export const ServerSettings = Schema.Struct({
   branchNamingMode: BranchNamingMode.pipe(
     Schema.withDecodingDefault(Effect.succeed("static" as const)),
   ),
-  branchNamePrefix: TrimmedString.pipe(Schema.withDecodingDefault(Effect.succeed("t3code"))),
+  branchNamePrefix: TrimmedString.pipe(Schema.withDecodingDefault(Effect.succeed("t3"))),
   branchNameInstructions: TrimmedString.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
+  removeAgentCreditsOnMerge: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   sourceControlWritingStyle: SourceControlWritingStyleSettings.pipe(
     Schema.withDecodingDefault(Effect.succeed({})),
   ),
@@ -1434,6 +1521,7 @@ export const ServerSettings = Schema.Struct({
     claudeAgent: ClaudeSettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
     cursor: CursorSettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
     grok: GrokSettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
+    muse: MuseSettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
     pi: PiSettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
     opencode: OpenCodeSettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
     antigravity: AntigravitySettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
@@ -1448,6 +1536,7 @@ export const ServerSettings = Schema.Struct({
   ),
   observability: ObservabilitySettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
   bitbucket: BitbucketSettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
+  github: GitHubSettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
   // Keyed by a user-chosen id so a source keeps its rows across edits. Entries
   // this build cannot decode round-trip untouched, as provider instances do.
   usageLimitSources: Schema.Record(UsageLimitSourceId, UsageLimitSourceConfig).pipe(
@@ -1615,6 +1704,12 @@ const AntigravitySettingsPatch = Schema.Struct({
   customModels: Schema.optionalKey(Schema.Array(CustomModelSetting)),
 });
 
+const MuseSettingsPatch = Schema.Struct({
+  enabled: Schema.optionalKey(Schema.Boolean),
+  binaryPath: Schema.optionalKey(TrimmedString),
+  customModels: Schema.optionalKey(Schema.Array(CustomModelSetting)),
+});
+
 const PiSettingsPatch = Schema.Struct({
   enabled: Schema.optionalKey(Schema.Boolean),
   binaryPath: Schema.optionalKey(TrimmedString),
@@ -1660,6 +1755,7 @@ export const ServerSettingsPatch = Schema.Struct({
       logsAfterDays: Schema.optionalKey(StorageRetentionDays),
     }),
   ),
+  worktreesDirectory: Schema.optionalKey(TrimmedString),
   // Server settings
   responseStreamingMode: Schema.optionalKey(ResponseStreamingMode),
   enableProviderUpdateChecks: Schema.optionalKey(Schema.Boolean),
@@ -1710,7 +1806,6 @@ export const ServerSettingsPatch = Schema.Struct({
   environmentIcon: Schema.optionalKey(Schema.NullOr(EnvironmentMachineKind)),
   defaultThreadEnvMode: Schema.optionalKey(Schema.NullOr(ThreadEnvMode)),
   newWorktreesStartFromOrigin: Schema.optionalKey(Schema.Boolean),
-  worktreeDirectory: Schema.optionalKey(WorktreeDirectory),
   worktreeProjectFolders: Schema.optionalKey(Schema.Boolean),
   worktreeBranchPrefix: Schema.optionalKey(WorktreeBranchPrefix),
   worktreeSubmodules: Schema.optionalKey(Schema.NullOr(WorktreeSubmodules)),
@@ -1720,6 +1815,7 @@ export const ServerSettingsPatch = Schema.Struct({
   branchNamingMode: Schema.optionalKey(BranchNamingMode),
   branchNamePrefix: Schema.optionalKey(TrimmedString),
   branchNameInstructions: Schema.optionalKey(TrimmedString),
+  removeAgentCreditsOnMerge: Schema.optionalKey(Schema.Boolean),
   sourceControlWritingStyle: Schema.optionalKey(
     Schema.Struct({
       mode: Schema.optionalKey(SourceControlWritingStyleMode),
@@ -1744,12 +1840,23 @@ export const ServerSettingsPatch = Schema.Struct({
       apiToken: Schema.optionalKey(TrimmedString),
     }),
   ),
+  /**
+   * `hosts` replaces the whole map, so an omitted host or account clears it. `tokens` merges per
+   * host: an empty token removes that host's token, the redaction marker keeps it.
+   */
+  github: Schema.optionalKey(
+    Schema.Struct({
+      hosts: Schema.optionalKey(Schema.Record(GitHubHost, GitHubHostSettings)),
+      tokens: Schema.optionalKey(Schema.Record(GitHubHost, TrimmedString)),
+    }),
+  ),
   providers: Schema.optionalKey(
     Schema.Struct({
       codex: Schema.optionalKey(CodexSettingsPatch),
       claudeAgent: Schema.optionalKey(ClaudeSettingsPatch),
       cursor: Schema.optionalKey(CursorSettingsPatch),
       grok: Schema.optionalKey(GrokSettingsPatch),
+      muse: Schema.optionalKey(MuseSettingsPatch),
       pi: Schema.optionalKey(PiSettingsPatch),
       opencode: Schema.optionalKey(OpenCodeSettingsPatch),
       antigravity: Schema.optionalKey(AntigravitySettingsPatch),
@@ -1777,6 +1884,26 @@ export const ServerSettingsPatch = Schema.Struct({
   ),
 });
 export type ServerSettingsPatch = typeof ServerSettingsPatch.Type;
+
+/** A mixed settings patch must be authorized for every configuration domain it changes. */
+export function requiredScopesForServerSettingsPatch(
+  patch: ServerSettingsPatch,
+): ReadonlyArray<AuthEnvironmentScope> {
+  let changesProviders = false;
+  let changesSettings = false;
+  for (const [key, value] of Object.entries(patch)) {
+    if (value === undefined) continue;
+    if (key === "providers" || key === "providerInstances" || key === "usageLimitSources") {
+      changesProviders = true;
+    } else {
+      changesSettings = true;
+    }
+  }
+  return [
+    ...(changesSettings || !changesProviders ? [AuthSettingsWriteScope] : []),
+    ...(changesProviders ? [AuthProvidersManageScope] : []),
+  ];
+}
 
 export const ClientSettingsPatch = Schema.Struct({
   notificationMode: Schema.optionalKey(NotificationMode),

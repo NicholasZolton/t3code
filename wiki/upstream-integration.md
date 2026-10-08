@@ -1,22 +1,36 @@
 ---
 type: Integration Record
 title: Upstream integration
-description: Completed upstream integration boundaries, latest review, and fork compatibility exceptions.
+description: Completed main integrations, the latest branch candidate, and fork compatibility exceptions.
 tags: [upstream, fork, integration]
 status: stable
 generated:
   by: opencode/gpt-6.1-sol
-  at: 2026-10-07T15:01:49Z
+  at: 2026-10-08T17:34:18Z
 verified:
   - by: opencode/gpt-6.1-sol
-    at: 2026-10-05T20:00:49Z
+    at: 2026-10-08T17:34:18Z
 snapshot:
-  at: 2026-10-05T20:00:49Z
-  fork_main: 258680014485a577ecb2f07829caf432b874d3ea
-  upstream_main: 1604ccc9d79f5270fb8e14d60664184bf142c4cb
+  at: 2026-10-08T17:34:18Z
+  fork_main: e4b289c26c2632c0a92f8d9d43fd2bf135d99ae4
+  upstream_main: 9a3070bcf023c3c025633659addeef4cf628133a
   shared_baseline: 1604ccc9d79f5270fb8e14d60664184bf142c4cb
   last_main_integration: ab7e864a1aa3ce44d99454b8e363297227475ead
+  candidate_merge: 2bc0f738329c83c0a7e146018d640a512634f876
+  candidate_branch: NicholasZolton/sync-upstream-changes
 sources:
+  - id: october-8-candidate
+    resource: "Local Git object 2bc0f738329c83c0a7e146018d640a512634f876 on NicholasZolton/sync-upstream-changes; parents e4b289c26c2632c0a92f8d9d43fd2bf135d99ae4 and 9a3070bcf023c3c025633659addeef4cf628133a"
+    title: Full upstream merge on the branch, not incorporated into fork main
+  - id: october-8-review-git
+    resource: "Local Git verification at 2026-10-08T17:34:18Z: origin/main e4b289c26c2632c0a92f8d9d43fd2bf135d99ae4 shares baseline 1604ccc9d79f5270fb8e14d60664184bf142c4cb with upstream 9a3070bcf023c3c025633659addeef4cf628133a and is missing 280 upstream commits; candidate 2bc0f738329c83c0a7e146018d640a512634f876 contains both parents and has zero gap against that upstream tip"
+    title: Verified candidate and main ancestry boundaries
+  - id: upstream-worktree-location
+    resource: https://github.com/pingdotgg/t3code/commit/1024941575067f68d909c6b98f56b02edac25b37
+    title: Upstream worktree location and previous-directory tracking
+  - id: upstream-skill-refresh
+    resource: https://github.com/pingdotgg/t3code/commit/a1830915ecf70e3ad4fbe8efb15ae9f18517eb54
+    title: Upstream five-minute workspace discovery cache and refresh policy
   - id: october-5-main-integration
     resource: https://github.com/NicholasZolton/t3code/pull/34
     title: Completed October 5 full upstream integration into fork main
@@ -63,7 +77,7 @@ sources:
     resource: https://github.com/pingdotgg/t3code/blob/65731f986ba2175063b0182deb6a143f8f323b74/packages/contracts/src/environment.ts
     title: Orchestration wire protocol version 2
   - id: upstream-current-manifest
-    resource: https://github.com/pingdotgg/t3code/blob/1604ccc9d79f5270fb8e14d60664184bf142c4cb/apps/server/src/provider/model-manifest.json
+    resource: https://github.com/pingdotgg/t3code/blob/9a3070bcf023c3c025633659addeef4cf628133a/apps/server/src/provider/model-manifest.json
     title: OpenCode version policy at the reviewed upstream tip
   - id: main-integration
     resource: https://github.com/NicholasZolton/t3code/pull/27
@@ -103,10 +117,10 @@ sources:
     title: Pairing with the running server and remembering Tailscale Serve settings
   - id: ssh-recovery
     resource: ../packages/ssh/src/tunnel.ts
-    title: Fork-side SSH recovery implementation, checked 2026-10-06T03:40:07Z
+    title: Fork-side SSH recovery implementation, checked 2026-10-08T17:34:18Z
   - id: upstream-ssh-recovery
-    resource: https://github.com/pingdotgg/t3code/blob/3a9c1a6df1b71d8ba73d287be90443e8e874802f/packages/ssh/src/tunnel.ts
-    title: Upstream still stops servers during stale-tunnel cleanup and failed reuse probes at the October 6 SSH review
+    resource: https://github.com/pingdotgg/t3code/blob/9a3070bcf023c3c025633659addeef4cf628133a/packages/ssh/src/tunnel.ts
+    title: Upstream still stops servers during stale-tunnel cleanup and failed reuse probes at the October 8 review
   - id: ssh-recovery-issue
     resource: https://github.com/pingdotgg/t3code/issues/15608
     title: Upstream report of remote work stopping on disconnect and stale-tunnel recovery
@@ -123,17 +137,45 @@ sources:
 
 # Upstream integration
 
-**Fork `main` includes all 114 newer upstream commits through `1604ccc9d7`,
-with zero gap against that pinned tip.**
-[PR #34](https://github.com/NicholasZolton/t3code/pull/34) merged on October 5,
-2026, at 20:00:02 UTC, landing at `2586800144`. The shared baseline is now
-`1604ccc9d7`.[^october-5-main-integration][^latest-review-git]
+**The October 8 branch candidate incorporates all 280 newer upstream commits
+through `9a3070bcf0`. Fork `main` has not incorporated that candidate.**
+The fetched `origin/main` is `e4b289c26c`; its shared baseline remains
+`1604ccc9d7`, from the October 5 sync. The candidate has zero gap against the
+reviewed upstream tip; main's gap is 280 commits.[^october-8-review-git]
 
 This is a revision-pinned snapshot, not a claim about newer upstream work.
 Refresh it after the next review or integration using the
 [maintenance guidance](maintenance.md).
 
+## Latest branch candidate
+
+Merge `2bc0f738329c83c0a7e146018d640a512634f876` on
+`NicholasZolton/sync-upstream-changes` preserves ancestry from fork
+`e4b289c26c` and upstream `9a3070bcf0`. It is a local integration, not a completed
+main landing or a deployment.[^october-8-candidate]
+
+The candidate adopts upstream's `worktreesDirectory` setting, Storage control,
+path validation, and previous-location tracking. Saved fork `worktreeDirectory`
+values migrate on load; an explicitly saved upstream value wins. Retain the
+fork's canonical-checkout grouping: `<location>/<original checkout>/<worktree>`,
+even when creating from a linked worktree. The optional flat layout and custom
+temporary branch prefixes remain. Defaults use upstream's `t3/` prefix and its
+namespace-collision fallback; existing legacy names stay recognized.
+[^october-8-candidate][^upstream-worktree-location]
+
+Workspace discovery now uses upstream's provider registry and five-minute
+freshness/refresh policy across clients. The old fork catalog helper and
+`invalidateWorkspaceSnapshots` API are removed, rather than maintained as a
+parallel refresh path. Preserve the unrelated fork boundaries below, including
+mixed Git/Jujutsu recovery, SSH reconnect preservation, configured OpenCode
+permissions and reused-subagent tracking, prompts, Vim, accounts, Crit/Portless,
+and private Android signing.[^october-8-candidate][^upstream-skill-refresh]
+
 ## Latest completed upstream sync
+
+[PR #34](https://github.com/NicholasZolton/t3code/pull/34) merged on October 5,
+2026, at 20:00:02 UTC, landing at `2586800144` with no ancestry gap against
+`1604ccc9d7`.[^october-5-main-integration][^latest-review-git]
 
 Merge `ab7e864a1aa3ce44d99454b8e363297227475ead` preserves upstream ancestry,
 with fork parent `9064bb3d8e` and upstream parent `1604ccc9d7`. The branch also
@@ -144,10 +186,10 @@ incorporated into fork `main`; the sync was not squashed.
 The maintainer chose upstream's MCP implementation in full: explicit targets,
 external callers, cross-project access, and caller permission ceilings replace
 the fork's none/project/environment access policy and its settings. Future syncs
-should not restore that parallel policy. Command discovery keeps the fork's
-catalog freshness and invalidation while adopting upstream's incomplete-discovery
-detection and retries on web, desktop, and mobile. Upstream OpenCode parser and
-permission helper tests replace the overlapping fork-only attachment test.
+should not restore that parallel policy. This sync combined fork catalog freshness
+with upstream incomplete-discovery retries; the October 8 candidate replaces that
+combined implementation with upstream's newer refresh policy. Upstream OpenCode
+parser and permission helper tests replaced the overlapping fork-only attachment test.
 [^upstream-mcp-targeting][^october-5-candidate-decisions]
 
 Unrelated fork behavior remains: Jujutsu, reusable prompts, Vim, configured
@@ -286,8 +328,8 @@ killing it or launching a competing server against the same T3 home. Explicit
 Disconnect, desktop shutdown, and requested runner changes retain their existing
 behavior.[^ssh-recovery]
 
-At the focused October 6 review, upstream `3a9c1a6df1` still has both destructive
-recovery paths; issue #15608 remains open. Preserve this boundary during later syncs
+At the October 8 review, upstream `9a3070bcf0` still has both destructive
+recovery paths reported in issue #15608. Preserve this boundary during later syncs
 unless upstream supplies equivalent recovery behavior.[^upstream-ssh-recovery][^ssh-recovery-issue]
 
 ## Private Android signing identity
@@ -341,7 +383,7 @@ git log --reverse --oneline origin/main..upstream/main
 
 [^ssh-recovery]: Fork-side SSH implementation and its focused readiness-recovery regressions.
 
-[^upstream-ssh-recovery]: Exact upstream source reviewed on October 6.
+[^upstream-ssh-recovery]: Exact upstream source reviewed on October 8.
 
 [^ssh-recovery-issue]: Open upstream issue and its stale-tunnel reconnect reproduction.
 
@@ -382,3 +424,11 @@ git log --reverse --oneline origin/main..upstream/main
 [^current-fork-main]: Main landing commit retaining upstream ancestry.
 
 [^current-git-history]: Ancestry checks and zero missing commits against the pinned upstream tip.
+
+[^october-8-candidate]: Local full merge, its exact parents, and retained fork boundaries.
+
+[^october-8-review-git]: Candidate and fetched main ancestry checks against the October 8 pinned upstream tip.
+
+[^upstream-worktree-location]: Upstream location resolution and managed-directory history selected for the candidate.
+
+[^upstream-skill-refresh]: Upstream workspace discovery freshness and refresh machinery selected for the candidate.

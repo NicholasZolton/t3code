@@ -40,26 +40,25 @@ describe("OpenCode permission settings", () => {
 });
 
 describe("worktree settings", () => {
-  it("retains the existing layout and branch prefix for older settings", () => {
+  it("defaults to grouped worktrees with the upstream temporary prefix", () => {
     const settings = decodeServerSettings({});
-    expect(settings.worktreeDirectory).toBe("");
+    expect(settings.worktreesDirectory).toBe("");
     expect(settings.worktreeProjectFolders).toBe(true);
-    expect(settings.worktreeBranchPrefix).toBe("t3code");
+    expect(settings.worktreeBranchPrefix).toBe(DEFAULT_SERVER_SETTINGS.worktreeBranchPrefix);
   });
 
   it("accepts home-based roots and Git-safe prefixes at the patch boundary", () => {
     expect(
       decodeServerSettingsPatch({
-        worktreeDirectory: " ~/.herdr/worktrees ",
+        worktreesDirectory: " ~/.herdr/worktrees ",
         worktreeProjectFolders: true,
         worktreeBranchPrefix: "nick/tasks",
       }),
     ).toEqual({
-      worktreeDirectory: "~/.herdr/worktrees",
+      worktreesDirectory: "~/.herdr/worktrees",
       worktreeProjectFolders: true,
       worktreeBranchPrefix: "nick/tasks",
     });
-    expect(() => decodeServerSettingsPatch({ worktreeDirectory: "relative/path" })).toThrow();
     expect(() => decodeServerSettingsPatch({ worktreeBranchPrefix: "nick/" })).toThrow();
   });
 });
@@ -878,6 +877,16 @@ describe("ServerSettings.providerInstances (slice-2 invariant)", () => {
 });
 
 describe("provider enabled defaults", () => {
+  it("keeps Muse disabled until a configured instance opts in", () => {
+    const muse = ProviderDriverKind.make("muse");
+    expect(decodeServerSettings({}).providers.muse.enabled).toBe(false);
+    expect(resolveProviderInstanceEnabled({ driver: muse, config: {} })).toBe(false);
+    expect(resolveProviderInstanceEnabled({ driver: muse, enabled: true, config: {} })).toBe(true);
+    expect(
+      resolveProviderInstanceEnabled({ driver: muse, enabled: true, config: { enabled: false } }),
+    ).toBe(false);
+  });
+
   it("enables only the stable bindings by default", () => {
     const decoded = decodeServerSettings({});
     expect(decoded.providers.codex.enabled).toBe(true);
@@ -1064,6 +1073,13 @@ describe("ServerSettingsPatch.providerInstances", () => {
 });
 
 describe("ServerSettingsPatch string normalization", () => {
+  it("lowercases GitHub hosts and defaults them to enabled", () => {
+    const patch = decodeServerSettingsPatch({
+      github: { hosts: { " GitHub.com ": { account: "  work  " } } },
+    });
+    expect(patch.github?.hosts).toEqual({ "github.com": { account: "work", enabled: true } });
+  });
+
   it("trims string settings while decoding patches", () => {
     const patch = decodeServerSettingsPatch({
       addProjectBaseDirectory: "  ~/Development  ",
@@ -1162,10 +1178,10 @@ it("validates remote device hosts and rejects ambiguous host ids", () => {
 });
 
 describe("branch naming settings", () => {
-  it("defaults existing settings to the t3code static prefix", () => {
+  it("defaults existing settings to the t3 static prefix", () => {
     expect(decodeServerSettings({})).toMatchObject({
       branchNamingMode: "static",
-      branchNamePrefix: "t3code",
+      branchNamePrefix: "t3",
       branchNameInstructions: "",
     });
   });
@@ -1182,4 +1198,18 @@ describe("branch naming settings", () => {
       expect(decodeServerSettingsPatch(input)).toEqual(input);
     },
   );
+});
+
+describe("ServerSettings.removeAgentCreditsOnMerge", () => {
+  it("keeps agent credits by default and accepts opt-in patches", () => {
+    expect(decodeServerSettings({}).removeAgentCreditsOnMerge).toBe(false);
+    expect(
+      decodeServerSettingsPatch({ removeAgentCreditsOnMerge: true }).removeAgentCreditsOnMerge,
+    ).toBe(true);
+    expect(
+      decodeServerSettings({
+        projectSettingsOverrides: { project: { removeAgentCreditsOnMerge: true } },
+      }).projectSettingsOverrides["project" as ProjectId]?.removeAgentCreditsOnMerge,
+    ).toBe(true);
+  });
 });

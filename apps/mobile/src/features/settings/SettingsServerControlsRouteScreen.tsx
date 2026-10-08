@@ -1,5 +1,7 @@
 import { useNavigation } from "@react-navigation/native";
 import { SettingsRow } from "./components/SettingsRow";
+import { AuthSettingsWriteScope } from "@t3tools/contracts";
+import { readEnvironmentScope, useEnvironmentsWithScope } from "../../state/session";
 import { ScreenScrollView as ScrollView } from "../../components/ScreenScrollView";
 import { AppText as Text, AppTextInput } from "../../components/AppText";
 import {
@@ -11,7 +13,7 @@ import {
   PROJECT_SCOPED_SERVER_SETTING_KEYS,
   type ProjectScopedServerSettingKey,
   WorktreeBranchPrefix,
-  WorktreeDirectory,
+  DEFAULT_SERVER_SETTINGS,
 } from "@t3tools/contracts";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
@@ -55,6 +57,7 @@ const PAGE_PROJECT_KEYS: Record<SettingsPage, readonly ProjectScopedServerSettin
   "new-threads": ["defaultThreadEnvMode", "worktreeSubmodules", "defaultRuntimeMode"],
   "source-control": [
     "defaultAutoPull",
+    "removeAgentCreditsOnMerge",
     "newWorktreesStartFromOrigin",
     "enableVcsAgentHints",
     "branchNamingMode",
@@ -146,6 +149,7 @@ function ServerSettingsDetail(props: { readonly page: SettingsPage }) {
   const navigation = useNavigation();
   const { selectedTargets, projectGroups, selectedProjectKey } = useSettingsEnvironmentFilter();
   const selectedProject = projectGroups.find((group) => group.key === selectedProjectKey);
+  const writableEnvironments = useEnvironmentsWithScope(selectedTargets, AuthSettingsWriteScope);
   const projectSelected = selectedProjectKey !== null;
   const targets = resolveMobileSettingsTargets(
     selectedTargets,
@@ -156,6 +160,9 @@ function ServerSettingsDetail(props: { readonly page: SettingsPage }) {
   const [pendingTargets, setPendingTargets] = useState<
     readonly ScopedMobileSettingsTarget[] | null
   >(null);
+  const canWriteSettings =
+    targets.length > 0 &&
+    targets.every((target) => writableEnvironments.has(target.environment.environmentId));
   const displayTargets = pendingWrites > 0 && pendingTargets !== null ? pendingTargets : targets;
   const hasConnectedSelection = targets.length > 0;
   const reference = displayTargets[0] ?? null;
@@ -170,7 +177,14 @@ function ServerSettingsDetail(props: { readonly page: SettingsPage }) {
     reportFailure: true,
   });
   const write = (patch: ServerSettingsPatch) => {
-    if (writeInFlight.current || !hasConnectedSelection) return;
+    if (
+      writeInFlight.current ||
+      !hasConnectedSelection ||
+      !targets.every((target) =>
+        readEnvironmentScope(target.environment.environmentId, AuthSettingsWriteScope),
+      )
+    )
+      return;
     const writes = planMobileScopedSettingsPatch(targets, projectSelected, patch);
     if (writes.length === 0) return;
     writeInFlight.current = true;
@@ -202,7 +216,13 @@ function ServerSettingsDetail(props: { readonly page: SettingsPage }) {
       });
   };
   const clearProjectOverrides = () => {
-    if (writeInFlight.current) return;
+    if (
+      writeInFlight.current ||
+      !targets.every((target) =>
+        readEnvironmentScope(target.environment.environmentId, AuthSettingsWriteScope),
+      )
+    )
+      return;
     const writes = planMobileScopedSettingsClear(targets, PAGE_PROJECT_KEYS[props.page]);
     if (writes.length === 0) return;
     writeInFlight.current = true;
@@ -223,7 +243,10 @@ function ServerSettingsDetail(props: { readonly page: SettingsPage }) {
       target.environment.serverConfig.environment.capabilities.projectSettingsOverrides === true,
   );
   const disabled =
-    pendingWrites > 0 || !hasConnectedSelection || (projectSelected && !supportsProjectOverrides);
+    !canWriteSettings ||
+    pendingWrites > 0 ||
+    !hasConnectedSelection ||
+    (projectSelected && !supportsProjectOverrides);
   const supportsContinuation = targets.every(
     (target) =>
       target.environment.serverConfig.environment.capabilities.threadRestartContinuation === true,
@@ -265,6 +288,7 @@ function ServerSettingsDetail(props: { readonly page: SettingsPage }) {
                   )}
                   supportsOverrides={supportsProjectOverrides}
                   pending={pendingWrites > 0}
+                  disabled={!canWriteSettings}
                   onClear={clearProjectOverrides}
                 />
               ) : null}
@@ -355,6 +379,16 @@ function ServerSettingsDetail(props: { readonly page: SettingsPage }) {
                     disabled={disabledFor("branchNamingMode")}
                     onChange={write}
                   />
+                  <SettingsSection title="Pull requests">
+                    <SettingsSwitchRow
+                      icon="arrow.triangle.merge"
+                      label="Remove agent credits when merging"
+                      subtitle="Remove recognized agent credits from GitHub merge and squash messages, keeping human co-authors. Includes auto-merge. Excludes merge queues, stack merges, and existing commits."
+                      value={uniform("removeAgentCreditsOnMerge")}
+                      disabled={disabledFor("removeAgentCreditsOnMerge")}
+                      onValueChange={(value) => write({ removeAgentCreditsOnMerge: value })}
+                    />
+                  </SettingsSection>
                   <SettingsSection title="Default branch">
                     <SettingsSwitchRow
                       icon="arrow.down.circle"
@@ -383,13 +417,13 @@ function ServerSettingsDetail(props: { readonly page: SettingsPage }) {
                       onValueChange={(value) => write({ enableVcsAgentHints: value })}
                     />
                     <WorktreeSettingField
-                      label="Worktree directory"
+                      label="Worktree location"
                       hint="Root for new worktrees; leave empty for the T3 home directory."
-                      value={uniform("worktreeDirectory")}
-                      placeholder={isMixed("worktreeDirectory") ? "Mixed" : "~/.herdr/worktrees"}
-                      disabled={disabledFor("worktreeDirectory")}
+                      value={uniform("worktreesDirectory")}
+                      placeholder={isMixed("worktreesDirectory") ? "Mixed" : "Default"}
+                      disabled={disabledFor("worktreesDirectory")}
                       setting="directory"
-                      onValueChange={(value) => write({ worktreeDirectory: value })}
+                      onValueChange={(value) => write({ worktreesDirectory: value })}
                     />
                     <SettingsSwitchRow
                       icon="folder"
@@ -403,7 +437,11 @@ function ServerSettingsDetail(props: { readonly page: SettingsPage }) {
                       label="Worktree branch prefix"
                       hint="Namespace for new temporary and generated branches."
                       value={uniform("worktreeBranchPrefix")}
-                      placeholder={isMixed("worktreeBranchPrefix") ? "Mixed" : "t3code"}
+                      placeholder={
+                        isMixed("worktreeBranchPrefix")
+                          ? "Mixed"
+                          : DEFAULT_SERVER_SETTINGS.worktreeBranchPrefix
+                      }
                       disabled={disabledFor("worktreeBranchPrefix")}
                       setting="prefix"
                       onValueChange={(value) => write({ worktreeBranchPrefix: value })}
@@ -526,7 +564,7 @@ function WorktreeSettingField(props: {
     if (draft === null || props.disabled) return;
     const value = draft.trim();
     setDraft(null);
-    const schema = props.setting === "directory" ? WorktreeDirectory : WorktreeBranchPrefix;
+    const schema = props.setting === "directory" ? Schema.Trim : WorktreeBranchPrefix;
     if (Option.isNone(Schema.decodeUnknownOption(schema)(value))) {
       Alert.alert(
         `Invalid ${props.label.toLowerCase()}`,

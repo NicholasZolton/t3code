@@ -1,6 +1,7 @@
 import { createNativeHeaderMenu } from "../../components/nativeHeaderMenu.ios";
 import type { ScreenHeaderMenu } from "../../components/ScreenHeader.types";
 import {
+  AuthSourceControlWriteScope,
   EnvironmentId,
   type GitRunStackedActionResult,
   type ProjectScript,
@@ -16,13 +17,14 @@ import { resolveVcsTerminology, resolveVcsUnsupportedReason } from "@t3tools/sha
 import { useNavigation } from "@react-navigation/native";
 import { NativeHeaderToolbar } from "../../native/StackHeader";
 import { useCallback, useMemo } from "react";
+import { useEnvironmentScope } from "../../state/session";
 import {
   basename,
   getTerminalStatusLabel,
   projectScriptMenuIcon,
-  projectScriptMenuLabel,
   type TerminalMenuSession,
 } from "../terminal/terminalMenu";
+import { projectScriptMenuLabel } from "@t3tools/shared/projectScripts";
 
 function truncateMiddle(value: string, maxLength: number): string {
   if (value.length <= maxLength) {
@@ -99,6 +101,7 @@ type ThreadGitControlsProps = ThreadGitMenuProps & {
     readonly onPress: () => void;
   };
   readonly canOpenTerminal: boolean;
+  readonly canOperateTerminal: boolean;
   readonly canOpenFiles: boolean;
   readonly projectScripts: ReadonlyArray<ProjectScript>;
   readonly terminalSessions: ReadonlyArray<TerminalMenuSession>;
@@ -112,6 +115,10 @@ type ThreadGitControlsProps = ThreadGitMenuProps & {
 function useThreadGitControlModel(props: ThreadGitMenuProps) {
   const navigation = useNavigation();
   const environmentId = props.environmentId;
+  const canWriteSourceControl = useEnvironmentScope(
+    environmentId ? EnvironmentId.make(String(environmentId)) : null,
+    AuthSourceControlWriteScope,
+  );
   const threadId = props.threadId;
   const { gitStatus, gitOperationLabel, onPull, onRunAction } = props;
 
@@ -124,18 +131,32 @@ function useThreadGitControlModel(props: ThreadGitMenuProps) {
   const hasPrimaryRemote = gitStatus?.hasPrimaryRemote ?? false;
   const isDefaultRef = gitStatus?.isDefaultRef ?? false;
 
-  const quickAction = useMemo(
-    () =>
-      isRepo
-        ? resolveQuickAction(gitStatus, busy, isDefaultRef, hasPrimaryRemote)
-        : {
-            label: `${vcsTerminology.systemName} unavailable`,
-            disabled: true,
-            kind: "show_hint" as const,
-            hint: `This workspace is not a ${vcsTerminology.systemName} repository.`,
-          },
-    [busy, gitStatus, hasPrimaryRemote, isDefaultRef, isRepo, vcsTerminology],
-  );
+  const quickAction = useMemo(() => {
+    if (!isRepo) {
+      return {
+        label: `${vcsTerminology.systemName} unavailable`,
+        disabled: true,
+        kind: "show_hint" as const,
+        hint: `This workspace is not a ${vcsTerminology.systemName} repository.`,
+      };
+    }
+    const action = resolveQuickAction(gitStatus, busy, isDefaultRef, hasPrimaryRemote);
+    return !canWriteSourceControl && (action.kind === "run_pull" || action.kind === "run_action")
+      ? {
+          ...action,
+          disabled: true,
+          hint: "This connection cannot change source control.",
+        }
+      : action;
+  }, [
+    busy,
+    canWriteSourceControl,
+    gitStatus,
+    hasPrimaryRemote,
+    isDefaultRef,
+    isRepo,
+    vcsTerminology,
+  ]);
 
   const quickActionHint =
     vcsUnsupportedReason ??
@@ -153,6 +174,7 @@ function useThreadGitControlModel(props: ThreadGitMenuProps) {
 
   const runActionWithPrompt = useCallback(
     async (input: GitActionRequestInput) => {
+      if (!canWriteSourceControl) return;
       const confirmableAction =
         input.action === "push" ||
         input.action === "create_pr" ||
@@ -181,10 +203,19 @@ function useThreadGitControlModel(props: ThreadGitMenuProps) {
 
       await onRunAction(input);
     },
-    [environmentId, gitStatus, isDefaultRef, onRunAction, navigation, threadId],
+    [
+      canWriteSourceControl,
+      environmentId,
+      gitStatus,
+      isDefaultRef,
+      onRunAction,
+      navigation,
+      threadId,
+    ],
   );
 
   const runQuickAction = useCallback(async () => {
+    if (quickAction.disabled) return;
     if (quickAction.kind === "run_pull") {
       await onPull();
       return;
@@ -252,6 +283,7 @@ function useThreadGitHeaderActionItems(props: ThreadGitControlsProps): ThreadGit
           items: [
             ...props.projectScripts.map((script) => ({
               description: script.command,
+              disabled: !props.canOperateTerminal,
               icon: { name: projectScriptMenuIcon(script.icon), type: "sfSymbol" as const },
               label: projectScriptMenuLabel(script),
               onPress: () => void props.onRunProjectScript(script),
@@ -286,6 +318,7 @@ function useThreadGitHeaderActionItems(props: ThreadGitControlsProps): ThreadGit
             })),
             {
               description: "Start another shell for this thread",
+              disabled: !props.canOperateTerminal,
               icon: { name: "plus", type: "sfSymbol" },
               label: "Open new terminal",
               onPress: props.onOpenNewTerminal,
@@ -383,6 +416,7 @@ function useThreadGitHeaderActionItems(props: ThreadGitControlsProps): ThreadGit
       model.runQuickAction,
       props.canOpenFiles,
       props.canOpenTerminal,
+      props.canOperateTerminal,
       props.gitStatus,
       props.onMergeBack,
       props.onOpenNewTerminal,
@@ -440,6 +474,7 @@ export function ThreadGitControls(props: ThreadGitControlsProps) {
               <NativeHeaderToolbar.MenuAction
                 key={script.id}
                 icon={projectScriptMenuIcon(script.icon)}
+                disabled={!props.canOperateTerminal}
                 onPress={() => void props.onRunProjectScript(script)}
                 subtitle={script.command}
               >
@@ -478,6 +513,7 @@ export function ThreadGitControls(props: ThreadGitControlsProps) {
           ))}
           <NativeHeaderToolbar.MenuAction
             icon="plus"
+            disabled={!props.canOperateTerminal}
             onPress={props.onOpenNewTerminal}
             subtitle="Start another shell for this thread"
           >

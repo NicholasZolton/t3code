@@ -454,7 +454,7 @@ describe("scoped settings writes", () => {
 
   it("reports an older environment that acknowledges a worktree setting without saving it", async () => {
     const patch = {
-      worktreeDirectory: "~/.herdr/worktrees",
+      worktreesDirectory: "~/.herdr/worktrees",
       worktreeBranchPrefix: "NicholasZolton",
     };
     const persistServer = vi
@@ -477,7 +477,7 @@ describe("scoped settings writes", () => {
   });
 
   it("accepts worktree settings acknowledged by every environment", async () => {
-    const patch = { worktreeDirectory: "~/.herdr/worktrees" };
+    const patch = { worktreesDirectory: "~/.herdr/worktrees" };
     const saved = applyServerSettingsPatch(DEFAULT_SERVER_SETTINGS, patch);
     const result = await persistScopedSettingsPatch(
       planScopedSettingsPatch(all, environments, patch),

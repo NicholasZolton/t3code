@@ -33,8 +33,8 @@ export function worktreeSettingsPatchApplied(
   saved: ServerSettings | undefined,
 ): boolean {
   return (
-    (patch.worktreeDirectory === undefined ||
-      saved?.worktreeDirectory === patch.worktreeDirectory) &&
+    (patch.worktreesDirectory === undefined ||
+      saved?.worktreesDirectory === patch.worktreesDirectory) &&
     (patch.worktreeProjectFolders === undefined ||
       saved?.worktreeProjectFolders === patch.worktreeProjectFolders) &&
     (patch.worktreeBranchPrefix === undefined ||
@@ -390,6 +390,24 @@ export function applyServerSettingsPatch(
       : {}),
     ...(patch.providerInstances !== undefined
       ? { providerInstances: patch.providerInstances }
+      : {}),
+    ...(patch.worktreesDirectory !== undefined &&
+    patch.worktreesDirectory !== current.worktreesDirectory
+      ? {
+          previousWorktreesDirectories: [
+            ...current.previousWorktreesDirectories.filter(
+              (directory) => directory !== patch.worktreesDirectory,
+            ),
+            ...(current.worktreesDirectory !== "" &&
+            !current.previousWorktreesDirectories.includes(current.worktreesDirectory)
+              ? [current.worktreesDirectory]
+              : []),
+          ],
+        }
+      : {}),
+    // Host replacement: deepMerge would keep a cleared account pin.
+    ...(patch.github?.hosts !== undefined
+      ? { github: { ...next.github, hosts: patch.github.hosts } }
       : {}),
     ...(projectSettingsOverridesPatch !== undefined
       ? {

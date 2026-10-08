@@ -31,6 +31,7 @@ export function GitCommitSheet(_props: GitCommitSheetProps) {
   const { selectedThreadCwd } = useSelectedThreadWorktree();
   const gitState = useSelectedThreadGitState();
   const gitActions = useSelectedThreadGitActions();
+  const { canWriteSourceControl, canChangeThreadBranch } = gitActions;
 
   const gitStatus = useEnvironmentQuery(
     selectedThread !== null && selectedThreadCwd !== null
@@ -59,6 +60,7 @@ export function GitCommitSheet(_props: GitCommitSheetProps) {
 
   const runCommitAction = useCallback(
     async (featureBranch: boolean) => {
+      if (!canWriteSourceControl || (featureBranch && !canChangeThreadBranch)) return;
       const commitMessage = dialogCommitMessage.trim();
       navigation.goBack();
       await gitActions.onRunSelectedThreadGitAction({
@@ -68,7 +70,15 @@ export function GitCommitSheet(_props: GitCommitSheetProps) {
         ...(!allSelected ? { filePaths: selectedFiles.map((file) => file.path) } : {}),
       });
     },
-    [allSelected, dialogCommitMessage, gitActions, navigation, selectedFiles],
+    [
+      allSelected,
+      canWriteSourceControl,
+      canChangeThreadBranch,
+      dialogCommitMessage,
+      gitActions,
+      navigation,
+      selectedFiles,
+    ],
   );
 
   return (
@@ -281,7 +291,7 @@ export function GitCommitSheet(_props: GitCommitSheetProps) {
               <SheetActionButton
                 icon="arrow.branch"
                 label={`${vcsTerminology.changeNounTitle} on new ${vcsTerminology.refNoun}`}
-                disabled={noneSelected || busy}
+                disabled={!canChangeThreadBranch || noneSelected || busy}
                 onPress={() => void runCommitAction(true)}
               />
             </View>
@@ -290,7 +300,7 @@ export function GitCommitSheet(_props: GitCommitSheetProps) {
                 icon="checkmark.circle"
                 label="Commit"
                 tone="primary"
-                disabled={noneSelected || busy}
+                disabled={!canWriteSourceControl || noneSelected || busy}
                 onPress={() => void runCommitAction(false)}
               />
             </View>

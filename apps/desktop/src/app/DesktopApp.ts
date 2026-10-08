@@ -34,6 +34,7 @@ import * as DesktopRemoteUpdates from "../updates/DesktopRemoteUpdates.ts";
 import * as DesktopUpdates from "../updates/DesktopUpdates.ts";
 import * as DesktopSnapShot from "../snapShot/DesktopSnapShot.ts";
 import * as DesktopWslBackend from "../wsl/DesktopWslBackend.ts";
+import * as DesktopRendererHistory from "../telemetry/DesktopRendererHistory.ts";
 
 const DEFAULT_DESKTOP_BACKEND_PORT = 3773;
 const MAX_TCP_PORT = 65_535;
@@ -344,11 +345,16 @@ const scopedProgram = Effect.scoped(
 
     const shutdown = yield* DesktopShutdown.DesktopShutdown;
     const sshEnvironment = yield* DesktopSshEnvironment.DesktopSshEnvironment;
+    const rendererHistory = yield* DesktopRendererHistory.DesktopRendererHistory;
 
     yield* Effect.addFinalizer(() =>
-      // Electron can exit before outer layer finalizers run, so await owned
-      // backends and SSH forwards before releasing the quit/relaunch waiter.
+      // Stop every backend in the pool, not just the primary. The
+      // electronApp.quit() path can race ahead of the layer-scope
+      // cascade, so leaving the WSL instance for its parent scope
+      // finalizer means it gets hard-killed by the OS instead of
+      // receiving SIGTERM + grace.
       stopAllPoolInstances().pipe(
+        Effect.ensuring(rendererHistory.shutdown),
         Effect.ensuring(sshEnvironment.shutdown),
         Effect.ensuring(shutdown.markComplete),
       ),

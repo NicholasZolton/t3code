@@ -61,6 +61,18 @@ type GitOverviewSheetProps = StaticScreenProps<{
 };
 
 export function GitOverviewSheet(props: GitOverviewSheetProps) {
+  const navigation = useNavigation();
+  const { environmentId, threadId } = props.route.params;
+  // A hand-typed deep link can carry a blank ID, which the branded IDs reject.
+  const isBlankLink = environmentId.trim().length === 0 || threadId.trim().length === 0;
+  useEffect(() => {
+    if (isBlankLink) navigation.goBack();
+  }, [isBlankLink, navigation]);
+  if (isBlankLink) return null;
+  return <GitOverviewSheetContent {...props} />;
+}
+
+function GitOverviewSheetContent(props: GitOverviewSheetProps) {
   const { layout } = useAdaptiveWorkspaceLayout();
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
@@ -83,6 +95,7 @@ export function GitOverviewSheet(props: GitOverviewSheetProps) {
   const gitActions = useSelectedThreadGitActions();
   const initRepository = useAtomCommand(vcsEnvironment.init, { reportFailure: false });
   const [isConverting, setIsConverting] = useState(false);
+  const { canWriteSourceControl, canChangeThreadBranch } = gitActions;
   const theme = useUniwindTheme();
   const foregroundColor = theme["--color-foreground"];
   const sheetColor = theme["--color-sheet"];
@@ -115,23 +128,25 @@ export function GitOverviewSheet(props: GitOverviewSheetProps) {
   const sheetMenuItems = useMemo(
     () =>
       menuItems.map((item) => ({
-        item,
-        disabledReason: getGitActionDisabledReason({
-          item,
-          gitStatus: gitStatus.data,
-          isBusy: busy,
-          hasPrimaryRemote,
-        }),
+        item: {
+          ...item,
+          disabled: item.disabled || !canWriteSourceControl,
+        },
+        disabledReason: !canWriteSourceControl
+          ? "This connection cannot change source control."
+          : getGitActionDisabledReason({
+              item,
+              gitStatus: gitStatus.data,
+              isBusy: busy,
+              hasPrimaryRemote,
+            }),
       })),
-    [busy, gitStatus.data, hasPrimaryRemote, menuItems],
+    [busy, canWriteSourceControl, gitStatus.data, hasPrimaryRemote, menuItems],
   );
-
-  useEffect(() => {
-    void gitActions.refreshSelectedThreadGitStatus({ quiet: true });
-  }, [gitActions]);
 
   const runActionWithPrompt = useCallback(
     async (input: GitActionRequestInput) => {
+      if (!canWriteSourceControl) return;
       const confirmableAction =
         input.action === "push" ||
         input.action === "create_pr" ||
@@ -163,12 +178,22 @@ export function GitOverviewSheet(props: GitOverviewSheetProps) {
       }
       await gitActions.onRunSelectedThreadGitAction(input);
     },
-    [environmentId, gitActions, gitStatus.data, isDefaultRef, isInspector, navigation, threadId],
+    [
+      canWriteSourceControl,
+      environmentId,
+      gitActions,
+      gitStatus.data,
+      isDefaultRef,
+      isInspector,
+      navigation,
+      threadId,
+    ],
   );
 
   const onPressMenuItem = useCallback(
     async (item: (typeof menuItems)[number]) => {
       if (item.disabled) return;
+      if (!canWriteSourceControl) return;
       if (item.dialogAction === "commit") {
         navigation.navigate("GitCommit", {
           environmentId: String(environmentId),
@@ -184,7 +209,7 @@ export function GitOverviewSheet(props: GitOverviewSheetProps) {
         await runActionWithPrompt({ action: "create_pr" });
       }
     },
-    [environmentId, navigation, runActionWithPrompt, threadId],
+    [canWriteSourceControl, environmentId, navigation, runActionWithPrompt, threadId],
   );
 
   // Status facts live on the relevant rows instead of crowding the header
@@ -299,8 +324,12 @@ export function GitOverviewSheet(props: GitOverviewSheetProps) {
             <SheetListRow
               icon="arrow.down.circle"
               title="Pull latest"
-              subtitle={`${behindCount} commit${behindCount === 1 ? "" : "s"} behind upstream`}
-              disabled={busy || !isRepo}
+              subtitle={
+                canWriteSourceControl
+                  ? `${behindCount} commit${behindCount === 1 ? "" : "s"} behind upstream`
+                  : "This connection cannot change source control."
+              }
+              disabled={!canWriteSourceControl || busy || !isRepo}
               onPress={() => void gitActions.onPullSelectedThreadBranch()}
             />
           </>
@@ -336,7 +365,11 @@ export function GitOverviewSheet(props: GitOverviewSheetProps) {
         <SheetListRow
           icon="point.topleft.down.curvedto.point.bottomright.up"
           title={`${vcsTerminology.refNounPlural} & ${vcsTerminology.workspaceNounPlural}`}
-          subtitle={`Switch ${vcsTerminology.refNoun}, create ${vcsTerminology.refNoun}, or move to a ${vcsTerminology.workspaceNoun}`}
+          subtitle={
+            canChangeThreadBranch
+              ? `Switch ${vcsTerminology.refNoun}, create ${vcsTerminology.refNoun}, or move to a ${vcsTerminology.workspaceNoun}`
+              : `View ${vcsTerminology.refNounPlural} and ${vcsTerminology.workspaceNounPlural}`
+          }
           disabled={busy || !isRepo}
           onPress={() =>
             navigation.navigate("GitBranches", {
