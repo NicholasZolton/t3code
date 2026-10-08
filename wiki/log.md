@@ -2,6 +2,8 @@
 
 ## 2026-10-08
 
+- **Integration**: [PR #37](https://github.com/NicholasZolton/t3code/pull/37) reached fork `main` at `e5365adddc`. Refreshed [upstream integration](upstream-integration.md): all 280 newer commits through `9a3070bcf0` are incorporated, with zero ancestry gap, upstream worktree-location and skill-refresh adoption, and preserved canonical checkout grouping.
+
 - **Integration candidate**: Recorded branch merge `2bc0f73832` through upstream `9a3070bcf0` in [upstream integration](upstream-integration.md). The branch contains all 280 newer commits; fetched fork `main` at `e4b289c26c` still awaits them. Documented upstream worktree-location and skill-refresh adoption while retaining canonical checkout grouping and fork recovery boundaries.
 
 ## 2026-10-07

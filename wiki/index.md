@@ -8,7 +8,7 @@ Repository-local knowledge about maintaining this fork with a small upstream dif
 
 ## Upstream
 
-- [Upstream integration](upstream-integration.md) - Main integrations, latest branch candidate, and fork compatibility exceptions.
+- [Upstream integration](upstream-integration.md) - Main integrations and fork compatibility exceptions.
 
 ## Maintaining this bundle
 

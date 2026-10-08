@@ -1,30 +1,34 @@
 ---
 type: Integration Record
 title: Upstream integration
-description: Completed main integrations, the latest branch candidate, and fork compatibility exceptions.
+description: Completed main integrations and fork compatibility exceptions.
 tags: [upstream, fork, integration]
 status: stable
 generated:
   by: opencode/gpt-6.1-sol
-  at: 2026-10-08T17:34:18Z
+  at: 2026-10-08T18:51:57Z
 verified:
   - by: opencode/gpt-6.1-sol
-    at: 2026-10-08T17:34:18Z
+    at: 2026-10-08T18:51:57Z
 snapshot:
-  at: 2026-10-08T17:34:18Z
-  fork_main: e4b289c26c2632c0a92f8d9d43fd2bf135d99ae4
+  at: 2026-10-08T18:51:57Z
+  fork_main: e5365adddc46e74a197f1f698a6ec79f12b92d99
   upstream_main: 9a3070bcf023c3c025633659addeef4cf628133a
-  shared_baseline: 1604ccc9d79f5270fb8e14d60664184bf142c4cb
-  last_main_integration: ab7e864a1aa3ce44d99454b8e363297227475ead
-  candidate_merge: 2bc0f738329c83c0a7e146018d640a512634f876
-  candidate_branch: NicholasZolton/sync-upstream-changes
+  shared_baseline: 9a3070bcf023c3c025633659addeef4cf628133a
+  last_main_integration: 2bc0f738329c83c0a7e146018d640a512634f876
 sources:
-  - id: october-8-candidate
-    resource: "Local Git object 2bc0f738329c83c0a7e146018d640a512634f876 on NicholasZolton/sync-upstream-changes; parents e4b289c26c2632c0a92f8d9d43fd2bf135d99ae4 and 9a3070bcf023c3c025633659addeef4cf628133a"
-    title: Full upstream merge on the branch, not incorporated into fork main
+  - id: october-8-main-integration
+    resource: https://github.com/NicholasZolton/t3code/pull/37
+    title: Completed October 8 full upstream integration into fork main
+  - id: october-8-fork-main
+    resource: https://github.com/NicholasZolton/t3code/commit/e5365adddc46e74a197f1f698a6ec79f12b92d99
+    title: Fork main after PR 37 merged with upstream ancestry preserved
+  - id: october-8-integration
+    resource: https://github.com/NicholasZolton/t3code/commit/2bc0f738329c83c0a7e146018d640a512634f876
+    title: Full upstream merge with parents e4b289c26c and 9a3070bcf0, now incorporated into main
   - id: october-8-review-git
-    resource: "Local Git verification at 2026-10-08T17:34:18Z: origin/main e4b289c26c2632c0a92f8d9d43fd2bf135d99ae4 shares baseline 1604ccc9d79f5270fb8e14d60664184bf142c4cb with upstream 9a3070bcf023c3c025633659addeef4cf628133a and is missing 280 upstream commits; candidate 2bc0f738329c83c0a7e146018d640a512634f876 contains both parents and has zero gap against that upstream tip"
-    title: Verified candidate and main ancestry boundaries
+    resource: "Local Git verification at 2026-10-08T18:51:57Z: origin/main e5365adddc46e74a197f1f698a6ec79f12b92d99 contains integration 2bc0f738329c83c0a7e146018d640a512634f876 and upstream 9a3070bcf023c3c025633659addeef4cf628133a; merge base is the pinned upstream tip; all 280 previously missing commits are incorporated with zero ancestry gap; PR 37 merged at 2026-10-08T18:49:13Z"
+    title: Verified completed October 8 integration boundary
   - id: upstream-worktree-location
     resource: https://github.com/pingdotgg/t3code/commit/1024941575067f68d909c6b98f56b02edac25b37
     title: Upstream worktree location and previous-directory tracking
@@ -137,31 +141,32 @@ sources:
 
 # Upstream integration
 
-**The October 8 branch candidate incorporates all 280 newer upstream commits
-through `9a3070bcf0`. Fork `main` has not incorporated that candidate.**
-The fetched `origin/main` is `e4b289c26c`; its shared baseline remains
-`1604ccc9d7`, from the October 5 sync. The candidate has zero gap against the
-reviewed upstream tip; main's gap is 280 commits.[^october-8-review-git]
+**The October 8 sync is complete on fork `main`: all 280 newer upstream commits
+through `9a3070bcf0` are incorporated.** The fetched `origin/main` is
+`e5365adddc`; its shared baseline is the reviewed upstream tip, with zero
+remaining ancestry gap.[^october-8-review-git]
 
 This is a revision-pinned snapshot, not a claim about newer upstream work.
 Refresh it after the next review or integration using the
 [maintenance guidance](maintenance.md).
 
-## Latest branch candidate
+## Latest completed upstream sync
 
-Merge `2bc0f738329c83c0a7e146018d640a512634f876` on
-`NicholasZolton/sync-upstream-changes` preserves ancestry from fork
-`e4b289c26c` and upstream `9a3070bcf0`. It is a local integration, not a completed
-main landing or a deployment.[^october-8-candidate]
+[PR #37](https://github.com/NicholasZolton/t3code/pull/37) merged on October 8,
+2026, at 18:49:13 UTC, landing at `e5365adddc`.
+Merge `2bc0f738329c83c0a7e146018d640a512634f876` preserves ancestry from fork
+`e4b289c26c` and upstream `9a3070bcf0`. Both parents are incorporated into fork
+`main`; the sync was not squashed. Main integration is not a remote deployment.
+[^october-8-main-integration][^october-8-fork-main][^october-8-integration]
 
-The candidate adopts upstream's `worktreesDirectory` setting, Storage control,
+The sync adopts upstream's `worktreesDirectory` setting, Storage control,
 path validation, and previous-location tracking. Saved fork `worktreeDirectory`
 values migrate on load; an explicitly saved upstream value wins. Retain the
 fork's canonical-checkout grouping: `<location>/<original checkout>/<worktree>`,
 even when creating from a linked worktree. The optional flat layout and custom
 temporary branch prefixes remain. Defaults use upstream's `t3/` prefix and its
 namespace-collision fallback; existing legacy names stay recognized.
-[^october-8-candidate][^upstream-worktree-location]
+[^october-8-integration][^upstream-worktree-location]
 
 Workspace discovery now uses upstream's provider registry and five-minute
 freshness/refresh policy across clients. The old fork catalog helper and
@@ -169,9 +174,9 @@ freshness/refresh policy across clients. The old fork catalog helper and
 parallel refresh path. Preserve the unrelated fork boundaries below, including
 mixed Git/Jujutsu recovery, SSH reconnect preservation, configured OpenCode
 permissions and reused-subagent tracking, prompts, Vim, accounts, Crit/Portless,
-and private Android signing.[^october-8-candidate][^upstream-skill-refresh]
+and private Android signing.[^october-8-integration][^upstream-skill-refresh]
 
-## Latest completed upstream sync
+## Previous upstream sync
 
 [PR #34](https://github.com/NicholasZolton/t3code/pull/34) merged on October 5,
 2026, at 20:00:02 UTC, landing at `2586800144` with no ancestry gap against
@@ -187,7 +192,7 @@ The maintainer chose upstream's MCP implementation in full: explicit targets,
 external callers, cross-project access, and caller permission ceilings replace
 the fork's none/project/environment access policy and its settings. Future syncs
 should not restore that parallel policy. This sync combined fork catalog freshness
-with upstream incomplete-discovery retries; the October 8 candidate replaces that
+with upstream incomplete-discovery retries; the October 8 sync replaces that
 combined implementation with upstream's newer refresh policy. Upstream OpenCode
 parser and permission helper tests replaced the overlapping fork-only attachment test.
 [^upstream-mcp-targeting][^october-5-candidate-decisions]
@@ -228,16 +233,16 @@ migrates to upstream branch naming while preserving temporary branch names. The 
 | -------------------------------------------------- | --------------------------------------------------------------- |
 | Fork                                               | `NicholasZolton/t3code`, remote `origin`                        |
 | Upstream                                           | `pingdotgg/t3code`, remote `upstream`                           |
-| Main landing commit                                | `2586800144` — merge of PR #34                                  |
-| Upstream integration commit                        | `ab7e864a1a` — `chore(sync): merge upstream through 1604ccc9d7` |
-| Fork-side parent                                   | `9064bb3d8e`                                                    |
-| Upstream-side parent / shared baseline             | `1604ccc9d7`                                                    |
+| Main landing commit                                | `e5365adddc` — merge of PR #37                                  |
+| Upstream integration commit                        | `2bc0f73832` — `chore(sync): merge upstream through 9a3070bcf0` |
+| Fork-side parent                                   | `e4b289c26c`                                                    |
+| Upstream-side parent / shared baseline             | `9a3070bcf0`                                                    |
 | Missing commits at that integration's upstream tip | **0**                                                           |
 
 Default to upstream implementations. Retain fork code for explicit features
 or fixes upstream does not provide. Native OpenCode 2 and thread management now
 use upstream services; fork configuration and UI improvements remain layered on
-those paths.[^october-5-candidate]
+those paths.[^october-8-integration]
 
 ## Earlier integration boundaries
 
@@ -352,6 +357,7 @@ git rev-parse origin/main upstream/main
 git merge-base origin/main upstream/main
 git merge-base --is-ancestor 696fd65db1 origin/main
 git merge-base --is-ancestor ab7e864a1a origin/main
+git merge-base --is-ancestor 2bc0f73832 origin/main
 git merge-base --is-ancestor a8df093eb6 origin/main
 git rev-list --count origin/main..upstream/main
 git log --reverse --oneline origin/main..upstream/main
@@ -425,10 +431,14 @@ git log --reverse --oneline origin/main..upstream/main
 
 [^current-git-history]: Ancestry checks and zero missing commits against the pinned upstream tip.
 
-[^october-8-candidate]: Local full merge, its exact parents, and retained fork boundaries.
+[^october-8-main-integration]: PR #37 and its recorded merge time.
 
-[^october-8-review-git]: Candidate and fetched main ancestry checks against the October 8 pinned upstream tip.
+[^october-8-fork-main]: Main landing commit retaining the complete upstream ancestry.
 
-[^upstream-worktree-location]: Upstream location resolution and managed-directory history selected for the candidate.
+[^october-8-integration]: Full upstream merge, its exact parents, and retained fork boundaries, now incorporated into main.
 
-[^upstream-skill-refresh]: Upstream workspace discovery freshness and refresh machinery selected for the candidate.
+[^october-8-review-git]: Completed main ancestry checks and zero missing commits against the October 8 pinned upstream tip.
+
+[^upstream-worktree-location]: Upstream location resolution and managed-directory history selected for the completed sync.
+
+[^upstream-skill-refresh]: Upstream workspace discovery freshness and refresh machinery selected for the completed sync.
