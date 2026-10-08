@@ -7,12 +7,12 @@ import type {
 } from "@t3tools/contracts";
 import { COMPOSER_CONTEXT_MAX_RECORDS, DEFAULT_SERVER_SETTINGS } from "@t3tools/contracts";
 import { useAtomValue } from "@effect/atom-react";
-import { isProviderWorkspaceCatalogStale } from "@t3tools/shared/providerWorkspaceCatalog";
-import { Atom } from "effect/unstable/reactivity";
+import { Atom } from "effect/reactivity";
 import { matchComposerThreadItems } from "@t3tools/client-runtime/composerThreadItems";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/models";
 
 const EMPTY_THREAD_SHELLS: ReadonlyArray<EnvironmentThreadShell> = [];
+import { PROVIDER_WORKSPACE_SNAPSHOT_TTL_MS } from "@t3tools/contracts";
 import { Alert } from "react-native";
 import {
   expandSavedPrompt,
@@ -45,6 +45,7 @@ import {
   getProviderSlashCommandsForSlashMenu,
   isProviderSkillUserInvocable,
   hasCompleteProviderWorkspaceSnapshot,
+  hasCurrentProviderWorkspaceSnapshot,
   resolveProviderSkillsForCwd,
   resolveProviderSlashCommandsForCwd,
 } from "@t3tools/client-runtime/providerSkills";
@@ -273,7 +274,9 @@ export function useComposerCommandMenu({
     selectedProviderStatus,
     projectCwd,
   );
-  const workspaceRefreshKeyRef = useRef<string | null>(null);
+  // The last scan this composer asked for. A request inside the TTL is not
+  // repeated, so a client clock ahead of the server's cannot loop rescans.
+  const workspaceRefreshKeyRef = useRef<{ key: string; requestedAt: number } | null>(null);
   const [workspaceRefreshRetry, setWorkspaceRefreshRetry] = useState<{
     key: string;
     notBefore: number;
@@ -317,28 +320,28 @@ export function useComposerCommandMenu({
     hadWorkspaceSnapshotRef.current = hasWorkspaceSnapshot;
   }, [hasWorkspaceSnapshot]);
   useEffect(() => {
-    if (!environmentId || !projectCwd || !selectedProviderInstanceId || !workspaceRefreshScopeKey)
-      return;
-    const snapshot = selectedProviderStatus?.workspaceSnapshots?.find(
-      (candidate) => candidate.cwd === projectCwd,
-    );
-    const isSkillMenuOpen = trigger?.kind === "skill" || trigger?.kind === "slash-command";
+    if (!environmentId || !projectCwd || !selectedProviderInstanceId) return;
+    const key = `${environmentId}:${selectedProviderInstanceId}:${projectCwd}`;
+    const now = Date.now();
+    const lastRequest = workspaceRefreshKeyRef.current;
     if (
-      hasWorkspaceSnapshot &&
-      snapshot &&
-      (!isSkillMenuOpen || !isProviderWorkspaceCatalogStale(snapshot.checkedAt, Date.now()))
+      lastRequest?.key === key &&
+      now - lastRequest.requestedAt < PROVIDER_WORKSPACE_SNAPSHOT_TTL_MS
     )
       return;
-    const key = `${workspaceRefreshScopeKey}:${hasWorkspaceSnapshot ? snapshot?.checkedAt : ""}`;
-    if (workspaceRefreshKeyRef.current === key) return;
+    if (hasCurrentProviderWorkspaceSnapshot(selectedProviderStatus, projectCwd, now)) {
+      setWorkspaceRefreshRetry(null);
+      return;
+    }
     const retry = workspaceRefreshRetry;
-    if (retry?.key === workspaceRefreshScopeKey && Date.now() < retry.notBefore) return;
-    workspaceRefreshKeyRef.current = key;
+    if (retry?.key === key && now < retry.notBefore) return;
+    const request = { key, requestedAt: now };
+    workspaceRefreshKeyRef.current = request;
     const retryLater = () => {
-      if (workspaceRefreshKeyRef.current !== key) return;
+      if (workspaceRefreshKeyRef.current !== request) return;
       workspaceRefreshKeyRef.current = null;
       setWorkspaceRefreshRetry({
-        key: workspaceRefreshScopeKey,
+        key,
         notBefore: Date.now() + WORKSPACE_SNAPSHOT_RETRY_COOLDOWN_MS,
       });
     };
@@ -346,30 +349,24 @@ export function useComposerCommandMenu({
       environmentId,
       input: { instanceId: selectedProviderInstanceId, cwd: projectCwd },
     }).then((result) => {
-      const updatedSnapshot =
-        result._tag === "Success"
-          ? result.value.providers
-              .find((provider) => provider.instanceId === selectedProviderInstanceId)
-              ?.workspaceSnapshots?.find((candidate) => candidate.cwd === projectCwd)
-          : undefined;
-      if (
-        !updatedSnapshot ||
-        updatedSnapshot.slashCommandsPending ||
-        (hasWorkspaceSnapshot && updatedSnapshot.checkedAt === snapshot?.checkedAt)
-      ) {
-        retryLater();
-      }
+      const refreshed =
+        result._tag === "Success" &&
+        hasCompleteProviderWorkspaceSnapshot(
+          result.value.providers.find(
+            (provider) => provider.instanceId === selectedProviderInstanceId,
+          ),
+          projectCwd,
+        );
+      if (!refreshed) retryLater();
     }, retryLater);
   }, [
+    draftMessage,
     environmentId,
-    hasWorkspaceSnapshot,
     projectCwd,
     refreshProviders,
     selectedProviderInstanceId,
     selectedProviderStatus,
-    trigger,
     workspaceRefreshRetry,
-    workspaceRefreshScopeKey,
   ]);
   const pathSearch = useComposerPathSearch({
     environmentId,

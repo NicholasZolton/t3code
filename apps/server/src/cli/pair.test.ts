@@ -5,6 +5,7 @@ import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 
 import * as NodeServices from "@effect/platform-node/NodeServices";
+import { AuthStandardClientScopes } from "@t3tools/contracts";
 import * as NetService from "@t3tools/shared/Net";
 import { HostProcessEnvironment, HostProcessPlatform } from "@t3tools/shared/hostProcess";
 import { assert, describe, expect, it } from "@effect/vitest";
@@ -16,9 +17,9 @@ import * as Option from "effect/Option";
 import * as Sink from "effect/Sink";
 import * as Stream from "effect/Stream";
 import * as TestConsole from "effect/testing/TestConsole";
-import { Command } from "effect/unstable/cli";
-import { FetchHttpClient } from "effect/unstable/http";
-import { ChildProcessSpawner } from "effect/unstable/process";
+import { Command, CliError } from "effect/cli";
+import { FetchHttpClient } from "effect/http";
+import { ChildProcessSpawner } from "effect/process";
 
 import { cli } from "../binCli.ts";
 import {
@@ -38,7 +39,7 @@ import { DevServerNotProxiableError, resolveLocalTarget } from "../environment/T
 
 import packageJson from "../../package.json" with { type: "json" };
 
-const CliRuntimeLayer = Layer.mergeAll(NodeServices.layer, NetService.layer);
+const layerCliRuntime = Layer.mergeAll(NodeServices.layer, NetService.layer);
 
 const baseState = {
   version: 1,
@@ -101,7 +102,7 @@ describe("pair tailscale local target", () => {
 const runCli = (args: ReadonlyArray<string>) => Command.runWith(cli, { version: "0.0.0" })(args);
 
 const provideCliTestLayers = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
-  Effect.provide(effect, Layer.mergeAll(CliRuntimeLayer, TestConsole.layer));
+  Effect.provide(effect, Layer.mergeAll(layerCliRuntime, TestConsole.layer));
 
 // Console output accumulates across CLI runs within a test, and each
 // Console.log call is one entry — so the latest command's output is the last
@@ -243,7 +244,7 @@ function restartFlags(baseDir: string, port: number): CliServerFlags {
 }
 
 const tailscaleRuntimeLayer = (layer: Layer.Layer<ChildProcessSpawner.ChildProcessSpawner>) =>
-  Layer.mergeAll(CliRuntimeLayer, layer, ConfigProvider.layer(ConfigProvider.fromEnv({ env: {} })));
+  Layer.mergeAll(layerCliRuntime, layer, ConfigProvider.layer(ConfigProvider.fromEnv({ env: {} })));
 
 describe("Tailscale pairing across restarts", () => {
   it.effect("restores a remembered custom HTTPS port to the new backend port", () => {
@@ -433,10 +434,13 @@ describe("t3 pair", () => {
         const listed = yield* captureStdout(
           runCli(["auth", "pairing", "list", "--base-dir", baseDir, "--json"]),
         );
-        // @effect-diagnostics-next-line preferSchemaOverJson:off - CLI JSON output is decoded as a presentation DTO.
-        const credentials = JSON.parse(listed) as ReadonlyArray<{ readonly label?: string }>;
+        const credentials = JSON.parse(listed) as ReadonlyArray<{
+          readonly label?: string;
+          readonly scopes: ReadonlyArray<string>;
+        }>;
         assert.equal(credentials.length, 1);
         assert.equal(credentials[0]?.label, "t3 pair");
+        assert.deepEqual(credentials[0]?.scopes, AuthStandardClientScopes);
       }),
     ).pipe(
       Effect.provide(NodeServices.layer),
@@ -454,6 +458,43 @@ describe("t3 pair", () => {
         off: () => undefined,
       }),
     ),
+  );
+
+  it.effect("mints a pairing grant with only the selected scopes", () =>
+    withDescriptorServer((origin) =>
+      Effect.gen(function* () {
+        const baseDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-pair-scopes-test-"));
+        yield* persistServerRuntimeState({
+          path: NodePath.join(baseDir, "userdata", "server-runtime.json"),
+          state: yield* makePersistedServerRuntimeState({
+            config: { host: "127.0.0.1", devUrl: undefined },
+            port: Number(new URL(origin).port),
+          }),
+        });
+
+        yield* captureStdout(
+          runCli([
+            "pair",
+            "--base-dir",
+            baseDir,
+            "--scope",
+            "orchestration:read",
+            "--scope",
+            "relay:read",
+            "--scope",
+            "orchestration:read",
+          ]),
+        );
+        const listed = yield* captureStdout(
+          runCli(["auth", "pairing", "list", "--base-dir", baseDir, "--json"]),
+        );
+        const credentials = JSON.parse(listed) as ReadonlyArray<{
+          readonly scopes: ReadonlyArray<string>;
+        }>;
+        assert.lengthOf(credentials, 1);
+        assert.deepEqual(credentials[0]?.scopes, ["orchestration:read", "relay:read"]);
+      }),
+    ).pipe(Effect.provide(NodeServices.layer)),
   );
 
   it.effect("pairs through the recorded dev web URL for dev servers", () =>
@@ -547,5 +588,75 @@ describe("t3 pair", () => {
       );
       assert.include(rendered, "No running T3 Code server found.");
     }).pipe(Effect.provide(NodeServices.layer)),
+  );
+});
+
+describe("auth scope options", () => {
+  it.effect.each([
+    { group: "pairing", action: "create" },
+    { group: "session", action: "issue" },
+  ] as const)(
+    "issues and persists only the selected scopes for auth $group $action",
+    ({ group, action }) =>
+      Effect.gen(function* () {
+        const baseDir = NodeFS.mkdtempSync(
+          NodePath.join(NodeOS.tmpdir(), "t3-cli-auth-scopes-test-"),
+        );
+        const output = yield* captureStdout(
+          runCli([
+            "auth",
+            group,
+            action,
+            "--base-dir",
+            baseDir,
+            "--json",
+            "--scope",
+            "orchestration:read",
+            "--scope",
+            "access:read",
+            "--scope",
+            "orchestration:read",
+          ]),
+        );
+        const issued = JSON.parse(output) as { readonly scopes: ReadonlyArray<string> };
+        const listOutput = yield* captureStdout(
+          runCli(["auth", group, "list", "--base-dir", baseDir, "--json"]),
+        );
+        const listed = JSON.parse(listOutput) as ReadonlyArray<{
+          readonly scopes: ReadonlyArray<string>;
+        }>;
+
+        assert.deepEqual(issued.scopes, ["orchestration:read", "access:read"]);
+        assert.lengthOf(listed, 1);
+        assert.deepEqual(listed[0]?.scopes, issued.scopes);
+      }),
+  );
+
+  it.effect.each(
+    [["pair"], ["auth", "pairing", "create"], ["auth", "session", "issue"]].map((command) => ({
+      command,
+      label: command.join(" "),
+    })),
+  )("rejects invalid scopes before running $label", ({ command }) =>
+    Effect.gen(function* () {
+      const error = yield* runCli([
+        ...command,
+        "--scope",
+        "orchestration:read",
+        "--scope",
+        "admin",
+      ]).pipe(Effect.provide(layerCliRuntime), Effect.flip);
+
+      if (!CliError.isCliError(error) || error._tag !== "ShowHelp") {
+        assert.fail(`Expected ShowHelp, got ${String(error)}`);
+      }
+      assert.deepEqual(error.commandPath, ["t3", ...command]);
+      const scopeError = error.errors[0];
+      if (scopeError?._tag !== "InvalidValue") {
+        assert.fail(`Expected InvalidValue, got ${String(scopeError?._tag)}`);
+      }
+      assert.equal(scopeError.option, "scope");
+      assert.equal(scopeError.value, "admin");
+    }),
   );
 });

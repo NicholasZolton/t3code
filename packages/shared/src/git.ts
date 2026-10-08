@@ -13,16 +13,21 @@ import * as Result from "effect/Result";
 import { detectSourceControlProviderFromRemoteUrl } from "./sourceControl.ts";
 
 export const WORKTREE_BRANCH_PREFIX = DEFAULT_WORKTREE_BRANCH_PREFIX;
-// Canonical form is `t3code/<8 hex>`. Older mobile builds generated `t3code/<uuid>`
-// via Crypto.randomUUID() (always RFC 4122 v4), so the matcher also accepts exactly
-// that shape — version nibble `4`, variant nibble `[89ab]` — to keep those threads
-// eligible for branch regeneration without loosening beyond what was ever generated.
-const TEMP_WORKTREE_TOKEN_SOURCE =
-  "(?:[0-9a-f]{8}|[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})";
+// Canonical form is `t3/<8 hex>`. `t3-<8 hex>` is the fallback when a plain `t3`
+// branch blocks the namespace. The matcher also accepts every legacy shape, so
+// existing threads stay eligible for branch regeneration: `t3code/<8 hex>` and
+// `t3code-<8 hex>` from before the prefix was shortened, and `t3code/<uuid>` from
+// older mobile builds that used Crypto.randomUUID() (always RFC 4122 v4, so version
+// nibble `4` and variant nibble `[89ab]`). Nothing looser than what was generated.
+const TEMP_WORKTREE_HEX_TOKEN = "[0-9a-f]{8}";
+const TEMP_WORKTREE_UUID_V4_TOKEN =
+  "[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}";
 const TEMP_WORKTREE_BRANCH_PATTERN = new RegExp(
-  `^${WORKTREE_BRANCH_PREFIX}\\/${TEMP_WORKTREE_TOKEN_SOURCE}$`,
+  `^(?:${WORKTREE_BRANCH_PREFIX}[-/]${TEMP_WORKTREE_HEX_TOKEN}|t3code(?:[-/]${TEMP_WORKTREE_HEX_TOKEN}|\\/${TEMP_WORKTREE_UUID_V4_TOKEN}))$`,
 );
+const TEMP_WORKTREE_TOKEN_SOURCE = `(?:${TEMP_WORKTREE_HEX_TOKEN}|${TEMP_WORKTREE_UUID_V4_TOKEN})`;
 const TEMP_WORKTREE_TOKEN_PATTERN = new RegExp(`^${TEMP_WORKTREE_TOKEN_SOURCE}$`);
+const TEMP_WORKTREE_HEX_PATTERN = new RegExp(`^${TEMP_WORKTREE_HEX_TOKEN}$`);
 
 /**
  * Sanitize an arbitrary string into a valid, lowercase git branch fragment.
@@ -128,6 +133,20 @@ export function buildTemporaryWorktreeBranchName(
   return `${prefix}/${token}`;
 }
 
+/**
+ * Git stores refs as paths, so a plain `t3` branch makes every `t3/<hex>`
+ * ref impossible. This moves a temporary name to the flat `t3-<hex>` sibling.
+ */
+export function flattenTemporaryWorktreeBranchName(refName: string): string {
+  const normalized = refName.trim().toLowerCase();
+  const match = normalized.match(new RegExp(`^(.*)[-/](${TEMP_WORKTREE_TOKEN_SOURCE})$`));
+  const prefix = match?.[1];
+  const token = match?.[2];
+  if (!prefix || !token) return normalized;
+  const namespace = prefix === "t3code" ? WORKTREE_BRANCH_PREFIX : prefix.replaceAll("/", "-");
+  return `${namespace}-${token.slice(0, 8)}`;
+}
+
 export function isTemporaryWorktreeBranch(
   refName: string,
   prefix: string = WORKTREE_BRANCH_PREFIX,
@@ -135,8 +154,14 @@ export function isTemporaryWorktreeBranch(
   const normalized = refName.trim().toLowerCase();
   return (
     TEMP_WORKTREE_BRANCH_PATTERN.test(normalized) ||
-    (normalized.startsWith(`${prefix.toLowerCase()}/`) &&
-      TEMP_WORKTREE_TOKEN_PATTERN.test(normalized.slice(prefix.length + 1)))
+    [`${prefix.toLowerCase()}/`, `${prefix.toLowerCase().replaceAll("/", "-")}-`].some(
+      (namespace) =>
+        normalized.startsWith(namespace) &&
+        (prefix === WORKTREE_BRANCH_PREFIX
+          ? TEMP_WORKTREE_HEX_PATTERN
+          : TEMP_WORKTREE_TOKEN_PATTERN
+        ).test(normalized.slice(namespace.length)),
+    )
   );
 }
 

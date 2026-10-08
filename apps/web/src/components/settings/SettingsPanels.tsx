@@ -1,6 +1,8 @@
 import { SettingsGroup } from "./SettingsGroup";
+import { useScopedSettingsWriteAllowed } from "./useScopedSettings";
 import { Spinner } from "~/components/ui/spinner";
 import { NotificationSettings } from "./NotificationSettings";
+import { PRIVACY_POLICY_URL } from "../../legalLinks";
 import { ArchiveIcon, ArchiveX, CheckIcon, ChevronRightIcon, SettingsIcon } from "lucide-react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import type { CSSProperties, ReactNode } from "react";
@@ -53,6 +55,7 @@ import * as Equal from "effect/Equal";
 import * as Schema from "effect/Schema";
 import { APP_VERSION, HOSTED_APP_CHANNEL, HOSTED_APP_CHANNEL_LABEL } from "../../branding";
 import { IS_NIGHTLY_BUILD, NightlyMobileBetaRow } from "../NightlyMobileBeta";
+import { CliCommandSettingsRow } from "./CliCommandSettingsRow";
 import {
   canCheckForUpdate,
   getDesktopUpdateButtonTooltip,
@@ -507,6 +510,7 @@ function AboutVersionSection() {
         />
       ) : null}
       {showNightlyMobileBeta ? <NightlyMobileBetaRow /> : null}
+      {hasDesktopBridge ? <CliCommandSettingsRow /> : null}
     </>
   );
 }
@@ -892,6 +896,7 @@ function BackgroundActivityAdvancedDialog({
   readonly open: boolean;
   readonly onOpenChange: (open: boolean) => void;
 }) {
+  const canWriteSettings = useScopedSettingsWriteAllowed();
   const settings = useScopedSettings();
   const updateSettings = useUpdateScopedSettings();
   const resolvedBackgroundActivity = resolveServerBackgroundActivitySettings(settings);
@@ -910,7 +915,7 @@ function BackgroundActivityAdvancedDialog({
   );
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open && canWriteSettings} onOpenChange={onOpenChange}>
       <DialogPopup className="max-w-xl">
         <DialogHeader>
           <DialogTitle>Background Activity</DialogTitle>
@@ -919,7 +924,10 @@ function BackgroundActivityAdvancedDialog({
           </DialogDescription>
         </DialogHeader>
         <DialogPanel>
-          <div className="overflow-hidden rounded-xl border bg-card text-card-foreground">
+          <fieldset
+            disabled={!canWriteSettings}
+            className="min-w-0 overflow-hidden rounded-xl border bg-card text-card-foreground"
+          >
             <div className="flex flex-col gap-3 border-b px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="min-w-0 space-y-1">
                 <div className="text-sm font-medium">Shared policy</div>
@@ -1141,11 +1149,12 @@ function BackgroundActivityAdvancedDialog({
                 </label>
               ))}
             </div>
-          </div>
+          </fieldset>
         </DialogPanel>
         <DialogFooter>
           <Button
             variant="outline"
+            disabled={!canWriteSettings}
             onClick={() => updateSettings(resetBackgroundActivitySettings())}
           >
             Reset all
@@ -2255,7 +2264,6 @@ export function GeneralSettingsPanel() {
   const backgroundActivityProfileOption = resolveBackgroundActivityProfileOption(settings);
   const mixedBackgroundActivity = useScopedSettingsMixed(["backgroundActivity"]);
   const mixedAddProjectBaseDirectory = useScopedSettingsMixed(["addProjectBaseDirectory"]);
-  const mixedWorktreeDirectory = useScopedSettingsMixed(["worktreeDirectory"]);
   const mixedWorktreeProjectFolders = useScopedSettingsMixed(["worktreeProjectFolders"]);
   const mixedWorktreeBranchPrefix = useScopedSettingsMixed(["worktreeBranchPrefix"]);
   const mixedTextGenerationModel = useScopedSettingsMixed(["textGenerationModelSelection"]);
@@ -3169,31 +3177,6 @@ export function GeneralSettingsPanel() {
         />
         <SettingsRow
           serverScoped
-          settingKeys={["worktreeDirectory"]}
-          {...searchableSetting("worktree-directory")}
-          description='Root for new worktrees. Leave empty to use the T3 home worktrees directory. Accepts an absolute path or "~/…".'
-          resetAction={
-            settings.worktreeDirectory ? (
-              <SettingResetButton
-                label="worktree directory"
-                onClick={() => updateSettings({ worktreeDirectory: "" })}
-              />
-            ) : null
-          }
-          control={
-            <DraftInput
-              size="sm"
-              className="w-full sm:w-72"
-              value={mixedWorktreeDirectory ? "" : settings.worktreeDirectory}
-              onCommit={(directory) => updateSettings({ worktreeDirectory: directory })}
-              placeholder={mixedWorktreeDirectory ? "Mixed" : "~/.herdr/worktrees"}
-              spellCheck={false}
-              aria-label="Worktree directory"
-            />
-          }
-        />
-        <SettingsRow
-          serverScoped
           settingKeys={["worktreeProjectFolders"]}
           {...searchableSetting("worktree-project-folders")}
           description="Place new worktrees under a folder named for their project, so project-specific configuration can live beside them."
@@ -3231,7 +3214,9 @@ export function GeneralSettingsPanel() {
               className="w-full sm:w-44"
               value={mixedWorktreeBranchPrefix ? "" : settings.worktreeBranchPrefix}
               onCommit={(prefix) => updateSettings({ worktreeBranchPrefix: prefix })}
-              placeholder={mixedWorktreeBranchPrefix ? "Mixed" : "t3code"}
+              placeholder={
+                mixedWorktreeBranchPrefix ? "Mixed" : DEFAULT_UNIFIED_SETTINGS.worktreeBranchPrefix
+              }
               spellCheck={false}
               aria-label="Worktree branch prefix"
             />
@@ -3515,6 +3500,19 @@ export function GeneralSettingsPanel() {
             {IS_NIGHTLY_BUILD ? <NightlyMobileBetaRow /> : null}
           </>
         )}
+        <SettingsRow
+          {...searchableSetting("privacy-policy")}
+          description="How we handle your data, including the anonymous usage data T3 Code collects."
+          control={
+            <Button
+              render={<a href={PRIVACY_POLICY_URL} target="_blank" rel="noreferrer noopener" />}
+              size="sm"
+              variant="outline"
+            >
+              View policy
+            </Button>
+          }
+        />
       </SettingsSection>
       <SettingsSection title="Diagnostics">
         <SettingsRow

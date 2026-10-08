@@ -12,7 +12,7 @@ import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
-import { ChildProcessSpawner } from "effect/unstable/process";
+import { ChildProcessSpawner } from "effect/process";
 
 import { writeFileStringAtomically } from "../atomicWrite.ts";
 import { formatHostForUrl, isLoopbackHost, isWildcardHost } from "../startupAccess.ts";
@@ -108,11 +108,12 @@ const make = Effect.gen(function* () {
     return yield* fs.readFileString(settingsPath).pipe(
       Effect.flatMap(decodeSettings),
       Effect.asSome,
-      Effect.catchTag("PlatformError", (cause) =>
-        cause.reason._tag === "NotFound"
-          ? Effect.succeed(Option.none<Settings>())
-          : Effect.fail(cause),
-      ),
+      Effect.catchTags({
+        PlatformError: (cause) =>
+          cause.reason._tag === "NotFound"
+            ? Effect.succeed(Option.none<Settings>())
+            : Effect.fail(cause),
+      }),
       Effect.mapError(
         (cause) => new TailscaleServeSettingsError({ operation: "read", settingsPath, cause }),
       ),
@@ -145,9 +146,10 @@ const make = Effect.gen(function* () {
       input.servePort ?? Option.getOrUndefined(settings)?.servePort ?? DEFAULT_TAILSCALE_SERVE_PORT;
     yield* disableTailscaleServe({ servePort }).pipe(
       Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner),
-      Effect.catchTag("TailscaleCommandExitError", (error) =>
-        error.stderrDiagnostic === "no-existing-handler" ? Effect.void : Effect.fail(error),
-      ),
+      Effect.catchTags({
+        TailscaleCommandExitError: (error) =>
+          error.stderrDiagnostic === "no-existing-handler" ? Effect.void : Effect.fail(error),
+      }),
     );
     if (Option.isSome(settings) && settings.value.servePort !== servePort) {
       return;

@@ -33,6 +33,7 @@ export function GitConfirmSheet(props: GitConfirmSheetProps) {
   const gitState = useSelectedThreadGitState();
   const vcsTerminology = gitState.vcsTerminology;
   const gitActions = useSelectedThreadGitActions();
+  const { canWriteSourceControl, canChangeThreadBranch } = gitActions;
 
   const params = props.route.params;
 
@@ -61,17 +62,25 @@ export function GitConfirmSheet(props: GitConfirmSheetProps) {
   );
 
   const continuePendingAction = useCallback(async () => {
-    if (!confirmAction) return;
+    if (!canWriteSourceControl || !confirmAction) return;
     navigation.dispatch(StackActions.replace("Thread", { environmentId, threadId }));
     await gitActions.onRunSelectedThreadGitAction({
       action: confirmAction,
       ...(params.commitMessage ? { commitMessage: params.commitMessage } : {}),
       ...(params.filePaths ? { filePaths: params.filePaths.split(",") } : {}),
     });
-  }, [confirmAction, environmentId, gitActions, params, navigation, threadId]);
+  }, [
+    canWriteSourceControl,
+    confirmAction,
+    environmentId,
+    gitActions,
+    params,
+    navigation,
+    threadId,
+  ]);
 
   const movePendingActionToFeatureBranch = useCallback(async () => {
-    if (!confirmAction) return;
+    if (!canChangeThreadBranch || !confirmAction) return;
     navigation.dispatch(StackActions.replace("Thread", { environmentId, threadId }));
 
     if (includesCommit) {
@@ -93,9 +102,11 @@ export function GitConfirmSheet(props: GitConfirmSheetProps) {
         branch.isRemote ? Result.failVoid : Result.succeed(branch.name),
       ),
     );
-    await gitActions.onCreateSelectedThreadBranch(newBranchName);
+    const created = await gitActions.onCreateSelectedThreadBranch(newBranchName);
+    if (created === null) return;
     await gitActions.onRunSelectedThreadGitAction({ action: confirmAction });
   }, [
+    canChangeThreadBranch,
     confirmAction,
     gitActions,
     gitState.selectedThreadBranches,
@@ -166,11 +177,13 @@ export function GitConfirmSheet(props: GitConfirmSheetProps) {
             <SheetActionButton
               icon="arrow.right.circle"
               label={copy?.continueLabel ?? "Continue"}
+              disabled={!canWriteSourceControl}
               onPress={() => void continuePendingAction()}
             />
             <SheetActionButton
               icon="arrow.branch"
               label={`Feature ${vcsTerminology.refNoun} & continue`}
+              disabled={!canChangeThreadBranch}
               tone="primary"
               onPress={() => void movePendingActionToFeatureBranch()}
             />

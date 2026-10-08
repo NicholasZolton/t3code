@@ -21,7 +21,7 @@ import {
 } from "./JjRemotes.ts";
 import { resolveWorkspaceRefName, strandedSegmentRows } from "./JjStatus.ts";
 import { bookmarkDigest, isT3WorkspaceName, workspaceNameForRef } from "./JjWorkspaceNaming.ts";
-import { resolveWorktreesRoot } from "../pathExpansion.ts";
+import { resolveWorktreesDirectory } from "../worktreesDirectory.ts";
 import { inspectWorkspaceFiles } from "../vcs/WorkspaceFileSafety.ts";
 import { T3_PROJECT_FILE_NAME } from "@t3tools/contracts";
 import { parseT3ProjectFile } from "@t3tools/shared/t3ProjectFile";
@@ -168,11 +168,22 @@ export const makeJjWorkspaces = (deps: JjWorkspaceOpsDeps): JjWorkspaceOps => {
         }
       }
 
-      const workspaceDirectory = resolveWorktreesRoot(options?.directory ?? "", worktreesDir, path);
+      const workspaceDirectory = resolveWorktreesDirectory(
+        options?.worktreesDirectory ?? "",
+        worktreesDir,
+        path,
+      );
+      if (workspaceDirectory === null && input.path == null) {
+        return yield* jjFailure(
+          "createWorktree",
+          input.cwd,
+          "The worktree location must be an absolute path other than a filesystem root. Update it in Settings → Storage.",
+        );
+      }
       const requestedPath =
         input.path ??
         defaultWorkspacePathForRef({
-          worktreesDir: workspaceDirectory,
+          worktreesDir: workspaceDirectory ?? worktreesDir,
           mainWorkspaceRoot: paths.mainWorkspaceRoot,
           refName: targetRef,
           ...(options?.projectFolders !== undefined

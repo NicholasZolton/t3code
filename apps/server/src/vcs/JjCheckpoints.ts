@@ -1,3 +1,4 @@
+// @effect-diagnostics nodeBuiltinImport:off - temporary restore bookmark names must not collide.
 import * as NodeCrypto from "node:crypto";
 
 import * as Effect from "effect/Effect";

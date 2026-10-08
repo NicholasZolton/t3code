@@ -73,6 +73,27 @@ describeJj("workspace naming", () => {
 });
 
 describeJj("JjWorkspaces.createWorktree", () => {
+  it.effect("keeps linked workspaces in the original checkout's configured grouping folder", () =>
+    withRepo(({ fileSystem, path, ops, root, worktreesDir }) =>
+      Effect.gen(function* () {
+        const location = path.join(worktreesDir, "custom");
+        const group = path.join(location, path.basename(root));
+        yield* fileSystem.makeDirectory(group, { recursive: true });
+        yield* fileSystem.writeFileString(path.join(group, "opencode.jsonc"), "{}\n");
+        const first = yield* ops.createWorktree(
+          { cwd: root, refName: "main", newRefName: "topic/first", path: null },
+          { worktreesDirectory: location },
+        );
+        const linked = yield* ops.createWorktree(
+          { cwd: first.worktree.path, refName: "main", newRefName: "topic/linked", path: null },
+          { worktreesDirectory: location },
+        );
+        assert.equal(first.worktree.path, path.join(group, "topic-first"));
+        assert.equal(linked.worktree.path, path.join(group, "topic-linked"));
+        assert.equal(yield* fileSystem.readFileString(path.join(group, "opencode.jsonc")), "{}\n");
+      }),
+    ),
+  );
   it.effect(
     "honors a configured flat workspace directory and rolls back unsupported submodule setup",
     () =>
@@ -81,7 +102,7 @@ describeJj("JjWorkspaces.createWorktree", () => {
           const configured = path.join(worktreesDir, "custom");
           const flat = yield* ops.createWorktree(
             { cwd: root, refName: "main", newRefName: "topic/flat", path: null },
-            { directory: configured, projectFolders: false },
+            { worktreesDirectory: configured, projectFolders: false },
           );
           assert.equal(flat.worktree.path, path.join(configured, "project-topic-flat"));
           yield* fileSystem.writeFileString(

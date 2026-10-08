@@ -50,7 +50,8 @@ import { normalizeProjectPathForComparison } from "@t3tools/shared/path";
 import * as ServerConfig from "../config.ts";
 import * as ProjectStore from "../orchestration-v2/ProjectStore.ts";
 import { resolveCodexHomeLayout } from "../provider/Drivers/CodexHomeLayout.ts";
-import { expandHomePath, resolveWorktreesRoot } from "../pathExpansion.ts";
+import { expandHomePath } from "../pathExpansion.ts";
+import { managedWorktreesDirectories } from "../worktreesDirectory.ts";
 import * as ServerSettings from "../serverSettings.ts";
 import { resolveJjRepoPaths } from "../vcs/JjRepo.ts";
 import {
@@ -650,7 +651,10 @@ export const make = Effect.gen(function* () {
     path.join(homeDir, "Documents", "Codex"),
   ];
 
-  const isExcludedProjectPath = (candidatePath: string, configuredWorktreesDir: string) =>
+  const isExcludedProjectPath = (
+    candidatePath: string,
+    configuredWorktreesDirs: ReadonlyArray<string>,
+  ) =>
     excludedProjectRoots.has(normalizeProjectPathForComparison(candidatePath)) ||
     excludedProjectAncestors.some((ancestor) =>
       normalizeForWorktreeMatch(candidatePath, foldWorktreeCase).startsWith(
@@ -661,7 +665,9 @@ export const make = Effect.gen(function* () {
       normalizeForWorktreeMatch(baseDir, foldWorktreeCase),
     ) ||
     isT3ManagedWorktree(candidatePath, worktreesDir, foldWorktreeCase) ||
-    isT3ManagedWorktree(candidatePath, configuredWorktreesDir, foldWorktreeCase) ||
+    configuredWorktreesDirs.some((directory) =>
+      isT3ManagedWorktree(candidatePath, directory, foldWorktreeCase),
+    ) ||
     isT3ManagedWorktree(candidatePath, realWorktreesDir, foldWorktreeCase);
 
   const listDirectory = (directory: string) =>
@@ -1222,11 +1228,7 @@ export const make = Effect.gen(function* () {
     const settings = yield* serverSettings.getSettings.pipe(
       Effect.mapError((cause) => new AgentSessionScanError({ operation: "read-settings", cause })),
     );
-    const configuredWorktreesDir = resolveWorktreesRoot(
-      settings.worktreeDirectory,
-      worktreesDir,
-      path,
-    );
+    const configuredWorktreesDir = managedWorktreesDirectories(settings, worktreesDir, path);
     cachedCandidates = raw;
 
     // Filesystem identity merges symlinks and case aliases without collapsing
@@ -1361,11 +1363,7 @@ export const make = Effect.gen(function* () {
     const settings = yield* serverSettings.getSettings.pipe(
       Effect.mapError((cause) => new AgentSessionScanError({ operation: "read-settings", cause })),
     );
-    const configuredWorktreesDir = resolveWorktreesRoot(
-      settings.worktreeDirectory,
-      worktreesDir,
-      path,
-    );
+    const configuredWorktreesDir = managedWorktreesDirectories(settings, worktreesDir, path);
     if (
       isExcludedProjectPath(root, configuredWorktreesDir) ||
       isExcludedProjectPath(realRoot, configuredWorktreesDir)

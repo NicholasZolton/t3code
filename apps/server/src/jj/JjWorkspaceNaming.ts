@@ -1,3 +1,4 @@
+// @effect-diagnostics nodeBuiltinImport:off - workspace ownership names use a synchronous digest.
 import * as NodeCrypto from "node:crypto";
 
 const WORKSPACE_NAME_PREFIX = "t3-";

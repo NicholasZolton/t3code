@@ -4,7 +4,7 @@ import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
-import { ChildProcessSpawner } from "effect/unstable/process";
+import { ChildProcessSpawner } from "effect/process";
 
 import { VcsRepositoryDetectionError } from "@t3tools/contracts";
 
@@ -20,7 +20,7 @@ function handleFor(kind: "git" | "jj"): VcsDriverRegistry.VcsDriverHandle {
   return { kind } as unknown as VcsDriverRegistry.VcsDriverHandle;
 }
 
-function makeLayer(input: {
+function layer(input: {
   readonly detect: VcsDriverRegistry.VcsDriverRegistry["Service"]["detect"];
   readonly git?: Partial<GitVcsDriver.GitVcsDriver["Service"]>;
   readonly gitManager?: Partial<GitManager.GitManager["Service"]>;
@@ -49,7 +49,7 @@ describe("GitWorkflowService", () => {
       assert.equal(isRepository, true);
     }).pipe(
       Effect.provide(
-        makeLayer({
+        layer({
           detect: () =>
             Effect.succeed({
               kind: "jj",
@@ -89,7 +89,7 @@ describe("GitWorkflowService", () => {
       });
     }).pipe(
       Effect.provide(
-        makeLayer({
+        layer({
           detect: () => Effect.succeed(null),
         }),
       ),
@@ -120,7 +120,7 @@ describe("GitWorkflowService", () => {
       });
     }).pipe(
       Effect.provide(
-        makeLayer({
+        layer({
           detect: () => Effect.succeed(null),
         }),
       ),
@@ -132,7 +132,7 @@ describe("GitWorkflowService", () => {
     const remoteStatus = vi.fn();
     const status = vi.fn();
 
-    const testLayer = GitWorkflowService.layer.pipe(
+    const layerTest = GitWorkflowService.layer.pipe(
       Layer.provide(NodeServices.layer),
       Layer.provide(ServerSettingsService.layerTest()),
       Layer.provide(
@@ -160,7 +160,7 @@ describe("GitWorkflowService", () => {
       assert.equal(localStatus.mock.calls.length, 0);
       assert.equal(remoteStatus.mock.calls.length, 0);
       assert.equal(status.mock.calls.length, 0);
-    }).pipe(Effect.provide(testLayer));
+    }).pipe(Effect.provide(layerTest));
   });
 
   it.effect("returns an empty ref list when no VCS repository is detected", () =>
@@ -177,7 +177,7 @@ describe("GitWorkflowService", () => {
       });
     }).pipe(
       Effect.provide(
-        makeLayer({
+        layer({
           detect: () => Effect.succeed(null),
         }),
       ),
@@ -205,7 +205,7 @@ describe("GitWorkflowService", () => {
       });
     }).pipe(
       Effect.provide(
-        makeLayer({
+        layer({
           detect: () => Effect.fail(cause),
         }),
       ),
@@ -226,7 +226,7 @@ describe("GitWorkflowService", () => {
       expect(error.detail).toContain("found no version control repository here");
     }).pipe(
       Effect.provide(
-        makeLayer({
+        layer({
           detect: () => Effect.succeed(null),
         }),
       ),
@@ -259,7 +259,7 @@ describe("GitWorkflowService", () => {
         expect(error.message).not.toContain(cause.detail);
       }).pipe(
         Effect.provide(
-          makeLayer({
+          layer({
             detect: () => Effect.fail(cause),
           }),
         ),
@@ -296,7 +296,7 @@ describe("GitWorkflowService", () => {
       assert.equal(jjListRefs.mock.calls.length, 1);
     }).pipe(
       Effect.provide(
-        makeLayer({
+        layer({
           detect: ({ cwd }) => Effect.succeed(handleFor(cwd === "/jj-repo" ? "jj" : "git")),
           git: { listRefs: gitListRefs },
           jj: { listRefs: jjListRefs },
@@ -317,7 +317,7 @@ describe("GitWorkflowService", () => {
       assert.equal(jjInvalidate.mock.calls.length, 1);
     }).pipe(
       Effect.provide(
-        makeLayer({
+        layer({
           detect: () => Effect.succeed(handleFor("git")),
           gitManager: { invalidateStatus: gitInvalidate },
           jj: { invalidateStatus: jjInvalidate },
@@ -338,7 +338,7 @@ describe("GitWorkflowService", () => {
       assert.equal(jjRemoveWorktree.mock.calls.length, 0);
     }).pipe(
       Effect.provide(
-        makeLayer({
+        layer({
           detect: ({ cwd }) =>
             Effect.succeed(handleFor(cwd === "/worktrees/pre-flip" ? "git" : "jj")),
           git: {
@@ -372,7 +372,7 @@ describe("GitWorkflowService", () => {
         assert.equal(jjRemoveWorktree.mock.calls.length, 0);
       }).pipe(
         Effect.provide(
-          makeLayer({
+          layer({
             detect: ({ cwd }) => Effect.succeed(cwd === "/jj-project" ? handleFor("jj") : null),
             jj: {
               removeWorktree: jjRemoveWorktree,

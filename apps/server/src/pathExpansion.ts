@@ -40,12 +40,3 @@ export function expandHomePathWith(value: string, path: Path.Path): string {
   }
   return value;
 }
-
-/** Empty setting retains the environment's existing worktree location. */
-export function resolveWorktreesRoot(
-  directory: string,
-  defaultRoot: string,
-  path: Path.Path,
-): string {
-  return directory ? path.resolve(expandHomePathWith(directory, path)) : path.resolve(defaultRoot);
-}

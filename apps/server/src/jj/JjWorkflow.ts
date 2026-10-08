@@ -13,7 +13,7 @@ import type { ChangeRequestStepServices, ChangeRequestVcsReads } from "../git/Gi
 import * as GitManager from "../git/GitManager.ts";
 import type { VcsWorkflowOps, WorkspaceCleanupInspection } from "../git/GitWorkflowService.ts";
 import * as ProjectSetupScriptRunner from "../project/ProjectSetupScriptRunner.ts";
-import * as ProviderRegistry from "../provider/Services/ProviderRegistry.ts";
+import * as ProviderRegistry from "../provider/ProviderRegistry.ts";
 import * as ServerSettings from "../serverSettings.ts";
 import * as SourceControlProviderRegistry from "../sourceControl/SourceControlProviderRegistry.ts";
 import * as TextGeneration from "../textGeneration/TextGeneration.ts";
@@ -489,7 +489,7 @@ export const make = Effect.gen(function* () {
         ),
         Effect.flatMap((settings) =>
           pullRequestThread.preparePullRequestThread(input, {
-            directory: settings.worktreeDirectory,
+            worktreesDirectory: settings.worktreesDirectory,
             projectFolders: settings.worktreeProjectFolders,
             submodules: settings.worktreeSubmodules,
           }),

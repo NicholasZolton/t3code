@@ -12,8 +12,11 @@ import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Order from "effect/Order";
 import * as Path from "effect/Path";
+import * as PubSub from "effect/PubSub";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
+import * as Scope from "effect/Scope";
+import * as Stream from "effect/Stream";
 import {
   GitActionProgressEvent,
   GitActionProgressPhase,
@@ -35,6 +38,9 @@ import {
   type SourceControlWritingStyleSettings,
   type TextGenerationError,
   type ThreadId,
+  type ThreadPullRequestKey,
+  type VcsCreateWorktreeInput,
+  type VcsCreateWorktreeResult,
 } from "@t3tools/contracts";
 import {
   detectSourceControlProviderFromGitRemoteUrl,
@@ -49,6 +55,11 @@ import {
   isSshRemoteUrl,
   type ChangeRequestTerminology,
 } from "@t3tools/shared/sourceControl";
+import { parseChangeRequestUrl } from "@t3tools/shared/changeRequestUrl";
+import {
+  normalizeThreadPullRequestKey,
+  threadPullRequestKeyOf,
+} from "@t3tools/shared/threadPullRequests";
 
 import { GitManagerError, GitPullRequestMaterializationError } from "@t3tools/contracts";
 import * as TextGeneration from "../textGeneration/TextGeneration.ts";
@@ -58,7 +69,7 @@ import {
   repositoryConventionsTextGenerationPolicy,
 } from "../textGeneration/TextGenerationPresets.ts";
 import * as ProjectSetupScriptRunner from "../project/ProjectSetupScriptRunner.ts";
-import * as ProviderRegistry from "../provider/Services/ProviderRegistry.ts";
+import * as ProviderRegistry from "../provider/ProviderRegistry.ts";
 import { extractBranchNameFromRemoteRef } from "./remoteRefs.ts";
 import { detachStackFrame } from "./detachStackFrame.ts";
 import * as ServerSettings from "../serverSettings.ts";
@@ -88,6 +99,8 @@ export type GitBranchPullRequest = NonNullable<VcsStatusResult["pr"]> & {
   readonly updatedAt: string | null;
   readonly closedAt?: string | null;
   readonly mergedAt?: string | null;
+  /** The pull request's head commit, when the host read reports it. */
+  readonly headSha?: string | null;
 };
 
 export interface SourceControlTextGenerationSettings {
@@ -98,6 +111,10 @@ export interface SourceControlTextGenerationSettings {
 export class GitManager extends Context.Service<
   GitManager,
   {
+    readonly createWorktree: (
+      input: VcsCreateWorktreeInput,
+      options?: GitVcsDriver.CreateWorktreeOptions,
+    ) => Effect.Effect<VcsCreateWorktreeResult, GitCommandError>;
     readonly status: (
       input: VcsStatusInput,
     ) => Effect.Effect<VcsStatusResult, GitManagerServiceError>;
@@ -126,6 +143,15 @@ export class GitManager extends Context.Service<
       input: GitRunStackedActionInput,
       options?: GitRunStackedActionOptions,
     ) => Effect.Effect<GitRunStackedActionResult, GitManagerServiceError>;
+    /**
+     * Pull requests a branch PR lookup saw in a new state (merged, closed, reopened), so thread
+     * links can catch up before the next sync sweep. Best effort.
+     */
+    readonly subscribePullRequestStateChanges: Effect.Effect<
+      Stream.Stream<ThreadPullRequestKey>,
+      never,
+      Scope.Scope
+    >;
   }
 >()("t3/git/GitManager") {}
 
@@ -190,6 +216,7 @@ export interface PullRequestInfo extends OpenPrInfo, PullRequestHeadRemoteInfo {
   closedAt?: string | null;
   mergedAt?: string | null;
   updatedAt: Option.Option<DateTime.Utc>;
+  headSha?: string | undefined;
 }
 
 const pullRequestUpdatedAtDescOrder: Order.Order<PullRequestInfo> = Order.mapInput(
@@ -450,6 +477,7 @@ export function toPullRequestInfo(summary: ChangeRequest): PullRequestInfo {
     url: summary.url,
     baseRefName: summary.baseRefName,
     headRefName: summary.headRefName,
+    ...(summary.headSha !== undefined ? { headSha: summary.headSha } : {}),
     state: summary.state ?? "open",
     ...(summary.isDraft === true ? { isDraft: true } : {}),
     closedAt: summary.closedAt ?? null,
@@ -1347,6 +1375,32 @@ export const make = Effect.gen(function* () {
       Effect.provideService(ServerSettings.ServerSettingsService, serverSettingsService),
     );
   });
+  // Best effort: a settings read failure falls back to the default location.
+  const readWorktreesDirectory = serverSettingsService.getSettings.pipe(
+    Effect.map((settings) => settings.worktreesDirectory),
+    Effect.orElseSucceed(() => ""),
+  );
+  const createWorktree: GitManager["Service"]["createWorktree"] = Effect.fn(
+    "GitManager.createWorktree",
+  )(function* (input, options) {
+    const submodules =
+      options?.submodules !== undefined
+        ? options.submodules
+        : yield* projectSettingsFor(input).pipe(
+            Effect.map((settings) => settings.worktreeSubmodules),
+            Effect.orElseSucceed(() => null),
+          );
+    const settings = yield* serverSettingsService.getSettings.pipe(
+      Effect.orElseSucceed(() => null),
+    );
+    return yield* gitCore.createWorktree(input, {
+      worktreesDirectory: settings?.worktreesDirectory ?? "",
+      projectFolders: settings?.worktreeProjectFolders ?? true,
+      ...options,
+      submodules,
+    });
+  });
+
   const randomUUIDv4 = (cwd: string) =>
     crypto.randomUUIDv4.pipe(
       Effect.mapError(
@@ -1636,6 +1690,26 @@ export const make = Effect.gen(function* () {
     prLookupFailureStreakByKey.set(key, streak);
     return prLookupFailureTtl(streak);
   };
+  // The last state a branch PR lookup read per pull request. The thread details panel shows
+  // this lookup, so a merge it sees must reach the thread's link and settlement right away.
+  const pullRequestStateChanges = yield* PubSub.sliding<ThreadPullRequestKey>(64);
+  const lookupStates = new Map<string, PullRequestInfo["state"]>();
+  const noteLookupState = (pr: PullRequestInfo) =>
+    Effect.suspend(() => {
+      const parsed = parseChangeRequestUrl(pr.url);
+      if (parsed === null || parsed.number !== pr.number) return Effect.void;
+      const key = normalizeThreadPullRequestKey(parsed);
+      const id = threadPullRequestKeyOf(key);
+      // An unseen pull request counts as open, so only a terminal first read announces.
+      const previous = lookupStates.get(id) ?? "open";
+      lookupStates.delete(id);
+      if (lookupStates.size >= PR_LOOKUP_CACHE_CAPACITY) {
+        const oldest = lookupStates.keys().next().value;
+        if (oldest !== undefined) lookupStates.delete(oldest);
+      }
+      lookupStates.set(id, pr.state);
+      return previous === pr.state ? Effect.void : PubSub.publish(pullRequestStateChanges, key);
+    });
   const prLookupCache = yield* Cache.makeWith(
     (key: string) => {
       const [
@@ -1668,6 +1742,7 @@ export const make = Effect.gen(function* () {
           return { latest: null, headContext };
         }
         const latest = yield* findLatestPrForHeadContext(cwd, headContext);
+        if (latest !== null) yield* noteLookupState(latest);
         return { latest, headContext };
       });
     },
@@ -1800,7 +1875,7 @@ export const make = Effect.gen(function* () {
               ? {
                   provider: error.provider,
                   providerOperation: error.operation,
-                  providerCommand: error.command ?? "unknown",
+                  ...(error.command === undefined ? {} : { providerCommand: error.command }),
                   errorDetail: error.detail,
                 }
               : {}),
@@ -1886,19 +1961,26 @@ export const make = Effect.gen(function* () {
     return handle?.context?.provider ?? provider;
   });
 
+  // Returns [head remote, origin]. Most branches track origin, so read it once.
+  const resolveHeadAndOriginContexts = (cwd: string, remoteName: string | null) =>
+    withSourceControlProviders(
+      remoteName === "origin"
+        ? resolveRemoteRepositoryContext(readConfigValueNullable, cwd, "origin").pipe(
+            Effect.map((origin) => [origin, origin] as const),
+          )
+        : Effect.all(
+            [
+              resolveRemoteRepositoryContext(readConfigValueNullable, cwd, remoteName),
+              resolveRemoteRepositoryContext(readConfigValueNullable, cwd, "origin"),
+            ],
+            { concurrency: "unbounded" },
+          ),
+    );
   const resolvePrLookupRepositoryIdentity = Effect.fn("resolvePrLookupRepositoryIdentity")(
     function* (cwd: string, branch: string, remoteNameOverride?: string) {
       const remoteName =
         remoteNameOverride ?? (yield* readConfigValueNullable(cwd, `branch.${branch}.remote`));
-      const [headRemote, targetRemote] = yield* withSourceControlProviders(
-        Effect.all(
-          [
-            resolveRemoteRepositoryContext(readConfigValueNullable, cwd, remoteName),
-            resolveRemoteRepositoryContext(readConfigValueNullable, cwd, "origin"),
-          ],
-          { concurrency: "unbounded" },
-        ),
-      );
+      const [headRemote, targetRemote] = yield* resolveHeadAndOriginContexts(cwd, remoteName);
       return {
         remoteName,
         headRemoteUrlKey:
@@ -2494,6 +2576,7 @@ export const make = Effect.gen(function* () {
       ...toStatusPr(latest),
       closedAt: latest.closedAt ?? null,
       mergedAt: latest.mergedAt ?? null,
+      headSha: latest.headSha ?? null,
       // Hosting CLIs can select an upstream repository instead of origin.
       // The returned PR URL names the repository that actually owns it.
       repositoryKey: pullRequestRepositoryKey(latest.url),
@@ -2791,12 +2874,8 @@ export const make = Effect.gen(function* () {
           path: null,
         },
         {
-          ...(worktreeSettings
-            ? {
-                directory: worktreeSettings.worktreeDirectory,
-                projectFolders: worktreeSettings.worktreeProjectFolders,
-              }
-            : {}),
+          worktreesDirectory: yield* readWorktreesDirectory,
+          projectFolders: worktreeSettings?.worktreeProjectFolders ?? true,
           // Best effort: a settings read failure falls back to the checkout's t3.json.
           submodules: worktreeSettings?.worktreeSubmodules ?? null,
         },
@@ -3052,6 +3131,7 @@ export const make = Effect.gen(function* () {
   );
 
   return GitManager.of({
+    createWorktree,
     localStatus,
     remoteStatus,
     status,
@@ -3062,6 +3142,9 @@ export const make = Effect.gen(function* () {
     resolvePullRequest,
     preparePullRequestThread,
     runStackedAction,
+    subscribePullRequestStateChanges: PubSub.subscribe(pullRequestStateChanges).pipe(
+      Effect.map((subscription) => Stream.fromSubscription(subscription)),
+    ),
   });
 });
 

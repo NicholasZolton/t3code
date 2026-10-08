@@ -1,4 +1,4 @@
-import * as ProviderRegistry from "../Services/ProviderRegistry.ts";
+import * as ProviderRegistry from "../ProviderRegistry.ts";
 import type { ServerProvider } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -7,17 +7,16 @@ import { makeManualOnlyProviderMaintenanceCapabilities } from "../providerMainte
 
 const makeProviderRegistryMock = (
   providers: ReadonlyArray<ServerProvider> = [],
-): ProviderRegistry.ProviderRegistryShape => ({
+): ProviderRegistry.ProviderRegistry["Service"] => ({
   getProviders: Effect.succeed(providers),
   refresh: () => Effect.succeed(providers),
   refreshInstance: () => Effect.succeed(providers),
   refreshWorkspaceSnapshot: () => Effect.succeed(providers),
-  invalidateWorkspaceSnapshots: () => Effect.succeed(providers),
   getProviderMaintenanceCapabilitiesForInstance: (_instanceId, provider) =>
     Effect.succeed(makeManualOnlyProviderMaintenanceCapabilities({ provider, packageName: null })),
   setProviderMaintenanceActionState: () => Effect.succeed(providers),
   streamChanges: Stream.empty,
 });
 
-export const makeProviderRegistryLayer = (providers: ReadonlyArray<ServerProvider> = []) =>
+export const layer = (providers: ReadonlyArray<ServerProvider> = []) =>
   Layer.succeed(ProviderRegistry.ProviderRegistry, makeProviderRegistryMock(providers));
