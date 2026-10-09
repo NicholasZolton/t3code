@@ -267,8 +267,6 @@ function ComboboxStatus({ className, ...props }: ComboboxPrimitive.Status.Props)
   );
 }
 
-const useComboboxFilter = ComboboxPrimitive.useFilter;
-
 export {
   Combobox,
   ComboboxInput,
@@ -281,5 +279,4 @@ export {
   ComboboxListVirtualized,
   ComboboxClear,
   ComboboxStatus,
-  useComboboxFilter,
 };

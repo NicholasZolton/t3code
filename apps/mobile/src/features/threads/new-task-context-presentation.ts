@@ -1,4 +1,5 @@
 import { sanitizeNewRefName } from "@t3tools/shared/git";
+import { searchItems } from "@t3tools/shared/searchRanking";
 import { DEFAULT_VCS_TERMINOLOGY, type VcsTerminology } from "@t3tools/shared/vcs";
 
 type WorkspaceMode = "local" | "worktree";
@@ -94,8 +95,5 @@ export function filterNewTaskBranches<T extends { readonly name: string }>(
   branches: ReadonlyArray<T>,
   rawQuery: string,
 ): ReadonlyArray<T> {
-  const query = sanitizeNewRefName(rawQuery).toLowerCase();
-  return query.length === 0
-    ? branches
-    : branches.filter((branch) => branch.name.toLowerCase().includes(query));
+  return searchItems(branches, sanitizeNewRefName(rawQuery), (branch) => [branch.name]);
 }

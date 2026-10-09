@@ -1,4 +1,5 @@
 import type { EnvironmentId, ScopedThreadRef, ThreadId } from "@t3tools/contracts";
+import { searchItems } from "@t3tools/shared/searchRanking";
 
 const COMPOSER_THREAD_RESULT_LIMIT = 5;
 
@@ -31,21 +32,21 @@ export function matchComposerThreadItems(input: {
 }): ComposerThreadItem[] {
   const query = input.query.trim().toLowerCase();
   if (query.length === 0) return [];
-  return input.shells
+  const candidates = input.shells
     .filter(
       (shell) =>
         shell.environmentId === input.environmentId &&
         shell.id !== input.excludeThreadId &&
-        shell.archivedAt === null &&
-        shell.title.toLowerCase().includes(query),
+        shell.archivedAt === null,
     )
-    .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
-    .slice(0, COMPOSER_THREAD_RESULT_LIMIT)
-    .map((shell) => ({
+    .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
+  return searchItems(candidates, query, (shell) => [shell.title], COMPOSER_THREAD_RESULT_LIMIT).map(
+    (shell) => ({
       id: `thread:${shell.environmentId}:${shell.id}`,
       type: "thread",
       thread: { environmentId: shell.environmentId, threadId: shell.id },
       label: shell.title,
       description: "Thread",
-    }));
+    }),
+  );
 }

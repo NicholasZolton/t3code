@@ -1,6 +1,7 @@
 import { resolveThreadWorkingStartedAt } from "@t3tools/client-runtime/state/models";
 import { backgroundWorkHoldsCompletion } from "@t3tools/shared/orchestrationV2PendingBackgroundWork";
 import { threadPullRequestSearchTerms } from "@t3tools/shared/threadPullRequests";
+import { searchItems, SEARCH_SECONDARY_FIELD_WEIGHT } from "@t3tools/shared/searchRanking";
 import * as React from "react";
 import {
   isAtomCommandInterrupted,
@@ -1072,10 +1073,8 @@ export { sortPinnedThreadsByOrderKey as sortPinnedThreadsForSidebar } from "@t3t
 const EMPTY_CONTENT_MATCH_KEYS: ReadonlySet<string> = new Set<string>();
 
 /**
- * Search the already-ordered sidebar thread collection by title or linked PR,
- * plus any thread whose messages the server matched (`contentMatchKeys`, keyed
- * by `threadSearchMatchKey`). Keeping the input order means lifecycle ordering
- * (active, snoozed, settled) remains stable while the user narrows the list.
+ * Rank title and linked-PR hits ahead of server-matched message content.
+ * Equal scores retain the sidebar's lifecycle and recency ordering.
  */
 export function searchSidebarThreads<
   T extends {
@@ -1090,15 +1089,21 @@ export function searchSidebarThreads<
 ): T[] {
   const normalizedQuery = query.trim().toLowerCase();
   if (normalizedQuery.length === 0) return [];
-  const titleMatches: T[] = [];
+  const titleMatches = searchItems(threads, query, (thread) => [
+    thread.title,
+    ...threadPullRequestSearchTerms(thread).map((value) => ({
+      value,
+      weight: SEARCH_SECONDARY_FIELD_WEIGHT,
+      fuzzy: false,
+    })),
+  ]);
+  const titleMatchIds = new Set(
+    titleMatches.map((thread) => `${thread.environmentId}:${thread.id}`),
+  );
   const contentMatches: T[] = [];
   for (const thread of threads) {
-    const matchesTitle = [thread.title, ...threadPullRequestSearchTerms(thread)].some((term) =>
-      term.toLowerCase().includes(normalizedQuery),
-    );
-    if (matchesTitle) {
-      titleMatches.push(thread);
-    } else if (
+    if (
+      !titleMatchIds.has(`${thread.environmentId}:${thread.id}`) &&
       contentMatchKeys.size > 0 &&
       contentMatchKeys.has(
         threadSearchMatchKey({ environmentId: thread.environmentId, threadId: thread.id }),
@@ -1110,14 +1115,16 @@ export function searchSidebarThreads<
   return [...titleMatches, ...contentMatches];
 }
 
-export function filterSidebarProjectScopeItems<TItem extends { readonly value: string }>(input: {
-  items: readonly TItem[];
-  query: string;
-  matches: (item: TItem, query: string) => boolean;
-}): readonly TItem[] {
+export function filterSidebarProjectScopeItems<
+  TItem extends { readonly value: string; readonly label: string },
+>(input: { items: readonly TItem[]; query: string }): readonly TItem[] {
   const query = input.query.trim();
   if (query.length === 0) return input.items;
-  return input.items.filter((item) => item.value !== "all" && input.matches(item, query));
+  return searchItems(
+    input.items.filter((item) => item.value !== "all"),
+    query,
+    (item) => [item.label],
+  );
 }
 
 export interface SidebarProjectScopeMenuState {

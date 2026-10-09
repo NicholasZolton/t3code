@@ -269,7 +269,6 @@ import {
   ComboboxList,
   ComboboxPopup,
   ComboboxTrigger,
-  useComboboxFilter,
 } from "./ui/combobox";
 import { SidebarContent, SidebarGroup, useSidebar } from "./ui/sidebar";
 import { SidebarChromeFooter, SidebarChromeHeader } from "./sidebar/SidebarChrome";
@@ -2637,7 +2636,6 @@ export default function Sidebar() {
     reduceSidebarProjectScopeMenuState,
     { open: false, query: "" },
   );
-  const projectScopeFilter = useComboboxFilter();
   // Filtering derives from the same React state that controls the input, so
   // the visible query and the visible list can never desync — the peer wiring
   // in DiffPanel and BranchToolbarBranchSelector. "All projects" is the default
@@ -2649,10 +2647,8 @@ export default function Sidebar() {
       filterSidebarProjectScopeItems({
         items: projectScopeItems,
         query: projectScopeMenuState.query,
-        matches: (item, query) =>
-          projectScopeFilter.contains(item, query, (candidate) => candidate.label),
       }),
-    [projectScopeFilter, projectScopeItems, projectScopeMenuState.query],
+    [projectScopeItems, projectScopeMenuState.query],
   );
   const scopedProjectGroup = useMemo(
     () =>

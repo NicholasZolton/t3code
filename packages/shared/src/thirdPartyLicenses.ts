@@ -1,3 +1,5 @@
+import { searchItems } from "./searchRanking.ts";
+
 export interface ThirdPartyLicenseEntry {
   readonly bundles: ReadonlyArray<string>;
   readonly kind: "custom" | "package";
@@ -81,19 +83,12 @@ export function filterThirdPartyLicenseEntries(
   entries: ReadonlyArray<ThirdPartyLicenseEntry>,
   query: string,
 ): ReadonlyArray<ThirdPartyLicenseEntry> {
-  const terms = query
-    .trim()
-    .toLowerCase()
-    .split(/\s+/)
-    .filter((term) => term.length > 0);
-  if (terms.length === 0) return entries;
-  return entries.filter((entry) => {
-    const searchable = [entry.name, entry.version, entry.license, ...entry.bundles]
-      .filter((value): value is string => value !== null)
-      .join(" ")
-      .toLowerCase();
-    return terms.every((term) => searchable.includes(term));
-  });
+  return searchItems(entries, query, (entry) => [
+    entry.name,
+    { value: entry.license, weight: 100 },
+    { value: entry.version ?? "", weight: 200, fuzzy: false },
+    ...entry.bundles.map((value) => ({ value, weight: 200 })),
+  ]);
 }
 
 const BUNDLE_LABELS: Readonly<Record<string, string>> = {

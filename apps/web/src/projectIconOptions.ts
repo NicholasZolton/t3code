@@ -1,4 +1,5 @@
 import { iconNames, type IconName } from "lucide-react/dynamic";
+import { searchItems } from "@t3tools/shared/searchRanking";
 export { PROJECT_ICON_COLORS, projectIconColorClassName } from "./projectIconColors";
 
 const POPULAR_PROJECT_ICONS = [
@@ -62,9 +63,9 @@ export const PROJECT_EMOJIS: ReadonlyArray<{ readonly emoji: string; readonly la
 ];
 
 export function filterProjectIconNames(query: string): ReadonlyArray<IconName> {
-  const normalized = query.trim().toLowerCase().replaceAll(/\s+/g, "-");
+  const normalized = query.trim();
   if (!normalized) return POPULAR_PROJECT_ICONS;
-  return iconNames.filter((name) => name.includes(normalized)).slice(0, 60);
+  return searchItems(iconNames, normalized, (name) => [name], 60);
 }
 
 export function firstEmoji(value: string): string | null {

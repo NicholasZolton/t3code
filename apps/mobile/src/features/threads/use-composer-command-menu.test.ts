@@ -45,6 +45,24 @@ import {
 } from "./use-composer-command-menu";
 
 describe("mobile slash commands", () => {
+  it("ranks abbreviated commands behind exact names and ahead of description-only hits", () => {
+    const items = buildComposerSlashCommandItems({
+      query: "rvm",
+      atMessageStart: true,
+      hasThread: true,
+      allowInteractionMode: false,
+      selectedProviderStatus: {
+        driver: ProviderDriverKind.make("codex"),
+        slashCommands: [
+          { name: "other", description: "Run rvm" },
+          { name: "review-menu", description: "Review changes" },
+          { name: "rvm", description: "Run review" },
+        ],
+      },
+    });
+    expect(items.map((item) => item.label)).toEqual(["/rvm", "/review-menu", "/other"]);
+  });
+
   const antigravity = {
     driver: ProviderDriverKind.make("antigravity"),
     showInteractionModeToggle: false,

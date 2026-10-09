@@ -7,6 +7,7 @@ import {
   type SessionGrantInput,
 } from "@t3tools/contracts";
 import { Atom } from "effect/reactivity";
+import { searchItems } from "@t3tools/shared/searchRanking";
 
 import type {
   EnvironmentConnectionPhase,
@@ -73,12 +74,11 @@ export function filterFilesystemBrowseEntries(
   entries: ReadonlyArray<FilesystemBrowseEntry>,
   query: string,
 ) {
-  const lowerQuery = query.toLowerCase();
   const showHidden = query.startsWith(".");
-  const visibleEntries = entries.filter(
-    (entry) =>
-      entry.name.toLowerCase().startsWith(lowerQuery) &&
-      (showHidden || !entry.name.startsWith(".")),
+  const visibleEntries = searchItems(
+    entries.filter((entry) => showHidden || !entry.name.startsWith(".")),
+    query,
+    (entry) => [entry.name],
   );
   const exactEntry =
     query.length > 0 ? (visibleEntries.find((entry) => entry.name === query) ?? null) : null;

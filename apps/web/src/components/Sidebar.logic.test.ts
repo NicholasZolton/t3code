@@ -1013,8 +1013,8 @@ describe("searchSidebarThreads", () => {
       ),
     );
 
-  it("matches thread titles case-insensitively and preserves their order", () => {
-    expect(searchSidebarThreads(threads, "work")).toEqual([threads[0], threads[2]]);
+  it("matches thread titles case-insensitively and ranks prefixes before later words", () => {
+    expect(searchSidebarThreads(threads, "work")).toEqual([threads[2], threads[0]]);
   });
 
   it("does not match project metadata", () => {
@@ -1027,23 +1027,23 @@ describe("searchSidebarThreads", () => {
 
   it("appends content-only matches after every title match", () => {
     expect(searchSidebarThreads(threads, "work", contentKeys("thread-2"))).toEqual([
-      threads[0],
       threads[2],
+      threads[0],
       threads[1],
     ]);
   });
 
   it("lists a thread matching both title and content once", () => {
     expect(searchSidebarThreads(threads, "work", contentKeys("thread-1"))).toEqual([
-      threads[0],
       threads[2],
+      threads[0],
     ]);
   });
 
   it("ignores content matches for threads outside the sidebar collection", () => {
     expect(searchSidebarThreads(threads, "work", contentKeys("thread-missing"))).toEqual([
-      threads[0],
       threads[2],
+      threads[0],
     ]);
   });
 });
@@ -1058,8 +1058,6 @@ describe("filterSidebarProjectScopeItems", () => {
     filterSidebarProjectScopeItems({
       items,
       query,
-      matches: (item, candidate) =>
-        item.label.toLocaleLowerCase().includes(candidate.toLocaleLowerCase()),
     });
 
   it("shows the default row first while the query is empty", () => {
@@ -1074,6 +1072,11 @@ describe("filterSidebarProjectScopeItems", () => {
   it("returns matching projects in source order and supports no-match results", () => {
     expect(filter("WORK")).toEqual([items[1]]);
     expect(filter("missing")).toEqual([]);
+  });
+
+  it("finds abbreviated project labels", () => {
+    expect(filter("awsp")).toEqual([items[1]]);
+    expect(filter("btl")).toEqual([items[2]]);
   });
 });
 

@@ -7,7 +7,7 @@ import {
   canCommitPendingModel,
   favoritesFirst,
   modelFavoriteKey,
-  modelMatchesCatalogQuery,
+  scoreModelCatalogQuery,
   pendingModelAfterPress,
   toggleModelFavorite,
 } from "./thread-settings-sheet-state";
@@ -78,21 +78,21 @@ describe("thread settings sheet state", () => {
   it("matches visible model and provider terms", () => {
     const model = modelOption("gpt-next");
 
-    expect(modelMatchesCatalogQuery({ model, providerLabel: "Codex", query: "NEXT" })).toBe(true);
-    expect(modelMatchesCatalogQuery({ model, providerLabel: "Codex", query: "codex" })).toBe(true);
-    expect(modelMatchesCatalogQuery({ model, providerLabel: "Codex", query: "claude" })).toBe(
-      false,
-    );
+    expect(scoreModelCatalogQuery({ model, providerLabel: "Codex", query: "NEXT" })).not.toBeNull();
+    expect(
+      scoreModelCatalogQuery({ model, providerLabel: "Codex", query: "codex" }),
+    ).not.toBeNull();
+    expect(scoreModelCatalogQuery({ model, providerLabel: "Codex", query: "claude" })).toBeNull();
   });
 
   it("treats whitespace-only catalog searches as empty", () => {
     expect(
-      modelMatchesCatalogQuery({
+      scoreModelCatalogQuery({
         model: modelOption("gpt-next"),
         providerLabel: "Codex",
         query: "   ",
       }),
-    ).toBe(true);
+    ).toBe(0);
   });
 
   it("matches the upstream provider's display name", () => {
@@ -102,12 +102,12 @@ describe("thread settings sheet state", () => {
       subtitle: "OpenCode Zen",
     };
 
-    expect(modelMatchesCatalogQuery({ model, providerLabel: "OpenCode", query: " ZEN " })).toBe(
-      true,
-    );
-    expect(modelMatchesCatalogQuery({ model, providerLabel: "OpenCode", query: "copilot" })).toBe(
-      false,
-    );
+    expect(
+      scoreModelCatalogQuery({ model, providerLabel: "OpenCode", query: " ZEN " }),
+    ).not.toBeNull();
+    expect(
+      scoreModelCatalogQuery({ model, providerLabel: "OpenCode", query: "copilot" }),
+    ).toBeNull();
   });
 
   it("clears staging when the applied model is pressed", () => {

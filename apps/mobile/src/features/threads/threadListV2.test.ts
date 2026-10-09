@@ -879,6 +879,44 @@ describe("buildThreadListV2Items", () => {
     ]);
   });
 
+  it("ranks exact and fuzzy title hits ahead of content hits within each lifecycle section", () => {
+    const contentThread = makeThread({
+      id: ThreadId.make("content"),
+      title: "Unrelated title",
+      updatedAt: NOW,
+    });
+    const { items } = buildThreadListV2Items({
+      threads: [
+        contentThread,
+        makeThread({ id: ThreadId.make("fuzzy"), title: "Review menu", updatedAt: NOW }),
+        makeThread({
+          id: ThreadId.make("exact"),
+          title: "rvw",
+          updatedAt: "2026-06-01T00:00:00.000Z",
+        }),
+        makeThread({
+          id: ThreadId.make("settled"),
+          title: "rvw",
+          settledOverride: "settled",
+          settledAt: NOW,
+        }),
+      ],
+      environmentId,
+      searchQuery: " RVW ",
+      matchedThreadKeys: new Set([
+        threadSearchMatchKey({ environmentId, threadId: contentThread.id }),
+      ]),
+      now: NOW,
+    });
+
+    expect(items.map((item) => [item.thread.id, item.variant])).toEqual([
+      ["exact", "card"],
+      ["fuzzy", "card"],
+      ["content", "card"],
+      ["settled", "slim"],
+    ]);
+  });
+
   it("includes a thread matched by message content", () => {
     const thread = makeThread({
       id: ThreadId.make("content-match"),

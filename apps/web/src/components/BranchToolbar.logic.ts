@@ -7,6 +7,7 @@ import type {
 } from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
 import { sanitizeNewRefName } from "@t3tools/shared/git";
+import { scoreSearchFields } from "@t3tools/shared/searchRanking";
 import { DEFAULT_VCS_TERMINOLOGY, type VcsTerminology } from "@t3tools/shared/vcs";
 import { toSortableTimestamp } from "../lib/threadSort";
 export {
@@ -334,7 +335,7 @@ export function shouldIncludeBranchPickerItem(input: {
   }
 
   const lowerItemValue = itemValue.toLowerCase();
-  if (lowerItemValue.includes(normalizedQuery)) {
+  if (scoreSearchFields([lowerItemValue], normalizedQuery) !== null) {
     return true;
   }
 
@@ -345,6 +346,6 @@ export function shouldIncludeBranchPickerItem(input: {
   return (
     sanitizedQuery.length > 0 &&
     sanitizedQuery !== normalizedQuery &&
-    lowerItemValue.includes(sanitizedQuery)
+    scoreSearchFields([lowerItemValue], sanitizedQuery) !== null
   );
 }

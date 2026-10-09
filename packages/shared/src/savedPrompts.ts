@@ -1,4 +1,4 @@
-import { scoreQueryMatch } from "./searchRanking.ts";
+import { searchItems } from "./searchRanking.ts";
 
 const VARIABLE = /\{\{(clipboard|env\.([a-zA-Z_][a-zA-Z0-9_]*))\}\}/g;
 
@@ -6,27 +6,8 @@ export function searchSavedPrompts(
   prompts: Readonly<Record<string, string>>,
   query: string,
 ): Array<[string, string]> {
-  const normalizedQuery = query.toLowerCase();
-  if (!normalizedQuery) {
-    return Object.entries(prompts).sort(([left], [right]) => left.localeCompare(right));
-  }
-
-  return Object.entries(prompts)
-    .map(([name, body]) => ({
-      name,
-      body,
-      score: scoreQueryMatch({
-        value: name.toLowerCase(),
-        query: normalizedQuery,
-        exactBase: 0,
-        prefixBase: 1,
-        includesBase: 100,
-        fuzzyBase: 500,
-      }),
-    }))
-    .filter((entry): entry is typeof entry & { score: number } => entry.score !== null)
-    .sort((left, right) => left.score - right.score || left.name.localeCompare(right.name))
-    .map(({ name, body }) => [name, body]);
+  const entries = Object.entries(prompts).sort(([left], [right]) => left.localeCompare(right));
+  return searchItems(entries, query, ([name]) => [name]);
 }
 
 export function savedPromptEnvironmentNames(body: string): string[] {

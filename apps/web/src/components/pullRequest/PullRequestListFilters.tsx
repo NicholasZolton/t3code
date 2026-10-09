@@ -7,6 +7,7 @@ import type {
   PullRequestListState,
   SourceControlProviderKind,
 } from "@t3tools/contracts";
+import { searchItems } from "@t3tools/shared/searchRanking";
 import {
   CircleCheckIcon,
   CircleDashedIcon,
@@ -253,17 +254,14 @@ function PullRequestAuthorFilter({
   onChange: (author: string | undefined) => void;
 }) {
   const [query, setQuery] = useState("");
-  const needle = query.trim().toLowerCase();
   const login = value?.toLowerCase() ?? "";
   const selected = options.find((option) => option.actor.login.toLowerCase() === login);
   const visible = [
     ...(selected ? [selected] : []),
-    ...options.filter(
-      (option) =>
-        option !== selected &&
-        (needle.length === 0 ||
-          option.actor.login.toLowerCase().includes(needle) ||
-          option.actor.name?.toLowerCase().includes(needle)),
+    ...searchItems(
+      options.filter((option) => option !== selected),
+      query,
+      (option) => [option.actor.login, option.actor.name ?? ""],
     ),
   ].slice(0, 10);
   const select = (next: string) => next.toLowerCase() !== login && onChange(next || undefined);

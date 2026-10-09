@@ -1,5 +1,5 @@
 import type { ProjectEntry } from "@t3tools/contracts";
-import { normalizeSearchQuery, scoreQueryMatch } from "@t3tools/shared/searchRanking";
+import { normalizeSearchQuery, scoreSearchFields } from "@t3tools/shared/searchRanking";
 
 export interface FileTreeNode {
   readonly path: string;
@@ -134,18 +134,7 @@ export function defaultExpandedTreePaths(nodes: ReadonlyArray<FileTreeNode>): Re
 }
 
 function valueMatchesSearchToken(value: string, token: string, fuzzy: boolean): boolean {
-  return (
-    scoreQueryMatch({
-      value,
-      query: token,
-      exactBase: 0,
-      prefixBase: 2,
-      boundaryBase: 4,
-      includesBase: 6,
-      ...(fuzzy ? { fuzzyBase: 100 } : {}),
-      boundaryMarkers: ["/", "-", "_", "."],
-    }) !== null
-  );
+  return scoreSearchFields([{ value, fuzzy }], token) !== null;
 }
 
 function nodeMatchesSearch(node: FileTreeNode, tokens: ReadonlyArray<string>): boolean {

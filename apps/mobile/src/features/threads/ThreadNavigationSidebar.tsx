@@ -12,6 +12,7 @@ import {
 import { LegendList } from "@legendapp/list/react-native";
 import type { MenuAction } from "@react-native-menu/menu";
 import { useAtomValue } from "@effect/atom-react";
+import { searchItems } from "@t3tools/shared/searchRanking";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { LayoutChangeEvent, TextInputInstance } from "react-native";
 import { Platform, StyleSheet, TextInput, View } from "react-native";
@@ -425,17 +426,18 @@ function ThreadNavigationSidebarPane(
     // (mirrors the compact Home v2 list) where they stay visible and
     // deletable while their environment is offline. Same environment scope
     // and search filter as the list.
-    const v2SearchQuery = props.searchQuery.trim().toLocaleLowerCase();
-    const v2PendingTasks = pendingTasks.filter(
-      (pendingTask) =>
-        (options.selectedEnvironmentId === null ||
-          pendingTask.environmentId === options.selectedEnvironmentId) &&
-        (selectedProjectRefs === null ||
-          selectedProjectRefs.has(
-            scopedProjectKey(pendingTask.environmentId, pendingTask.projectId),
-          )) &&
-        (v2SearchQuery.length === 0 ||
-          pendingTask.title.toLocaleLowerCase().includes(v2SearchQuery)),
+    const v2PendingTasks = searchItems(
+      pendingTasks.filter(
+        (pendingTask) =>
+          (options.selectedEnvironmentId === null ||
+            pendingTask.environmentId === options.selectedEnvironmentId) &&
+          (selectedProjectRefs === null ||
+            selectedProjectRefs.has(
+              scopedProjectKey(pendingTask.environmentId, pendingTask.projectId),
+            )),
+      ),
+      props.searchQuery,
+      (pendingTask) => [pendingTask.title],
     );
     const items: SidebarListItem[] = buildThreadListV2ListItems({
       items: threadListV2Layout.items,

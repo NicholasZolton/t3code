@@ -1,3 +1,5 @@
+import { scoreSearchFields, SEARCH_SECONDARY_FIELD_WEIGHT } from "@t3tools/shared/searchRanking";
+
 export interface CommandPaletteItem {
   readonly key: string;
   readonly kind: "action" | "project" | "thread";
@@ -14,30 +16,24 @@ export function filterCommandPaletteItems(
   matchedThreadKeys: ReadonlySet<string>,
 ) {
   const actionsOnly = query.startsWith(">");
-  const normalized = (actionsOnly ? query.slice(1) : query).trim().toLocaleLowerCase();
-  const tokens = normalized.split(/\s+/);
+  const normalized = (actionsOnly ? query.slice(1) : query).trim();
   return items
     .flatMap((item, index) => {
       if (actionsOnly && item.kind !== "action") return [];
-      if (!normalized) return item.kind === "project" ? [] : [{ item, rank: 0, index }];
-      const title = item.title.toLocaleLowerCase();
-      const haystack = [title, ...item.searchTerms].join(" ").toLocaleLowerCase();
-      if (
-        !tokens.every((token) => haystack.includes(token)) &&
-        !(item.kind === "thread" && matchedThreadKeys.has(item.key))
-      )
-        return [];
-      const rank =
-        title === normalized
-          ? 3
-          : title.startsWith(normalized)
-            ? 2
-            : title.includes(normalized)
-              ? 1
-              : 0;
-      return [{ item, rank, index }];
+      if (!normalized) return item.kind === "project" ? [] : [{ item, score: 0, index }];
+      const score = scoreSearchFields(
+        [
+          item.title,
+          ...item.searchTerms.map((value) => ({ value, weight: SEARCH_SECONDARY_FIELD_WEIGHT })),
+        ],
+        normalized,
+      );
+      if (score !== null) return [{ item, score, index }];
+      return item.kind === "thread" && matchedThreadKeys.has(item.key)
+        ? [{ item, score: Number.MAX_SAFE_INTEGER, index }]
+        : [];
     })
-    .sort((left, right) => right.rank - left.rank || left.index - right.index)
+    .sort((left, right) => left.score - right.score || left.index - right.index)
     .map(({ item }) => item);
 }
 

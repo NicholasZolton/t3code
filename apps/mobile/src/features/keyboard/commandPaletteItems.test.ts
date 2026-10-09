@@ -56,6 +56,15 @@ describe("filterCommandPaletteItems", () => {
     ).toEqual(["new"]);
   });
 
+  it("uses weighted fuzzy ranking for actions and projects", () => {
+    expect(
+      filterCommandPaletteItems(items, "> opnstngs", emptyMatches).map((item) => item.key),
+    ).toEqual(["settings"]);
+    expect(
+      filterCommandPaletteItems(items, "mbl app", emptyMatches).map((item) => item.key),
+    ).toEqual(["project", "mac:one", "siva:one"]);
+  });
+
   it("includes server content matches scoped to the correct environment, except in actions-only mode", () => {
     const matches = new Set(["siva:one", "project"]);
     expect(

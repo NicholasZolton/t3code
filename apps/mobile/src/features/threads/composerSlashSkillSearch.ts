@@ -1,7 +1,8 @@
 import type { ServerProviderSkill } from "@t3tools/contracts";
+import { scoreProviderSkill } from "@t3tools/client-runtime/providerSkills";
 
-export function matchesSlashSkillQuery(skill: ServerProviderSkill, query: string): boolean {
-  if (!skill.enabled) return false;
+export function scoreSlashSkillQuery(skill: ServerProviderSkill, query: string): number | null {
+  if (!skill.enabled || skill.userInvocable === false) return null;
   const normalizedQuery = query.toLowerCase();
   const skillQuery =
     normalizedQuery === "skill"
@@ -9,8 +10,5 @@ export function matchesSlashSkillQuery(skill: ServerProviderSkill, query: string
       : normalizedQuery.startsWith("skill:")
         ? normalizedQuery.slice("skill:".length)
         : normalizedQuery;
-  if (!skillQuery) return true;
-  return [skill.name, skill.displayName, skill.shortDescription, skill.description].some((value) =>
-    value?.toLowerCase().includes(skillQuery),
-  );
+  return scoreProviderSkill(skill, skillQuery);
 }

@@ -1,5 +1,6 @@
 import { MousePointer2Icon, PaintbrushIcon, PlusIcon, XIcon } from "lucide-react";
 import { ChevronDown, ChevronUp } from "lucide";
+import { searchItems } from "@t3tools/shared/searchRanking";
 import {
   useCallback,
   useEffect,
@@ -1051,14 +1052,10 @@ export function ThemeEditorPanel({
     const query = roleQuery.trim().toLowerCase();
     const groups = THEME_EDITOR_ROLE_GROUPS.map((group) => ({
       ...group,
-      families: group.families.filter(
-        (family) =>
-          !query ||
-          [family.label, ...family.roles.map((role) => getThemeRoleLabel(role))]
-            .join(" ")
-            .toLowerCase()
-            .includes(query),
-      ),
+      families: searchItems(group.families, query, (family) => [
+        family.label,
+        ...family.roles.map((role) => getThemeRoleLabel(role)),
+      ]),
     })).filter((group) => group.families.length > 0);
     return isAdvanced ? (
       <div className="space-y-5">

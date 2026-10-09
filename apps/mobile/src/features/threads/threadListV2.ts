@@ -1,4 +1,5 @@
 import { threadPullRequestSearchTerms } from "@t3tools/shared/threadPullRequests";
+import { scoreSearchFields, SEARCH_SECONDARY_FIELD_WEIGHT } from "@t3tools/shared/searchRanking";
 import {
   canSnooze,
   effectiveSnoozed,
@@ -693,7 +694,7 @@ export function buildThreadListV2Items(input: {
             pendingOrder: null,
           }),
         );
-  const query = input.searchQuery.trim().toLocaleLowerCase();
+  const query = input.searchQuery.trim();
   const projectKeys = input.projectRefs
     ? new Set(input.projectRefs.map((ref) => `${ref.environmentId}:${ref.projectId}`))
     : null;
@@ -707,6 +708,15 @@ export function buildThreadListV2Items(input: {
   let nextSnoozeWakeAt: string | null = null;
   // An empty set is treated as absent so `?.` skips building the key.
   const queuedThreadKeys = input.queuedThreadKeys?.size ? input.queuedThreadKeys : undefined;
+  const searchScores = new Map<EnvironmentThreadShell, number>();
+  const rankSearchSection = (
+    threads: readonly EnvironmentThreadShell[],
+  ): readonly EnvironmentThreadShell[] =>
+    query.length === 0
+      ? threads
+      : [...threads].sort(
+          (left, right) => (searchScores.get(left) ?? 0) - (searchScores.get(right) ?? 0),
+        );
   for (const thread of input.threads) {
     if (thread.archivedAt !== null || thread.lineage.relationshipToParent === "subagent") continue;
     // The server stamps settledOverride for the tail.
@@ -714,12 +724,22 @@ export function buildThreadListV2Items(input: {
     if (projectKeys !== null && !projectKeys.has(`${thread.environmentId}:${thread.projectId}`)) {
       continue;
     }
+    const searchScore =
+      query.length === 0
+        ? 0
+        : scoreSearchFields(
+            [
+              thread.title,
+              ...threadPullRequestSearchTerms(thread).map((value) => ({
+                value,
+                weight: SEARCH_SECONDARY_FIELD_WEIGHT,
+                fuzzy: false,
+              })),
+            ],
+            query,
+          );
     if (
-      query.length > 0 &&
-      !thread.title.toLocaleLowerCase().includes(query) &&
-      !threadPullRequestSearchTerms(thread).some((term) =>
-        term.toLocaleLowerCase().includes(query),
-      ) &&
+      searchScore === null &&
       input.matchedThreadKeys?.has(
         threadSearchMatchKey({
           environmentId: thread.environmentId,
@@ -729,6 +749,7 @@ export function buildThreadListV2Items(input: {
     ) {
       continue;
     }
+    if (query.length > 0) searchScores.set(thread, searchScore ?? Number.MAX_SAFE_INTEGER);
     const supportsSettlement = input.settlementEnvironmentIds?.has(thread.environmentId) ?? true;
     const supportsSnooze = input.snoozeEnvironmentIds?.has(thread.environmentId) ?? true;
     // Snooze outranks settlement and pinning until the thread wakes.
@@ -758,14 +779,18 @@ export function buildThreadListV2Items(input: {
 
   // The beta inbox is time-ordered, so the saved arrangement (and any move in
   // flight) is kept but not applied until the beta is off again.
-  const orderedActive = workingShelfEnabled
-    ? sortInboxThreadsByReturn(active, input.inboxReturnAt)
-    : applyPendingThreadOrder(sortThreadsForListV2(active), "active", pending);
+  const orderedActive = rankSearchSection(
+    workingShelfEnabled
+      ? sortInboxThreadsByReturn(active, input.inboxReturnAt)
+      : applyPendingThreadOrder(sortThreadsForListV2(active), "active", pending),
+  );
   // Newest send first; finishing and waking again do not move a row.
-  const orderedWorking = sortWorkingThreadsBySend(working);
-  const orderedSnoozed = [...snoozed].sort(
-    (left, right) =>
-      parseTimestampMs(left.snoozedUntil ?? "") - parseTimestampMs(right.snoozedUntil ?? ""),
+  const orderedWorking = rankSearchSection(sortWorkingThreadsBySend(working));
+  const orderedSnoozed = rankSearchSection(
+    [...snoozed].sort(
+      (left, right) =>
+        parseTimestampMs(left.snoozedUntil ?? "") - parseTimestampMs(right.snoozedUntil ?? ""),
+    ),
   );
   const selectedThreadKey = input.selectedThreadKey ?? null;
   const visibleWorking =
@@ -780,7 +805,7 @@ export function buildThreadListV2Items(input: {
       : orderedSnoozed.filter(
           (thread) => `${thread.environmentId}:${thread.id}` === selectedThreadKey,
         );
-  const orderedSettled = sortSettledThreadsReusingLast(settled);
+  const orderedSettled = rankSearchSection(sortSettledThreadsReusingLast(settled));
   const settledLimit = input.settledLimit ?? Number.POSITIVE_INFINITY;
   const limitedSettled =
     orderedSettled.length > settledLimit ? orderedSettled.slice(0, settledLimit) : orderedSettled;
@@ -800,10 +825,8 @@ export function buildThreadListV2Items(input: {
         );
 
   const items: ThreadListV2Item[] = [];
-  for (const thread of applyPendingThreadOrder(
-    sortPinnedThreadsByOrderKey(pinned),
-    "pinned",
-    pending,
+  for (const thread of rankSearchSection(
+    applyPendingThreadOrder(sortPinnedThreadsByOrderKey(pinned), "pinned", pending),
   )) {
     items.push({
       thread,
