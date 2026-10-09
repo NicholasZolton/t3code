@@ -1,7 +1,7 @@
 import type { GitStatusEntry } from "@pierre/trees";
 import { FileTree, useFileTree, useFileTreeSelector } from "@pierre/trees/react";
 import { ChevronsDownUp, ChevronsUpDown } from "lucide";
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from "react";
 
 import { useTheme } from "~/hooks/useTheme";
 import { cn } from "~/lib/utils";
@@ -26,6 +26,7 @@ interface DiffFileTreeProps {
   readonly entries: ReadonlyArray<DiffFileTreeEntry>;
   /** Called with the file's path when the reader picks a file row. */
   readonly onSelectFile: (path: string) => void;
+  readonly onFileContextMenu?: (path: string, event: MouseEvent<HTMLElement>) => void;
   /**
    * The file the diff is currently showing, kept selected in the tree. Bump `revealRequestId` to
    * scroll the tree to the same path again.
@@ -47,6 +48,7 @@ interface DiffFileTreeProps {
 export function DiffFileTree({
   entries,
   onSelectFile,
+  onFileContextMenu,
   selectedPath = null,
   revealRequestId = 0,
   ariaLabel,
@@ -204,6 +206,20 @@ export function DiffFileTree({
       <FileTree
         model={model}
         aria-label={ariaLabel}
+        onContextMenuCapture={(event) => {
+          if (!onFileContextMenu) return;
+          const row = event.nativeEvent
+            .composedPath()
+            .find(
+              (node): node is HTMLElement =>
+                node instanceof HTMLElement && node.hasAttribute("data-item-path"),
+            );
+          const path = row?.getAttribute("data-item-path");
+          if (!path || !filePathsRef.current.has(path)) return;
+          event.preventDefault();
+          event.stopPropagation();
+          onFileContextMenu(path, event);
+        }}
         onClickCapture={(event) => {
           if (
             event.defaultPrevented ||
