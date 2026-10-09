@@ -23,7 +23,15 @@ import {
 import { ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown } from "lucide";
 import * as Schema from "effect/Schema";
 import * as DateTime from "effect/DateTime";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type MouseEvent,
+} from "react";
 import { useCodeViewFileReveal } from "./diffs/useCodeViewFileReveal";
 import { useFilesystemReadAccess } from "~/state/filesystem";
 import { useOpenInPreferredEditor } from "../editorPreferences";
@@ -250,6 +258,20 @@ export default function DiffPanel({
         .autoCollapseTestAndSnapshotFiles
     : true;
   const onFileContextMenu = useFileContextMenuHandler(activeThread?.environmentId ?? null);
+  const showDiffFileContextMenu = useCallback(
+    (filePath: string, event: MouseEvent<HTMLElement>): void => {
+      onFileContextMenu(
+        {
+          environmentId: activeThread?.environmentId ?? null,
+          filePath,
+          workspaceRoot: activeCwd,
+          repositoryRoot: activeRepositoryRoot,
+        },
+        event,
+      );
+    },
+    [activeThread?.environmentId, activeCwd, activeRepositoryRoot, onFileContextMenu],
+  );
   const openInPreferredEditor = useOpenInPreferredEditor(
     activeThread?.environmentId ?? null,
     serverConfig?.availableEditors ?? [],
@@ -1269,20 +1291,14 @@ export default function DiffPanel({
                     const composedPath = event.nativeEvent.composedPath?.() ?? [];
                     const title = composedPath.find(
                       (node): node is HTMLElement =>
-                        node instanceof HTMLElement && node.hasAttribute("data-title"),
+                        node instanceof HTMLElement &&
+                        (node.hasAttribute("data-title") || node.hasAttribute("data-prev-name")),
                     );
-                    const filePath = title?.textContent?.trim();
+                    const filePath = title?.textContent;
                     if (!filePath) return;
                     event.preventDefault();
-                    onFileContextMenu(
-                      {
-                        environmentId: activeThread?.environmentId ?? null,
-                        filePath,
-                        workspaceRoot: activeCwd,
-                        repositoryRoot: activeRepositoryRoot,
-                      },
-                      event,
-                    );
+                    event.stopPropagation();
+                    showDiffFileContextMenu(filePath, event);
                   }}
                 >
                   <AnnotatableCodeView
@@ -1357,6 +1373,7 @@ export default function DiffPanel({
                       selectedPath={selectedFilePath}
                       revealRequestId={selectedFileRevealRequestId}
                       onSelectFile={revealDiffFile}
+                      onFileContextMenu={showDiffFileContextMenu}
                     />
                   </aside>
                 ) : null}

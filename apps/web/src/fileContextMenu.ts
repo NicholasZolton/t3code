@@ -1,6 +1,6 @@
 /**
- * Right-click actions for a workspace file: reveal it in the environment's
- * file manager and open it in an editor. Reuse the chat file-chip menu's
+ * Right-click actions for a workspace file: copy its path, reveal it in the
+ * environment's file manager, and open it in an editor. Reuse the chat file-chip menu's
  * machinery: reveal rides `shell.openInEditor` with `reveal: true`, which the
  * server only honors when its `shellRevealInFileManager` config flag is set,
  * so both actions work for every client and connection mode.
@@ -14,6 +14,7 @@ import {
 import { useCallback, useMemo } from "react";
 
 import { resolveDiffPathForWorkspace } from "./diffFileActions";
+import { writeTextToClipboard } from "./hooks/useCopyToClipboard";
 import {
   revealInFileExplorerLabelForKind,
   revealInFileExplorerLabelForOs,
@@ -27,6 +28,8 @@ import { toastManager } from "./components/ui/toast";
 import { useAtomValue } from "@effect/atom-react";
 
 export type FileContextMenuAction =
+  | "copy-relative-path"
+  | "copy-absolute-path"
   | "reveal-in-folder"
   | "open"
   /** Submenu parent; never the activated id. */
@@ -41,12 +44,11 @@ export interface FileContextMenuTarget {
   readonly repositoryRoot?: string | undefined;
 }
 
-/** Absolute path on the environment host, or null when it cannot be resolved. */
 /**
  * Absolute path on the environment host for a diff-style target, resolving
  * repo-relative paths through the workspace root like every other diff
  * surface. Returns null when the path cannot be resolved, which callers must
- * treat as "no file actions available".
+ * treat as "no host file actions available".
  */
 export function resolveFileContextMenuAbsolutePath(target: FileContextMenuTarget): string | null {
   const workspaceFilePath = resolveDiffPathForWorkspace({
@@ -63,6 +65,20 @@ export function resolveFileContextMenuAbsolutePath(target: FileContextMenuTarget
   return resolvePathLinkTarget(workspaceFilePath, target.workspaceRoot);
 }
 
+// A diff may include sibling projects. Copying their paths does not require host file access.
+function resolveFileContextMenuAbsoluteCopyPath(target: FileContextMenuTarget): string | null {
+  return (
+    resolveFileContextMenuAbsolutePath(target) ??
+    (target.repositoryRoot
+      ? resolveFileContextMenuAbsolutePath({
+          ...target,
+          workspaceRoot: target.repositoryRoot,
+          repositoryRoot: undefined,
+        })
+      : null)
+  );
+}
+
 const EDITOR_LABEL_BY_ID = new Map(EDITORS.map((editor) => [editor.id, editor.label]));
 
 export interface FileContextMenuCapabilities {
@@ -72,21 +88,19 @@ export interface FileContextMenuCapabilities {
 }
 
 /**
- * Menu items for a resolved file, offering only what the environment's config
- * advertises: default-app open, reveal (with server-provided wording), and an
- * "Open with" submenu of detected editors. Empty when nothing can act.
+ * Copying a relative path needs no host capabilities. Absolute-path copying and
+ * host file actions are offered only when the path can be resolved.
  */
 export function buildFileContextMenuItems(input: {
-  readonly hasAbsolutePath: boolean;
+  readonly target: FileContextMenuTarget;
   readonly capabilities: FileContextMenuCapabilities;
 }): readonly ContextMenuItem<FileContextMenuAction>[] {
-  // Without a resolvable absolute path nothing here can act on the file.
-  if (!input.hasAbsolutePath) return [];
+  const hasHostFilePath = resolveFileContextMenuAbsolutePath(input.target) !== null;
   const items: ContextMenuItem<FileContextMenuAction>[] = [];
-  if (input.capabilities.canOpenDefault) {
+  if (hasHostFilePath && input.capabilities.canOpenDefault) {
     items.push({ id: "open", label: "Open", icon: "pencil" });
   }
-  if (input.capabilities.revealLabel !== undefined) {
+  if (hasHostFilePath && input.capabilities.revealLabel !== undefined) {
     items.push({
       id: "reveal-in-folder",
       label: input.capabilities.revealLabel,
@@ -94,7 +108,7 @@ export function buildFileContextMenuItems(input: {
     });
   }
   const editorIds = input.capabilities.editorIds.filter((id) => id !== "file-manager");
-  if (editorIds.length > 0) {
+  if (hasHostFilePath && editorIds.length > 0) {
     items.push({
       id: "open-with",
       label: "Open with",
@@ -104,6 +118,15 @@ export function buildFileContextMenuItems(input: {
       })),
     });
   }
+  items.push({
+    id: "copy-relative-path",
+    label: "Copy relative path",
+    icon: "copy",
+    separatorBefore: items.length > 0,
+  });
+  if (resolveFileContextMenuAbsoluteCopyPath(input.target) !== null) {
+    items.push({ id: "copy-absolute-path", label: "Copy absolute path", icon: "copy" });
+  }
   return items;
 }
 
@@ -112,7 +135,6 @@ export function buildFileContextMenuItems(input: {
  * (a thread's environment, a file browser's environment), so capabilities
  * resolve once per hook call.
  */
-/** Builds and dispatches the file context menu for one environment's files. */
 export function useFileContextMenu(environmentId: EnvironmentId | null) {
   const openInEditor = useAtomCommand(shellEnvironment.openInEditor, { reportFailure: false });
   const serverConfig = useAtomValue(serverEnvironment.configValueAtom(environmentId));
@@ -138,6 +160,27 @@ export function useFileContextMenu(environmentId: EnvironmentId | null) {
       action: FileContextMenuAction,
       target: FileContextMenuTarget,
     ): Promise<void> => {
+      if (action === "copy-relative-path" || action === "copy-absolute-path") {
+        const path =
+          action === "copy-relative-path"
+            ? target.filePath
+            : resolveFileContextMenuAbsoluteCopyPath(target);
+        if (path === null) return;
+        const label = action === "copy-relative-path" ? "Relative path" : "Absolute path";
+        try {
+          const copied = await writeTextToClipboard(path, "file path");
+          if (copied) {
+            toastManager.add({ type: "success", title: `${label} copied`, description: path });
+          }
+        } catch (error) {
+          toastManager.add({
+            type: "error",
+            title: "Failed to copy file path",
+            description: error instanceof Error ? error.message : "An error occurred.",
+          });
+        }
+        return;
+      }
       const absolutePath = resolveFileContextMenuAbsolutePath(target);
       if (absolutePath === null || environmentId === null) return;
 
@@ -165,27 +208,25 @@ export function useFileContextMenu(environmentId: EnvironmentId | null) {
       });
     };
 
+    const buildItems = (
+      target: FileContextMenuTarget,
+    ): readonly ContextMenuItem<FileContextMenuAction>[] =>
+      buildFileContextMenuItems({ target, capabilities });
+
     const show = async (
       target: FileContextMenuTarget,
       position?: { x: number; y: number },
     ): Promise<void> => {
       const api = readLocalApi();
-      const items = buildFileContextMenuItems({
-        hasAbsolutePath: resolveFileContextMenuAbsolutePath(target) !== null,
-        capabilities,
-      });
+      const items = buildItems(target);
       if (items.length === 0 || api === undefined) return;
       const clicked = await api.contextMenu.show(items, position);
       if (clicked === null) return;
-      await activate(clicked as FileContextMenuAction, target);
+      await activate(clicked, target);
     };
 
     return {
-      buildItems: (target: FileContextMenuTarget) =>
-        buildFileContextMenuItems({
-          hasAbsolutePath: resolveFileContextMenuAbsolutePath(target) !== null,
-          capabilities,
-        }),
+      buildItems,
       capabilities,
       activate,
       show,
@@ -193,7 +234,6 @@ export function useFileContextMenu(environmentId: EnvironmentId | null) {
   }, [environmentId, openInEditor, serverConfig]);
 }
 
-/** Convenience callback for onContextMenu handlers. */
 /** Returns an onContextMenu callback that shows the menu at the pointer. */
 export function useFileContextMenuHandler(environmentId: EnvironmentId | null) {
   const contextMenu = useFileContextMenu(environmentId);
