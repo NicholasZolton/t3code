@@ -2639,6 +2639,32 @@ it.layer(layerTest)("GitVcsDriver core integration", (it) => {
   });
 
   describe("refName operations", () => {
+    it.effect("ranks fuzzy ref matches before paginating the complete catalog", () =>
+      Effect.gen(function* () {
+        const cwd = yield* makeTmpDir();
+        yield* initRepoWithCommit(cwd);
+        const driver = yield* GitVcsDriver.GitVcsDriver;
+        yield* driver.createRef({ cwd, refName: "feature/review-menu" });
+        yield* driver.createRef({ cwd, refName: "rvm" });
+        yield* driver.createRef({ cwd, refName: "unrelated" });
+
+        const first = yield* driver.listRefs({ cwd, query: "rvm", limit: 1 });
+        assert.deepEqual(
+          first.refs.map((ref) => ref.name),
+          ["rvm"],
+        );
+        assert.equal(first.totalCount, 2);
+        assert.equal(first.nextCursor, 1);
+
+        const second = yield* driver.listRefs({ cwd, query: "rvm", cursor: 1, limit: 1 });
+        assert.deepEqual(
+          second.refs.map((ref) => ref.name),
+          ["feature/review-menu"],
+        );
+        assert.equal(second.nextCursor, null);
+      }),
+    );
+
     it.effect("optionally includes remote refs that match local branches", () =>
       Effect.gen(function* () {
         const cwd = yield* makeTmpDir();

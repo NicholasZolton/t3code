@@ -8,8 +8,7 @@ import {
 } from "@t3tools/contracts";
 import { filterFilesystemBrowseEntries } from "@t3tools/client-runtime/state/filesystem";
 import type { SidebarThreadSortOrder } from "@t3tools/contracts/settings";
-import * as Arr from "effect/Array";
-import * as Result from "effect/Result";
+import { scoreSearchFields, SEARCH_SECONDARY_FIELD_WEIGHT } from "@t3tools/shared/searchRanking";
 import { type ReactNode } from "react";
 import { getThreadSortTimestamp, sortThreads } from "../lib/threadSort";
 import { normalizeSearchText } from "../lib/utils";
@@ -390,52 +389,23 @@ export function buildThreadActionItems<TThread extends BuildThreadActionItemsThr
   });
 }
 
-function rankSearchFieldMatch(
-  field: string,
-  normalizedQuery: string,
-  queryTokens: ReadonlyArray<string>,
-): number {
-  const normalizedField = normalizeSearchText(field);
-  if (
-    normalizedField.length === 0 ||
-    !queryTokens.every((token) => normalizedField.includes(token))
-  ) {
-    return Number.NEGATIVE_INFINITY;
-  }
-  if (normalizedField === normalizedQuery) {
-    return 3;
-  }
-  if (normalizedField.startsWith(normalizedQuery)) {
-    return 2;
-  }
-  if (normalizedField.includes(normalizedQuery)) {
-    return 1;
-  }
-  return 0;
-}
-
-function rankCommandPaletteItemMatch(
+function scoreCommandPaletteItemMatch(
   item: CommandPaletteActionItem | CommandPaletteSubmenuItem,
   normalizedQuery: string,
   queryTokens: ReadonlyArray<string>,
-): number {
-  const terms = item.searchTerms.filter((term) => term.length > 0);
-  if (terms.length === 0) {
-    return 0;
+): number | null {
+  const title = normalizeSearchText(item.searchTerms[0] ?? "");
+  // Literal thread-title hits retain their recency ordering. Fuzzy hits follow them.
+  if (item.searchRecency !== undefined && queryTokens.every((token) => title.includes(token))) {
+    return title === normalizedQuery ? 0 : 1;
   }
-
-  for (const [index, field] of terms.entries()) {
-    const fieldRank = rankSearchFieldMatch(field, normalizedQuery, queryTokens);
-    if (fieldRank !== Number.NEGATIVE_INFINITY) {
-      if (index === 0 && item.searchRecency !== undefined) {
-        // All non-exact thread title matches share a tier so recency breaks the tie.
-        return 1_000 + Number(fieldRank === 3);
-      }
-      return 1_000 - index * 100 + fieldRank;
-    }
-  }
-
-  return 0;
+  return scoreSearchFields(
+    item.searchTerms.map((value, index) => ({
+      value,
+      weight: index * SEARCH_SECONDARY_FIELD_WEIGHT,
+    })),
+    normalizedQuery,
+  );
 }
 
 export function filterCommandPaletteGroups(input: {
@@ -491,22 +461,15 @@ export function filterCommandPaletteGroups(input: {
   }
 
   return searchableGroups.flatMap((group) => {
-    const items = Arr.filterMap(group.items, (item, index) => {
-      const haystack = normalizeSearchText(item.searchTerms.join(" "));
-      if (!queryTokens.every((token) => haystack.includes(token))) {
-        return Result.failVoid;
-      }
-
-      return Result.succeed({
-        item,
-        index,
-        rank: rankCommandPaletteItemMatch(item, normalizedQuery, queryTokens),
-      });
-    })
+    const items = group.items
+      .flatMap((item, index) => {
+        const score = scoreCommandPaletteItemMatch(item, normalizedQuery, queryTokens);
+        return score === null ? [] : [{ item, index, score }];
+      })
       .toSorted(
         (left, right) =>
           Number(left.item.secondary ?? false) - Number(right.item.secondary ?? false) ||
-          right.rank - left.rank ||
+          left.score - right.score ||
           (right.item.searchRecency ?? 0) - (left.item.searchRecency ?? 0) ||
           left.index - right.index,
       )

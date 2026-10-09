@@ -2,6 +2,7 @@ import { LegendList, type LegendListRef } from "@legendapp/list/react";
 import { CheckIcon } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { isMonospaceFamily, queryInstalledFontFamilies } from "../../appearanceFonts";
+import { searchItems } from "@t3tools/shared/searchRanking";
 import {
   Combobox,
   ComboboxEmpty,
@@ -149,11 +150,7 @@ export function FontFamilyPicker({
     const trimmedQuery = query.trim().toLowerCase();
     const result: string[] = [];
     if (trimmedQuery.length === 0) result.push(DEFAULT_FONT_VALUE);
-    result.push(
-      ...families.filter(
-        (family) => trimmedQuery.length === 0 || family.toLowerCase().includes(trimmedQuery),
-      ),
-    );
+    result.push(...searchItems(families, trimmedQuery, (family) => [family]));
     return result;
   }, [query, families]);
 

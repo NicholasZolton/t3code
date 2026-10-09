@@ -251,10 +251,8 @@ export function BranchToolbarBranchSelector({
   const vcsTerminology = resolveVcsTerminology(branchStatusQuery.data);
   const trimmedBranchQuery = branchQuery.trim();
   const deferredTrimmedBranchQuery = deferredBranchQuery.trim();
-  // The server filters refs by substring, so it has to be given the sanitized
-  // name as well: querying the raw "new branch" drops an existing new-branch
-  // from the response entirely, which would defeat the collision check below.
-  // Ref names cannot contain an ASCII space, so sanitizing loses no matches.
+  // Search the name a new ref would actually use so existing refs remain
+  // available to the collision check below when sanitizing changes the input.
   const branchRefQuery = sanitizeNewRefName(deferredTrimmedBranchQuery);
   const branchRefState = usePaginatedBranches({
     environmentId,

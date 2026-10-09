@@ -9,6 +9,7 @@ import { useAtomCommand } from "~/state/use-atom-command";
 import type { EnvironmentId, PullRequestLabelCandidate, PullRequestRef } from "@t3tools/contracts";
 import { CheckIcon, TagIcon } from "lucide-react";
 import { useMemo, useState } from "react";
+import { searchItems, SEARCH_SECONDARY_FIELD_WEIGHT } from "@t3tools/shared/searchRanking";
 
 import { pullRequestEnvironment } from "~/state/pullRequests";
 import { useEnvironmentQuery } from "~/state/query";
@@ -18,16 +19,6 @@ import { toastManager } from "../ui/toast";
 import { PullRequestCandidatePicker } from "./PullRequestCandidatePicker";
 import { readableFailure } from "./pullRequestDetail.logic";
 import { pullRequestLabelColor } from "./pullRequestList.logic";
-
-/** Narrows only what arrived: the host is asked once, when the menu opens. */
-function matches(candidate: PullRequestLabelCandidate, query: string): boolean {
-  if (query.length === 0) return true;
-  const needle = query.toLowerCase();
-  return (
-    candidate.name.toLowerCase().includes(needle) ||
-    (candidate.description ?? "").toLowerCase().includes(needle)
-  );
-}
 
 export function PullRequestLabelPicker({
   environmentId,
@@ -53,7 +44,11 @@ export function PullRequestLabelPicker({
   });
 
   const candidates = useMemo(
-    () => (candidatesQuery.data?.candidates ?? []).filter((entry) => matches(entry, query)),
+    () =>
+      searchItems(candidatesQuery.data?.candidates ?? [], query, (entry) => [
+        entry.name,
+        { value: entry.description ?? "", weight: SEARCH_SECONDARY_FIELD_WEIGHT, fuzzy: false },
+      ]),
     [candidatesQuery.data, query],
   );
 

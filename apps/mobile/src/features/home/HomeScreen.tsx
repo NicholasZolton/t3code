@@ -11,6 +11,7 @@ import {
   type EnvironmentThreadSearchMatch,
 } from "@t3tools/client-runtime/state/thread-search";
 import { type EnvironmentId, type SidebarProjectGroupingMode } from "@t3tools/contracts";
+import { searchItems } from "@t3tools/shared/searchRanking";
 import { useAtomValue } from "@effect/atom-react";
 import { useFocusEffect } from "@react-navigation/native";
 import { use, useCallback, useEffect, useMemo, useRef, useState, type ComponentProps } from "react";
@@ -623,21 +624,22 @@ export function HomeScreen(props: HomeScreenProps) {
   // they are spliced in below the active block and stay visible and deletable
   // while their environment is offline. Same environment scope and search
   // filter as the list itself.
-  const v2SearchQuery = props.searchQuery.trim().toLocaleLowerCase();
   const v2PendingTasks = useMemo(
     () =>
-      props.pendingTasks.filter(
-        (pendingTask) =>
-          (props.selectedEnvironmentId === null ||
-            pendingTask.environmentId === props.selectedEnvironmentId) &&
-          (v2ScopedProjectKeys === null ||
-            v2ScopedProjectKeys.has(
-              scopedProjectKey(pendingTask.environmentId, pendingTask.projectId),
-            )) &&
-          (v2SearchQuery.length === 0 ||
-            pendingTask.title.toLocaleLowerCase().includes(v2SearchQuery)),
+      searchItems(
+        props.pendingTasks.filter(
+          (pendingTask) =>
+            (props.selectedEnvironmentId === null ||
+              pendingTask.environmentId === props.selectedEnvironmentId) &&
+            (v2ScopedProjectKeys === null ||
+              v2ScopedProjectKeys.has(
+                scopedProjectKey(pendingTask.environmentId, pendingTask.projectId),
+              )),
+        ),
+        props.searchQuery,
+        (pendingTask) => [pendingTask.title],
       ),
-    [props.pendingTasks, props.selectedEnvironmentId, v2ScopedProjectKeys, v2SearchQuery],
+    [props.pendingTasks, props.selectedEnvironmentId, v2ScopedProjectKeys, props.searchQuery],
   );
   const threadListV2Items = useMemo(
     () =>

@@ -2,6 +2,7 @@
 
 import { ArrowDownIcon, ArrowUpIcon, PencilIcon, PlusIcon, StarIcon, XIcon } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { searchItems } from "@t3tools/shared/searchRanking";
 import {
   ProviderDriverKind,
   type ProviderInstanceId,
@@ -207,11 +208,7 @@ export function ProviderModelsSection({
   const normalizedFilter = filter.trim().toLowerCase();
   const isFiltering = showFilter && normalizedFilter.length > 0;
   const visibleModels = isFiltering
-    ? displayModels.filter(
-        (model) =>
-          model.name.toLowerCase().includes(normalizedFilter) ||
-          model.slug.toLowerCase().includes(normalizedFilter),
-      )
+    ? searchItems(displayModels, normalizedFilter, (model) => [model.name, model.slug])
     : displayModels;
 
   // The parent commits the new custom model and hands back an updated

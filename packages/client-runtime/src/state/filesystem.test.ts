@@ -129,6 +129,22 @@ describe("filesystem read access", () => {
 });
 
 describe("filesystem browse model", () => {
+  it("ranks abbreviated directory names without changing exact-path detection", () => {
+    const entries = [
+      { name: "Projects", fullPath: "/work/Projects" },
+      { name: "prj", fullPath: "/work/prj" },
+      { name: ".prj", fullPath: "/work/.prj" },
+    ];
+    expect(filterFilesystemBrowseEntries(entries, "prj")).toEqual({
+      visibleEntries: [entries[1], entries[0]],
+      exactEntry: entries[1],
+    });
+    expect(filterFilesystemBrowseEntries(entries, "prjs")).toEqual({
+      visibleEntries: [entries[0]],
+      exactEntry: null,
+    });
+  });
+
   it("derives the browse target and navigation state", () => {
     expect(getFilesystemBrowsePath("~/projects/t3")).toEqual({
       isBrowsing: true,

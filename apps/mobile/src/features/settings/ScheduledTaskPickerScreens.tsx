@@ -1,6 +1,7 @@
 import { useNavigation } from "@react-navigation/native";
 import * as Haptics from "expo-haptics";
 import { useMemo, useState } from "react";
+import { searchItems } from "@t3tools/shared/searchRanking";
 
 import { AppText as Text } from "../../components/AppText";
 import { buildModelOptions, groupByProvider } from "../../lib/modelOptions";
@@ -109,8 +110,10 @@ export function ScheduledTaskBranchPickerRouteScreen() {
     cwd: project?.workspaceRoot ?? null,
     query: debouncedQuery,
   });
-  const visibleBranches = branches.refs.filter(
-    (branch) => !branch.isRemote && branch.name.toLowerCase().includes(query.trim().toLowerCase()),
+  const visibleBranches = searchItems(
+    branches.refs.filter((branch) => !branch.isRemote),
+    query,
+    (branch) => [branch.name],
   );
 
   if (!editor) return <MissingTaskDraft />;

@@ -1,4 +1,5 @@
 import { isElectron } from "~/env";
+import { scoreSearchFields, SEARCH_SECONDARY_FIELD_WEIGHT } from "@t3tools/shared/searchRanking";
 import { isMacPlatform, isWindowsPlatform, normalizeSearchText } from "~/lib/utils";
 import { STATIC_KEYBINDING_COMMANDS, type KeybindingCommand } from "@t3tools/contracts";
 import type { EnvironmentId } from "@t3tools/contracts";
@@ -1125,7 +1126,6 @@ export function searchSettings(
 ): ReadonlyArray<SettingsSearchItem> {
   const normalizedQuery = normalizeSearchText(query);
   if (normalizedQuery.length === 0) return [];
-  const queryTokens = normalizedQuery.split(" ");
   const platform = typeof navigator === "undefined" ? "" : navigator.platform;
 
   return items
@@ -1134,33 +1134,24 @@ export function searchSettings(
       if (item.macOnly && !isMacPlatform(platform)) return [];
       if (item.windowsOnly && !isWindowsPlatform(platform)) return [];
 
-      const title = normalizeSearchText(item.title);
-      const fields = [
-        title,
-        normalizeSearchText(SETTINGS_SECTION_LABELS[item.to]),
-        ...(item.searchTerms ?? []).map(normalizeSearchText),
-      ];
-      if (!queryTokens.every((token) => fields.some((field) => field.includes(token)))) return [];
-
-      const exactPhraseField = fields.findIndex((field) => field.includes(normalizedQuery));
-      const rank =
-        title === normalizedQuery
-          ? 5
-          : title.startsWith(normalizedQuery)
-            ? 4
-            : title.includes(normalizedQuery)
-              ? 3
-              : queryTokens.every((token) => title.includes(token))
-                ? 2
-                : exactPhraseField >= 0
-                  ? 1
-                  : 0;
-      return [{ item, index, rank }];
+      const score = scoreSearchFields(
+        [
+          item.title,
+          { value: SETTINGS_SECTION_LABELS[item.to], weight: SEARCH_SECONDARY_FIELD_WEIGHT },
+          ...(item.searchTerms ?? []).map((value) => ({
+            value,
+            weight: SEARCH_SECONDARY_FIELD_WEIGHT,
+            fuzzy: false,
+          })),
+        ],
+        normalizedQuery,
+      );
+      return score === null ? [] : [{ item, index, score }];
     })
     .toSorted(
       (left, right) =>
         Number(left.item.secondary ?? false) - Number(right.item.secondary ?? false) ||
-        right.rank - left.rank ||
+        left.score - right.score ||
         left.index - right.index,
     )
     .map(({ item }) => item);

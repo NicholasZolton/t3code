@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { matchesSlashSkillQuery } from "./composerSlashSkillSearch";
+import { scoreSlashSkillQuery } from "./composerSlashSkillSearch";
 
 const browserSkill = {
   name: "browser",
@@ -9,9 +9,9 @@ const browserSkill = {
   shortDescription: "Open and control the in-app browser",
 };
 
-describe("matchesSlashSkillQuery", () => {
+describe("scoreSlashSkillQuery", () => {
   it("matches the rendered skill prefix", () => {
-    expect(matchesSlashSkillQuery(browserSkill, "skill")).toBe(true);
-    expect(matchesSlashSkillQuery(browserSkill, "skill:brow")).toBe(true);
+    expect(scoreSlashSkillQuery(browserSkill, "skill")).toBe(0);
+    expect(scoreSlashSkillQuery(browserSkill, "skill:brow")).not.toBeNull();
   });
 });

@@ -30,6 +30,7 @@ import {
 } from "@t3tools/contracts";
 import { dedupeRemoteBranchesWithLocalMatches, normalizeGitRemoteUrl } from "@t3tools/shared/git";
 import { HostProcessPlatform } from "@t3tools/shared/hostProcess";
+import { searchItems } from "@t3tools/shared/searchRanking";
 import { compactTraceAttributes } from "@t3tools/shared/observability";
 import { decodeJsonResult } from "@t3tools/shared/schemaJson";
 import { parseT3ProjectFile } from "@t3tools/shared/t3ProjectFile";
@@ -261,8 +262,7 @@ export function filterBranchesForListQuery(
     return refs;
   }
 
-  const normalizedQuery = query.toLowerCase();
-  return refs.filter((refName) => refName.name.toLowerCase().includes(normalizedQuery));
+  return searchItems(refs, query, (refName) => [refName.name]);
 }
 
 export function paginateBranches(input: {

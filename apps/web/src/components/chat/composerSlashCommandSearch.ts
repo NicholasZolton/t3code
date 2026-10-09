@@ -1,11 +1,12 @@
 import {
   insertRankedSearchResult,
   normalizeSearchQuery,
-  scoreQueryMatch,
+  scoreSearchFields,
+  SEARCH_SECONDARY_FIELD_WEIGHT,
 } from "@t3tools/shared/searchRanking";
 
 import type { ComposerCommandItem } from "./ComposerCommandMenu";
-import { scoreProviderSkill } from "../../providerSkillSearch";
+import { scoreProviderSkill } from "@t3tools/client-runtime/providerSkills";
 
 type SlashSearchItem = Extract<
   ComposerCommandItem,
@@ -41,36 +42,13 @@ function scoreSlashCommandItem(item: SlashSearchItem, query: string): number | n
     return "skill".startsWith(query) ? Number.MAX_SAFE_INTEGER : null;
   }
 
-  const primaryValue =
-    item.type === "slash-command" ? item.command.toLowerCase() : item.command.name.toLowerCase();
-  const description = item.description.toLowerCase();
-
-  const scores = [
-    scoreQueryMatch({
-      value: primaryValue,
-      query,
-      exactBase: 0,
-      prefixBase: 2,
-      boundaryBase: 4,
-      includesBase: 6,
-      fuzzyBase: 100,
-      boundaryMarkers: ["-", "_", "/"],
-    }),
-    scoreQueryMatch({
-      value: description,
-      query,
-      exactBase: 20,
-      prefixBase: 22,
-      boundaryBase: 24,
-      includesBase: 26,
-    }),
-  ].filter((score): score is number => score !== null);
-
-  if (scores.length === 0) {
-    return null;
-  }
-
-  return Math.min(...scores);
+  return scoreSearchFields(
+    [
+      item.type === "slash-command" ? item.command : item.command.name,
+      { value: item.description, weight: SEARCH_SECONDARY_FIELD_WEIGHT, fuzzy: false },
+    ],
+    query,
+  );
 }
 
 export function searchSlashCommandItems(

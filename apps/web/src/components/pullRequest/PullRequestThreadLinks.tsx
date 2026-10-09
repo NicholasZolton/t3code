@@ -3,6 +3,7 @@ import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import type { EnvironmentId, PullRequestRef, ScopedThreadRef, ThreadId } from "@t3tools/contracts";
 import { CheckIcon, MessageSquareIcon } from "lucide-react";
 import { useState } from "react";
+import { searchItems, SEARCH_SECONDARY_FIELD_WEIGHT } from "@t3tools/shared/searchRanking";
 import { threadPullRequestLinkMode } from "@t3tools/client-runtime/thread-pull-request-compatibility";
 import { usePullRequestLinking } from "~/hooks/usePullRequestLinking";
 
@@ -193,17 +194,13 @@ function ThreadPicker({
       .filter((project) => project.environmentId === environmentId)
       .map((project) => [project.id, project.title]),
   );
-  const search = query.trim().toLocaleLowerCase();
-  const candidates = threads
-    .filter(
-      (thread) =>
-        thread.environmentId === environmentId &&
-        thread.archivedAt === null &&
-        `${thread.title} ${projectNames.get(thread.projectId) ?? ""}`
-          .toLocaleLowerCase()
-          .includes(search),
-    )
+  const eligibleThreads = threads
+    .filter((thread) => thread.environmentId === environmentId && thread.archivedAt === null)
     .toSorted((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  const candidates = searchItems(eligibleThreads, query, (thread) => [
+    thread.title,
+    { value: projectNames.get(thread.projectId) ?? "", weight: SEARCH_SECONDARY_FIELD_WEIGHT },
+  ]);
   return (
     <Command mode="none" value={query} onValueChange={setQuery} aria-label="Choose a thread">
       <CommandInput placeholder="Search threads or projects..." disabled={pending} />

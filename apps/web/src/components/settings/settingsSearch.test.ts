@@ -64,7 +64,7 @@ describe("searchSettings", () => {
     expect(searchSettings("thè\u{1ab0}mes")[0]?.id).toBe("theme");
     const localeLowerCase = vi.spyOn(String.prototype, "toLocaleLowerCase").mockReturnValue("gıt");
     try {
-      expect(searchSettings("GIT")[0]?.id).toBe("git-fetch-interval");
+      expect(searchSettings("GIT")[0]?.id).toBe("github-routing");
       expect(localeLowerCase).not.toHaveBeenCalled();
     } finally {
       localeLowerCase.mockRestore();
@@ -102,11 +102,11 @@ describe("searchSettings", () => {
     expect(searchSettings("administrative access")[0]?.id).toBe("connections-environment");
   });
 
-  it("lists thread confirmations in panel order", () => {
+  it("ranks shorter confirmation labels before longer ones", () => {
     expect(searchSettings("confirmation").map((item) => item.id)).toEqual([
       "unpin-confirmation",
-      "archive-confirmation",
       "delete-confirmation",
+      "archive-confirmation",
     ]);
   });
 
@@ -127,7 +127,7 @@ describe("searchSettings", () => {
   it("hides desktop-only settings from browser search", () => {
     expect(SETTINGS_SEARCH_ITEMS.some((item) => item.id === "quit-confirmation")).toBe(true);
     expect(searchSettings("hold to quit")).toEqual([]);
-    expect(searchSettings("wsl")).toEqual([]);
+    expect(searchSettings("wsl").some((item) => item.desktopOnly)).toBe(false);
   });
 
   it("hides macOS-only settings on other platforms", () => {
@@ -251,9 +251,13 @@ describe("searchSettings", () => {
       hasThreadAutoSettlement: true,
     });
 
-    expect(searchSettings("auto-settle", available).map((item) => item.id)).toEqual([
-      "auto-settle-inactive-threads",
+    expect(
+      searchSettings("auto-settle", available)
+        .filter((item) => item.requiresThreadAutoSettlement)
+        .map((item) => item.id),
+    ).toEqual([
       "auto-settle-merged-threads",
+      "auto-settle-inactive-threads",
       "days-before-auto-settle",
     ]);
   });
@@ -382,7 +386,9 @@ describe("searchSettings", () => {
       hasThreadAutoSettlement: true,
     });
     expect(searchSettings("writing style", available)[0]?.id).toBe("source-control-writing-style");
-    expect(searchSettings("auto-settle", available)).toHaveLength(3);
+    expect(
+      searchSettings("auto-settle", available).filter((item) => item.requiresThreadAutoSettlement),
+    ).toHaveLength(3);
   });
 });
 
@@ -476,9 +482,13 @@ describe("auto-settlement search availability", () => {
       isWslSettingsRowVisible: false,
       hasThreadAutoSettlement: availability.eligibleEnvironmentIds.length > 0,
     });
-    expect(searchSettings("auto-settle", items).map((item) => item.id)).toEqual([
-      "auto-settle-inactive-threads",
+    expect(
+      searchSettings("auto-settle", items)
+        .filter((item) => item.requiresThreadAutoSettlement)
+        .map((item) => item.id),
+    ).toEqual([
       "auto-settle-merged-threads",
+      "auto-settle-inactive-threads",
       "days-before-auto-settle",
     ]);
   });

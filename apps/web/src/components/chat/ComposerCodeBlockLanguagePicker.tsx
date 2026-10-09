@@ -1,5 +1,6 @@
 import { CheckIcon, ChevronDownIcon } from "lucide-react";
 import { useMemo, useState } from "react";
+import { searchItems } from "@t3tools/shared/searchRanking";
 
 import {
   CODE_BLOCK_LANGUAGES,
@@ -54,13 +55,10 @@ export function ComposerCodeBlockLanguagePicker(props: {
         : [{ id: current, label: current }, ...CODE_BLOCK_LANGUAGES],
     [current],
   );
-  const filteredItems = useMemo(() => {
-    const needle = query.trim().toLowerCase();
-    if (!needle) return items;
-    return items.filter(
-      (entry) => entry.label.toLowerCase().includes(needle) || entry.id.includes(needle),
-    );
-  }, [items, query]);
+  const filteredItems = useMemo(
+    () => searchItems(items, query, (entry) => [entry.label, entry.id]),
+    [items, query],
+  );
   const selected = items.find((entry) => entry.id === current) ?? null;
 
   return (

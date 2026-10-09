@@ -1,4 +1,5 @@
 import type { ModelOption, ProviderGroup } from "../../lib/modelOptions";
+import { scoreSearchFields } from "@t3tools/shared/searchRanking";
 import type { ProviderInstanceId } from "@t3tools/contracts";
 
 export type ModelFavorite = {
@@ -34,23 +35,21 @@ export function favoritesFirst(
   return [...favorites, ...others];
 }
 
-/** Match the terms a user can actually see or recognize in the model picker. */
-export function modelMatchesCatalogQuery(input: {
+/** Rank the terms a user can actually see or recognize in the model picker. */
+export function scoreModelCatalogQuery(input: {
   readonly model: ModelOption;
   readonly providerLabel: string;
   readonly query: string;
-}): boolean {
-  const query = input.query.trim().toLocaleLowerCase();
-  if (query.length === 0) {
-    return true;
-  }
-
-  return [
-    input.model.label,
-    input.model.subtitle,
-    input.model.selection.model,
-    input.providerLabel,
-  ].some((value) => value.toLocaleLowerCase().includes(query));
+}): number | null {
+  return scoreSearchFields(
+    [
+      input.model.label,
+      input.model.selection.model,
+      { value: input.model.subtitle, weight: 20 },
+      { value: input.providerLabel, weight: 30 },
+    ],
+    input.query,
+  );
 }
 
 /** Preserve staged provider options when the highlighted model is tapped again. */

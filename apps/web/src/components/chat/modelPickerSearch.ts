@@ -1,4 +1,9 @@
-import { normalizeSearchQuery, scoreQueryMatch } from "@t3tools/shared/searchRanking";
+import {
+  normalizeSearchQuery,
+  scoreSearchFields,
+  SEARCH_FAVORITE_SCORE_BOOST,
+  type SearchField,
+} from "@t3tools/shared/searchRanking";
 
 type ModelPickerSearchableModel = {
   /** Driver kind — indexed so "codex" still matches a Codex Personal instance. */
@@ -15,33 +20,14 @@ type ModelPickerSearchableModel = {
   isFavorite?: boolean;
 };
 
-const MODEL_PICKER_FAVORITE_SCORE_BOOST = 24;
-
-function getModelPickerSearchFields(model: ModelPickerSearchableModel): string[] {
+function getModelPickerSearchFields(model: ModelPickerSearchableModel): SearchField[] {
   return [
-    normalizeSearchQuery(model.name),
-    ...(model.shortName ? [normalizeSearchQuery(model.shortName)] : []),
-    ...(model.subProvider ? [normalizeSearchQuery(model.subProvider)] : []),
-    normalizeSearchQuery(model.driverKind),
-    normalizeSearchQuery(model.providerDisplayName),
-    buildModelPickerSearchText(model),
+    model.name,
+    model.shortName ?? "",
+    { value: model.subProvider ?? "", weight: 20 },
+    { value: model.driverKind, weight: 30 },
+    { value: model.providerDisplayName, weight: 30 },
   ];
-}
-
-function scoreModelPickerSearchToken(
-  field: string,
-  token: string,
-  fieldBase: number,
-): number | null {
-  return scoreQueryMatch({
-    value: field,
-    query: token,
-    exactBase: fieldBase,
-    prefixBase: fieldBase + 2,
-    boundaryBase: fieldBase + 4,
-    includesBase: fieldBase + 6,
-    ...(token.length >= 3 ? { fuzzyBase: fieldBase + 100 } : {}),
-  });
 }
 
 export function buildModelPickerSearchText(model: ModelPickerSearchableModel): string {
@@ -56,32 +42,8 @@ export function scoreModelPickerSearch(
   model: ModelPickerSearchableModel,
   query: string,
 ): number | null {
-  const tokens = normalizeSearchQuery(query)
-    .split(/\s+/u)
-    .filter((token) => token.length > 0);
-
-  if (tokens.length === 0) {
-    return 0;
-  }
-
-  const fields = getModelPickerSearchFields(model);
-  let score = 0;
-
-  for (const token of tokens) {
-    const tokenScores: Array<number> = [];
-    for (let index = 0; index < fields.length; index += 1) {
-      const fieldScore = scoreModelPickerSearchToken(fields[index]!, token, index * 10);
-      if (fieldScore !== null) {
-        tokenScores.push(fieldScore);
-      }
-    }
-
-    if (tokenScores.length === 0) {
-      return null;
-    }
-
-    score += Math.min(...tokenScores);
-  }
-
-  return model.isFavorite ? score - MODEL_PICKER_FAVORITE_SCORE_BOOST : score;
+  if (!query.trim()) return 0;
+  const score = scoreSearchFields(getModelPickerSearchFields(model), query);
+  if (score === null) return null;
+  return model.isFavorite ? score - SEARCH_FAVORITE_SCORE_BOOST : score;
 }

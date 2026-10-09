@@ -10,6 +10,7 @@ import type {
 import type { LegendListRenderItemProps } from "@legendapp/list/react-native";
 import { useAtomSet, useAtomValue } from "@effect/atom-react";
 import { AnimatedLegendList } from "@legendapp/list/reanimated";
+import { SEARCH_FAVORITE_SCORE_BOOST } from "@t3tools/shared/searchRanking";
 import {
   getProviderOptionCurrentLabel,
   getProviderOptionCurrentValue,
@@ -85,7 +86,7 @@ import {
   canCommitPendingModel,
   favoritesFirst,
   modelFavoriteKey,
-  modelMatchesCatalogQuery,
+  scoreModelCatalogQuery,
   pendingModelAfterPress,
   providerSectionIsCollapsed,
   toggleModelFavorite,
@@ -644,19 +645,30 @@ function useThreadSettingsCatalogItems(
                   session.isDisplayed(model) ||
                   session.favoriteKeys.has(model.key),
               );
-        const visibleModels = favoritesFirst(
+        const favoriteOrderedModels = favoritesFirst(
           catalogModels.filter(
             (model) =>
-              (session.providerFilter !== FAVORITES_PROVIDER_FILTER ||
-                session.favoriteKeys.has(model.key)) &&
-              modelMatchesCatalogQuery({
-                model,
-                providerLabel: group.providerLabel,
-                query: session.searchQuery,
-              }),
+              session.providerFilter !== FAVORITES_PROVIDER_FILTER ||
+              session.favoriteKeys.has(model.key),
           ),
           session.favoriteKeys,
         );
+        const visibleModels = favoriteOrderedModels
+          .flatMap((model, index) => {
+            const score = scoreModelCatalogQuery({
+              model,
+              providerLabel: group.providerLabel,
+              query: session.searchQuery,
+            });
+            if (score === null) return [];
+            const boost =
+              session.searchQuery.trim() && session.favoriteKeys.has(model.key)
+                ? SEARCH_FAVORITE_SCORE_BOOST
+                : 0;
+            return [{ model, index, score: score - boost }];
+          })
+          .sort((left, right) => left.score - right.score || left.index - right.index)
+          .map(({ model }) => model);
         if (visibleModels.length === 0) {
           return [];
         }

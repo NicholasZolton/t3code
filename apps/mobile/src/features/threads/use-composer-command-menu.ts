@@ -35,15 +35,14 @@ import {
   type ComposerTrigger,
 } from "@t3tools/shared/composerTrigger";
 import {
-  insertRankedSearchResult,
   normalizeSearchQuery,
-  scoreQueryMatch,
+  scoreSearchFields,
+  SEARCH_SECONDARY_FIELD_WEIGHT,
 } from "@t3tools/shared/searchRanking";
 import {
-  dedupeProviderSkillsByName,
   getProviderSkillsForSlashMenu,
   getProviderSlashCommandsForSlashMenu,
-  isProviderSkillUserInvocable,
+  searchProviderSkills,
   hasCompleteProviderWorkspaceSnapshot,
   hasCurrentProviderWorkspaceSnapshot,
   resolveProviderSkillsForCwd,
@@ -56,13 +55,35 @@ import { serverEnvironment } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { useComposerPathSearch, useComposerPullRequestSearch } from "../../state/queries";
 import type { ComposerCommandItem } from "./ComposerCommandPopover";
-import { matchesSlashSkillQuery } from "./composerSlashSkillSearch";
+import { scoreSlashSkillQuery } from "./composerSlashSkillSearch";
 
 const WORKSPACE_SNAPSHOT_RETRY_COOLDOWN_MS = 10_000;
 const EMPTY_SETTINGS_ATOM = Atom.make(DEFAULT_SERVER_SETTINGS);
 
 function composerSelectionAtEnd(draftMessage: string): ComposerEditorSelection {
   return { start: draftMessage.length, end: draftMessage.length };
+}
+
+function rankSlashCommandItems(
+  items: readonly ComposerCommandItem[],
+  query: string,
+): ComposerCommandItem[] {
+  return items
+    .flatMap((item, index) => {
+      const score =
+        item.type === "skill"
+          ? scoreSlashSkillQuery(item.skill, query)
+          : scoreSearchFields(
+              [
+                item.label.replace(/^\//, ""),
+                { value: item.description, weight: SEARCH_SECONDARY_FIELD_WEIGHT, fuzzy: false },
+              ],
+              query,
+            );
+      return score === null ? [] : [{ item, score, index }];
+    })
+    .sort((left, right) => left.score - right.score || left.index - right.index)
+    .map(({ item }) => item);
 }
 
 export function buildComposerSlashCommandItems(input: {
@@ -105,14 +126,13 @@ export function buildComposerSlashCommandItems(input: {
     },
   ] satisfies ComposerCommandItem[];
   const items: ComposerCommandItem[] = builtIn.filter(
-    (item) => item.command.includes(query) && (item.command === "model" || allowInteractionMode),
+    (item) => item.command === "model" || allowInteractionMode,
   );
 
   // Providers expand commands only at the start of a message. T3 commands
   // change local state and do not have this restriction.
-  if (!input.atMessageStart) return items;
+  if (!input.atMessageStart) return rankSlashCommandItems(items, query);
   for (const command of input.selectedProviderStatus?.slashCommands ?? []) {
-    if (!command.name.toLowerCase().includes(query)) continue;
     if (command.name === "compact" && !input.hasCompactableConversation) continue;
     // T3's own limits command is answered by the thread composer; New Task has
     // nowhere to show it. A provider's same-named command is left alone.
@@ -134,7 +154,7 @@ export function buildComposerSlashCommandItems(input: {
       description: command.description ?? "",
     });
   }
-  return items;
+  return rankSlashCommandItems(items, query);
 }
 
 export function resolveComposerCommandSelection(input: {
@@ -433,94 +453,22 @@ export function useComposerCommandMenu({
           : null,
       });
 
-      const skillItems = visibleSkills
-        .filter((skill) => matchesSlashSkillQuery(skill, q))
-        .map((skill) => ({
-          id: `skill:${skill.name}`,
-          type: "skill" as const,
-          skill,
-          label: `skill:${skill.name}`,
-          description: skill.shortDescription ?? skill.description ?? "",
-        }));
+      const skillItems = visibleSkills.map((skill) => ({
+        id: `skill:${skill.name}`,
+        type: "skill" as const,
+        skill,
+        label: `skill:${skill.name}`,
+        description: skill.shortDescription ?? skill.description ?? "",
+      }));
 
-      return [...commandItems, ...skillItems];
+      return rankSlashCommandItems([...commandItems, ...skillItems], q);
     }
 
     if (trigger.kind === "skill") {
-      const enabledSkills = dedupeProviderSkillsByName(skills.filter(isProviderSkillUserInvocable));
       const normalizedQuery = normalizeSearchQuery(trigger.query, {
         trimLeadingPattern: /^\p{Sc}+/u,
       });
-
-      if (!normalizedQuery) {
-        return enabledSkills.slice(0, 20).map((skill) => ({
-          id: `skill:${skill.name}`,
-          type: "skill" as const,
-          skill,
-          label: skill.displayName ?? skill.name,
-          description: skill.shortDescription ?? skill.description ?? "",
-        }));
-      }
-
-      const ranked: Array<{
-        item: (typeof enabledSkills)[number];
-        score: number;
-        tieBreaker: string;
-      }> = [];
-      for (const skill of enabledSkills) {
-        const displayLabel = (skill.displayName ?? skill.name).toLowerCase();
-        const scores = [
-          scoreQueryMatch({
-            value: skill.name.toLowerCase(),
-            query: normalizedQuery,
-            exactBase: 0,
-            prefixBase: 2,
-            boundaryBase: 4,
-            includesBase: 6,
-            fuzzyBase: 100,
-            boundaryMarkers: ["-", "_", "/"],
-          }),
-          scoreQueryMatch({
-            value: displayLabel,
-            query: normalizedQuery,
-            exactBase: 1,
-            prefixBase: 3,
-            boundaryBase: 5,
-            includesBase: 7,
-            fuzzyBase: 110,
-          }),
-          scoreQueryMatch({
-            value: skill.shortDescription?.toLowerCase() ?? "",
-            query: normalizedQuery,
-            exactBase: 20,
-            prefixBase: 22,
-            boundaryBase: 24,
-            includesBase: 26,
-          }),
-          scoreQueryMatch({
-            value: skill.description?.toLowerCase() ?? "",
-            query: normalizedQuery,
-            exactBase: 30,
-            prefixBase: 32,
-            boundaryBase: 34,
-            includesBase: 36,
-          }),
-        ].filter((score): score is number => score !== null);
-
-        if (scores.length > 0) {
-          insertRankedSearchResult(
-            ranked,
-            {
-              item: skill,
-              score: Math.min(...scores),
-              tieBreaker: `${displayLabel}\u0000${skill.name}`,
-            },
-            20,
-          );
-        }
-      }
-
-      return ranked.map(({ item: skill }) => ({
+      return searchProviderSkills(skills, normalizedQuery, 20).map((skill) => ({
         id: `skill:${skill.name}`,
         type: "skill" as const,
         skill,

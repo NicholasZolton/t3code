@@ -345,6 +345,31 @@ function makeThread(overrides: Partial<Thread> = {}): Thread {
 }
 
 describe("buildProjectActionItems", () => {
+  it("ranks fuzzy project labels ahead of path-only matches in the new-thread menu", () => {
+    const projects = [
+      {
+        ...makeProject({ id: ProjectId.make("path"), title: "Other", workspaceRoot: "/work/t3cd" }),
+        displayName: "Other",
+      },
+      { ...makeProject({ id: ProjectId.make("fuzzy"), title: "T3 Code" }), displayName: "T3 Code" },
+      { ...makeProject({ id: ProjectId.make("exact"), title: "t3cd" }), displayName: "t3cd" },
+    ];
+    const items = buildProjectActionItems({
+      projects,
+      valuePrefix: "project",
+      icon: () => null,
+      runProject: async () => undefined,
+    });
+    const groups = filterCommandPaletteGroups({
+      activeGroups: [{ value: "projects", label: "Projects", items }],
+      query: "t3cd",
+      isInSubmenu: true,
+      projectSearchItems: [],
+      threadSearchItems: [],
+    });
+    expect(groups[0]?.items.map((item) => item.title)).toEqual(["t3cd", "T3 Code", "Other"]);
+  });
+
   it("shows the grouped display name but keeps the real title for icons", () => {
     const project = makeProject({ title: "fleet", workspaceRoot: "/Users/theo/Code/p/fleet" });
     const iconTitles: string[] = [];

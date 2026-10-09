@@ -13,6 +13,7 @@ import type {
 } from "@t3tools/contracts";
 import { CheckIcon, UserPlusIcon } from "lucide-react";
 import { useMemo, useState } from "react";
+import { searchItems } from "@t3tools/shared/searchRanking";
 
 import { pullRequestEnvironment } from "~/state/pullRequests";
 import { useEnvironmentQuery } from "~/state/query";
@@ -22,17 +23,6 @@ import { toastManager } from "../ui/toast";
 import { PullRequestCandidatePicker } from "./PullRequestCandidatePicker";
 import { PullRequestActorLabel } from "./pullRequestPresentation";
 import { readableFailure } from "./pullRequestDetail.logic";
-
-/** Long lists are common — an organisation repository lists everyone — so what arrived can be
- * narrowed here. It narrows only what arrived: the host is asked once, when the menu opens. */
-function matches(candidate: PullRequestReviewerCandidate, query: string): boolean {
-  if (query.length === 0) return true;
-  const needle = query.toLowerCase();
-  return (
-    candidate.login.toLowerCase().includes(needle) ||
-    (candidate.name ?? "").toLowerCase().includes(needle)
-  );
-}
 
 export function PullRequestReviewerPicker({
   environmentId,
@@ -58,7 +48,11 @@ export function PullRequestReviewerPicker({
   });
 
   const candidates = useMemo(
-    () => (candidatesQuery.data?.candidates ?? []).filter((entry) => matches(entry, query)),
+    () =>
+      searchItems(candidatesQuery.data?.candidates ?? [], query, (entry) => [
+        entry.login,
+        entry.name ?? "",
+      ]),
     [candidatesQuery.data, query],
   );
 

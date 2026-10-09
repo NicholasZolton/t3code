@@ -1,3 +1,4 @@
+import { searchItems } from "@t3tools/shared/searchRanking";
 import {
   STATIC_KEYBINDING_COMMANDS,
   type KeybindingCommand,
@@ -291,15 +292,13 @@ export function buildKeybindingRows(
     return rowsWithConflicts;
   }
 
-  return rowsWithConflicts.filter((row) => {
-    return (
-      row.command.toLowerCase().includes(normalizedQuery) ||
-      commandLabel(row.command).toLowerCase().includes(normalizedQuery) ||
-      row.key.toLowerCase().includes(normalizedQuery) ||
-      row.when.toLowerCase().includes(normalizedQuery) ||
-      row.source.toLowerCase().includes(normalizedQuery)
-    );
-  });
+  return searchItems(rowsWithConflicts, normalizedQuery, (row) => [
+    commandLabel(row.command),
+    row.command,
+    { value: row.key, weight: 100 },
+    { value: row.when, weight: 200, fuzzy: false },
+    { value: row.source, weight: 200 },
+  ]);
 }
 
 function collectWhenIdentifiersFromNode(
