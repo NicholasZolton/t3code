@@ -6,9 +6,11 @@ Receive alerts when an agent finishes, fails, needs approval, or asks for input.
 
 For self-hosted notifications without T3 Connect, pair your Android phone to your environment normally, then enable that environment under **Settings → Notifications → Paired environments**. Your server and Android app must have matching Firebase configuration; ask your server administrator if setup is unavailable.
 
-Alerts use generic text, without thread titles or conversation content. Opening a thread fetches its destination directly from your server, so Tailscale or your normal server connection must be available when you tap. The server must remain running to send notifications; your phone does not need to keep a connection open to receive them. Turn off the environment's notification preference to stop local alerts, even when that server is offline. Revoking the phone's pairing prevents new sends from the server.
+Alerts show thread titles and project names, using the same notification behavior as T3 Connect. Their content is encrypted for your phone before it reaches Google and decrypted natively, including when the app is not running. Conversations, code and files are not included. The server must remain running to send notifications; your phone does not need to keep a connection open to receive them. Opening the thread still requires Tailscale or your normal server connection.
 
-Paired alerts work independently of T3 Connect sign-in and may appear while the app is in the foreground. Ongoing activity cards and iOS notifications still use T3 Connect.
+Enable **Ongoing Agent Activity** to follow work from your enabled environments in one activity card. Finished results remain visible for up to 15 minutes. Alerts stay quiet when their thread is on screen, while the activity card continues to update. Paired delivery is independent of T3 Connect sign-in; iOS notifications still require T3 Connect.
+
+Both the Android app and server must support encrypted notifications. Updating the app refreshes existing enabled registrations automatically. Turn off an environment's preference to stop local alerts and remove its notification key, even while the server is offline. Revoking the phone's pairing prevents new sends. Google still processes device identifiers and delivery metadata; encryption does not hide notifications displayed on your phone.
 
 ## T3 Connect
 

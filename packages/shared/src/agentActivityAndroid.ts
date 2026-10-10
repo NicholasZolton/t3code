@@ -1,12 +1,87 @@
-import type { RelayAgentActivityAggregateState } from "@t3tools/contracts/relay";
+import type {
+  RelayAgentActivityAggregateState,
+  RelayAgentActivityState,
+  RelayAgentAwarenessPreferences,
+} from "@t3tools/contracts/relay";
 import {
   activityPhasePriority,
+  statusForPhase,
   TERMINAL_AGENT_ACTIVITY_DISPLAY_TTL_MS,
 } from "./agentActivityAggregate.ts";
-import { agentActivityExpiresAt } from "./agentActivityPayloads.ts";
+import { agentActivityExpiresAt, notificationForActivity } from "./agentActivityPayloads.ts";
+import {
+  alertForActivityRows,
+  attentionTransitionRows,
+  terminalTransitionRows,
+  shouldAlertForActivity,
+} from "./agentActivityAlerts.ts";
+
+export interface AndroidAgentAlert {
+  readonly alert_id: string;
+  readonly alert_group?: string;
+  readonly alert_title: string;
+  readonly alert_body: string;
+  readonly alert_path: string;
+}
+
+export function androidAlertForState(
+  state: RelayAgentActivityState,
+  preferences: RelayAgentAwarenessPreferences,
+  nowMs: number,
+): AndroidAgentAlert | null {
+  if (!shouldAlertForActivity({ ...state, preferences, nowMs })) return null;
+  const notification = notificationForActivity({ ...state, status: statusForPhase(state.phase) });
+  return {
+    alert_id: JSON.stringify([state.environmentId, state.threadId, state.phase, state.updatedAt]),
+    alert_group: JSON.stringify([state.environmentId, state.threadId]),
+    alert_title: notification.title,
+    alert_body: notification.body,
+    alert_path: notification.deepLink,
+  };
+}
+
+export function androidAlertForAggregate(input: {
+  readonly previousAggregate: RelayAgentActivityAggregateState;
+  readonly nextAggregate: RelayAgentActivityAggregateState;
+  readonly preferences: RelayAgentAwarenessPreferences;
+  readonly nowMs: number;
+}): AndroidAgentAlert | null {
+  if (!input.preferences.notificationsEnabled) return null;
+  const attention = attentionTransitionRows(input);
+  const activities =
+    attention.length > 0
+      ? attention
+      : terminalTransitionRows({ ...input, includeUnobserved: true });
+  const first = activities[0];
+  const alert = alertForActivityRows(activities);
+  if (!first || !alert) return null;
+  if (activities.length === 1) {
+    const notification = notificationForActivity(first);
+    return {
+      alert_id: JSON.stringify([first.environmentId, first.threadId, first.phase, first.updatedAt]),
+      alert_group: JSON.stringify([first.environmentId, first.threadId]),
+      alert_title: notification.title,
+      alert_body: notification.body,
+      alert_path: notification.deepLink,
+    };
+  }
+  return {
+    // Stable across queue ordering and retries; the native receiver deduplicates it.
+    alert_id: JSON.stringify(
+      activities
+        .map((row) => [row.environmentId, row.threadId, row.phase, row.updatedAt])
+        .sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b))),
+    ),
+    alert_title: alert.title,
+    alert_body: alert.body,
+    alert_path: "/",
+  };
+}
 
 /** Android focuses the priority thread while retaining rows for older clients. */
-export function androidActivityData(aggregate: RelayAgentActivityAggregateState | null) {
+export function androidActivityData(
+  aggregate: RelayAgentActivityAggregateState | null,
+): Record<string, string> {
   const rows = [...(aggregate?.activities ?? [])].sort(
     (a, b) => activityPhasePriority(a.phase) - activityPhasePriority(b.phase),
   );
@@ -51,13 +126,16 @@ export function androidActivityData(aggregate: RelayAgentActivityAggregateState 
 }
 
 /** Keep Unicode, escaping and grouped alerts within FCM's 4 KB data budget. */
-export function fitFcmData(input: Readonly<Record<string, string>>): Record<string, string> {
+export function fitFcmData(
+  input: Readonly<Record<string, string>>,
+  maxBytes = 3800,
+): Record<string, string> {
   const data = { ...input };
   const encoder = new TextEncoder();
   const textKeys = Object.keys(data).filter(
     (key) => key.endsWith("_body") || key.endsWith("_title") || key.startsWith("activity_line_"),
   );
-  while (encoder.encode(JSON.stringify(data)).length > 3800) {
+  while (encoder.encode(JSON.stringify(data)).length > maxBytes) {
     const key = textKeys.sort(
       (a, b) => encoder.encode(data[b]!).length - encoder.encode(data[a]!).length,
     )[0];

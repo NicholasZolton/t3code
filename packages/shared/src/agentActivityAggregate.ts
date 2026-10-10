@@ -32,7 +32,9 @@ export function statusForPhase(phase: RelayAgentActivityState["phase"]): string 
   }
 }
 
-function aggregateRowForState(state: RelayAgentActivityState) {
+function aggregateRowForState(
+  state: RelayAgentActivityState,
+): RelayAgentActivityAggregateState["activities"][number] {
   return {
     environmentId: state.environmentId,
     threadId: state.threadId,
@@ -114,8 +116,8 @@ export function makeAggregateState(input: {
     .filter((state) => isRecentTerminalState(state, input.nowMs))
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   const displayedStates = [
-    ...activeStates
-      .toSorted((a, b) => activityPhasePriority(a.phase) - activityPhasePriority(b.phase))
+    ...[...activeStates]
+      .sort((a, b) => activityPhasePriority(a.phase) - activityPhasePriority(b.phase))
       .slice(0, MAX_ACTIVITY_ROWS),
     ...recentTerminalStates,
   ].slice(0, MAX_ACTIVITY_ROWS);

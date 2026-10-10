@@ -70,6 +70,7 @@ import {
   RelayEnvironmentLinkProof,
   RelayEnvironmentMintResponse,
   RelayLinkProofRequest,
+  RelayAgentAwarenessPreferences,
 } from "./relay.ts";
 
 const OptionalBearerHeaders = Schema.Struct({
@@ -466,6 +467,9 @@ export const PairedNotificationRegistration = Schema.Struct({
   registrationId: PairedNotificationId,
   pushToken: TrimmedNonEmptyString.pipe(Schema.check(Schema.isMaxLength(4096))),
   packageName: TrimmedNonEmptyString.pipe(Schema.check(Schema.isMaxLength(255))),
+  // Public P-256 SPKI only. Optional to decode pre-encryption registrations during upgrade.
+  encryptionPublicKey: Schema.optionalKey(TrimmedNonEmptyString.check(Schema.isMaxLength(256))),
+  preferences: Schema.optionalKey(RelayAgentAwarenessPreferences),
 });
 export type PairedNotificationRegistration = typeof PairedNotificationRegistration.Type;
 
@@ -481,6 +485,7 @@ export type PairedNotificationReference = typeof PairedNotificationReference.Typ
 export const PairedNotificationStatus = Schema.Struct({
   configured: Schema.Boolean,
   registrationId: Schema.NullOr(PairedNotificationId),
+  encryptedActivitySupported: Schema.optionalKey(Schema.Boolean),
 });
 export type PairedNotificationStatus = typeof PairedNotificationStatus.Type;
 

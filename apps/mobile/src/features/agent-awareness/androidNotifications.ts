@@ -3,7 +3,12 @@ import { requireOptionalNativeModule } from "expo";
 import { Linking, Platform } from "react-native";
 
 interface AndroidAgentNotifications {
-  configurePaired?(registrationIds: ReadonlyArray<string>, scheme: string): void;
+  configurePaired?(
+    registrationIds: ReadonlyArray<string>,
+    scheme: string,
+    ongoingEnabled: boolean,
+  ): void;
+  pairedNotificationPublicKey?(registrationId: string): Promise<string>;
   configure(deviceId: string, userId: string, scheme: string, ongoingEnabled: boolean): void;
   clear(): void;
   setThreadOnScreen?(path: string | null): void;
@@ -21,11 +26,23 @@ export function supportsAndroidAgentNotifications(): boolean {
 }
 
 export function supportsPairedAndroidNotifications(): boolean {
-  return typeof native?.configurePaired === "function";
+  return (
+    typeof native?.configurePaired === "function" &&
+    typeof native?.pairedNotificationPublicKey === "function"
+  );
 }
 
-export function configurePairedAndroidNotifications(registrationIds: ReadonlyArray<string>): void {
-  native?.configurePaired?.(registrationIds, appScheme());
+export function configurePairedAndroidNotifications(
+  registrationIds: ReadonlyArray<string>,
+  ongoingEnabled = true,
+): void {
+  native?.configurePaired?.(registrationIds, appScheme(), ongoingEnabled);
+}
+
+export async function pairedNotificationPublicKey(registrationId: string): Promise<string> {
+  if (!native?.pairedNotificationPublicKey)
+    throw new Error("This Android build needs encrypted notification support.");
+  return await native.pairedNotificationPublicKey(registrationId);
 }
 
 function appScheme(): string {

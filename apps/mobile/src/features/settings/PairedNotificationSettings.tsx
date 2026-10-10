@@ -8,7 +8,12 @@ import { runtime } from "../../lib/runtime";
 import { uuidv4 } from "../../lib/uuid";
 import { mobilePreferencesAtom, updateMobilePreferencesAtom } from "../../state/preferences";
 import { useSavedRemoteConnections } from "../../state/use-remote-environment-registry";
-import { supportsPairedAndroidNotifications } from "../agent-awareness/androidNotifications";
+import {
+  supportsPairedAndroidNotifications,
+  supportsAndroidLiveUpdateSettings,
+  openAndroidLiveUpdateSettings,
+  configurePairedAndroidNotifications,
+} from "../agent-awareness/androidNotifications";
 import {
   enablePairedNotifications,
   pairedNotificationStatusesAtom,
@@ -17,6 +22,7 @@ import {
 import type { SavedRemoteConnection } from "../../lib/connection";
 import { SettingsSection } from "./components/SettingsSection";
 import { SettingsSwitchRow } from "./components/SettingsSwitchRow";
+import { SettingsRow } from "./components/SettingsRow";
 
 export function PairedNotificationSettings(): JSX.Element | null {
   const preferences = useAtomValue(mobilePreferencesAtom);
@@ -36,7 +42,9 @@ export function PairedNotificationSettings(): JSX.Element | null {
   async function toggle(connection: SavedRemoteConnection, enabled: boolean): Promise<void> {
     if (pending.has(connection.environmentId)) return;
     setPending((current) => new Set([...current, connection.environmentId]));
-    const registrationId = registrations[connection.environmentId]?.registrationId ?? uuidv4();
+    const registrationId = enabled
+      ? uuidv4()
+      : (registrations[connection.environmentId]?.registrationId ?? uuidv4());
     let preferenceSaved = false;
     try {
       if (enabled) await runtime.runPromise(enablePairedNotifications(connection, registrationId));
@@ -54,6 +62,19 @@ export function PairedNotificationSettings(): JSX.Element | null {
           updatePairedNotificationRegistration(connection, { registrationId, enabled }),
         );
     } catch (error) {
+      if (enabled && !preferenceSaved) {
+        configurePairedAndroidNotifications(
+          Object.values(registrations)
+            .filter((registration) => registration.enabled)
+            .map((registration) => registration.registrationId),
+          AsyncResult.isSuccess(preferences) && preferences.value.liveActivitiesEnabled !== false,
+        );
+        void runtime
+          .runPromise(
+            updatePairedNotificationRegistration(connection, { registrationId, enabled: false }),
+          )
+          .catch(() => undefined);
+      }
       if (!enabled && preferenceSaved) {
         Alert.alert(
           "Notifications are off on this phone",
@@ -77,8 +98,8 @@ export function PairedNotificationSettings(): JSX.Element | null {
   return (
     <SettingsSection title="Paired environments">
       <Text className="text-sm text-foreground-muted">
-        Get completion, failure, approval and input alerts directly from your servers. T3 Connect is
-        not used. Google receives only generic event types and opaque notification IDs.
+        Get rich agent alerts and ongoing activity directly from your servers, without T3 Connect.
+        Notification content is encrypted for this phone before it reaches Google.
       </Text>
       {!supported ? (
         <Text className="text-sm text-foreground-muted">
@@ -114,6 +135,39 @@ export function PairedNotificationSettings(): JSX.Element | null {
           }}
         />
       ))}
+      {supported && connections.length > 0 ? (
+        <SettingsSwitchRow
+          icon="bolt.circle"
+          label="Ongoing Agent Activity"
+          subtitle="Show activity cards for enabled environments. This device preference also applies to T3 Connect."
+          disabled={!AsyncResult.isSuccess(preferences)}
+          value={
+            AsyncResult.isSuccess(preferences) && preferences.value.liveActivitiesEnabled !== false
+          }
+          onValueChange={(enabled) => {
+            void save({ liveActivitiesEnabled: enabled }).catch(() => {
+              Alert.alert(
+                "Couldn't update activity",
+                "Try changing the activity preference again.",
+              );
+            });
+          }}
+        />
+      ) : null}
+      {supported && supportsAndroidLiveUpdateSettings() ? (
+        <SettingsRow
+          icon="bolt.circle"
+          label="Live Update Settings"
+          onPress={() => {
+            void openAndroidLiveUpdateSettings().catch(() => {
+              Alert.alert(
+                "Couldn't open Settings",
+                "Open T3 Code's notification settings in Android Settings.",
+              );
+            });
+          }}
+        />
+      ) : null}
     </SettingsSection>
   );
 }

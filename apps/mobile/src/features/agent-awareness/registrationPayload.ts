@@ -1,4 +1,7 @@
-import type { RelayDeviceRegistrationRequest } from "@t3tools/contracts/relay";
+import type {
+  RelayDeviceRegistrationRequest,
+  RelayAgentAwarenessPreferences,
+} from "@t3tools/contracts/relay";
 
 import type { Preferences } from "../../persistence/mobile-preferences";
 import { supportsAgentAwarenessPush } from "./capabilities";
@@ -8,6 +11,21 @@ import { supportsAgentAwarenessPush } from "./capabilities";
 // APNs. The relay routes each device's pushes accordingly.
 export function resolveApsEnvironment(appVariant: unknown): "sandbox" | "production" {
   return appVariant === "development" ? "sandbox" : "production";
+}
+
+export function makeAgentAwarenessPreferences(input: {
+  readonly notificationsEnabled: boolean;
+  readonly preferences: Preferences;
+}): RelayAgentAwarenessPreferences {
+  const pushAvailable = supportsAgentAwarenessPush();
+  return {
+    liveActivitiesEnabled: pushAvailable && input.preferences.liveActivitiesEnabled !== false,
+    notificationsEnabled: pushAvailable && input.notificationsEnabled,
+    notifyOnApproval: true,
+    notifyOnInput: true,
+    notifyOnCompletion: true,
+    notifyOnFailure: true,
+  };
 }
 
 export function makeRelayDeviceRegistrationRequest(
@@ -26,8 +44,6 @@ export function makeRelayDeviceRegistrationRequest(
     | { readonly platform: "android"; readonly androidApiLevel: number }
   ),
 ): RelayDeviceRegistrationRequest {
-  const pushAvailable = supportsAgentAwarenessPush();
-  const liveActivitiesEnabled = pushAvailable && input.preferences.liveActivitiesEnabled !== false;
   return {
     deviceId: input.deviceId,
     label: input.label,
@@ -40,13 +56,6 @@ export function makeRelayDeviceRegistrationRequest(
     ...(input.apsEnvironment ? { apsEnvironment: input.apsEnvironment } : {}),
     ...(input.pushToken ? { pushToken: input.pushToken } : {}),
     ...(input.pushToStartToken ? { pushToStartToken: input.pushToStartToken } : {}),
-    preferences: {
-      liveActivitiesEnabled,
-      notificationsEnabled: pushAvailable && input.notificationsEnabled,
-      notifyOnApproval: true,
-      notifyOnInput: true,
-      notifyOnCompletion: true,
-      notifyOnFailure: true,
-    },
+    preferences: makeAgentAwarenessPreferences(input),
   };
 }

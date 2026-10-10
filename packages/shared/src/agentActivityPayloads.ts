@@ -6,7 +6,15 @@ import type {
 import * as DateTime from "effect/DateTime";
 import * as Option from "effect/Option";
 
-import type { ApnsNotificationPayload } from "./apnsDeliveryJobs.ts";
+export interface AgentNotificationPayload {
+  readonly title: string;
+  readonly body: string;
+  readonly environmentId: string;
+  readonly threadId: string;
+  readonly deepLink: string;
+  readonly phase?: RelayAgentActivityState["phase"] | undefined;
+  readonly updatedAt?: string | undefined;
+}
 
 export function isTerminalPhase(state: RelayAgentActivityState): boolean {
   return state.phase === "completed" || state.phase === "failed";
@@ -96,9 +104,9 @@ export function sanitizeAgentActivityAggregateState(
   };
 }
 
-export function sanitizeApnsNotificationPayload(
-  notification: ApnsNotificationPayload,
-): ApnsNotificationPayload {
+export function sanitizeAgentNotificationPayload(
+  notification: AgentNotificationPayload,
+): AgentNotificationPayload {
   return {
     ...notification,
     title: truncateText(notification.title, MAX_SUMMARY_TEXT_LENGTH),
@@ -109,9 +117,9 @@ export function sanitizeApnsNotificationPayload(
 
 export function notificationForActivity(
   row: RelayAgentActivityAggregateRow,
-): ApnsNotificationPayload {
+): AgentNotificationPayload {
   const activity = sanitizeAgentActivityAggregateRow(row);
-  return sanitizeApnsNotificationPayload({
+  return sanitizeAgentNotificationPayload({
     title: activity.threadTitle,
     body: `${activity.status}: ${activity.projectTitle}`,
     environmentId: activity.environmentId,

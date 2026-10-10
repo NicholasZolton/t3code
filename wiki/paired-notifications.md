@@ -1,12 +1,12 @@
 ---
 type: Compatibility Decision
 title: Paired Android notifications
-description: Preserve direct paired delivery and opaque notification payloads when integrating upstream activity delivery.
+description: Preserve session-owned direct delivery and encrypted rich Android notifications using shared Connect policy.
 tags: [fork, android, notifications, privacy]
 status: experimental
 generated:
   by: opencode/gpt-6.1-sol
-  at: 2026-10-10T17:55:51Z
+  at: 2026-10-10T19:02:34Z
 sources:
   - id: paired-delivery
     resource: ../apps/server/src/notifications/PairedNotifications.ts
@@ -18,9 +18,9 @@ sources:
 
 # Paired Android notifications
 
-The fork supports Google notification delivery without routing activity through T3 Connect. Preserve the existing pairing/session authorization boundary: notification subscriptions do not introduce another account or pairing identity. Delivery remains experimental until verified on a physical phone against an updated sending server.[^paired-delivery]
+The fork supports Google notification delivery without routing activity through T3 Connect. Preserve the existing pairing/session authorization boundary: notification subscriptions do not introduce another account or pairing identity. Generic completion delivery was verified on Nicholas's Galaxy S23 against the remote environment on October 10, 2026; encrypted rich delivery requires a new Android binary and an updated sending server.[^paired-delivery]
 
-Keep direct FCM messages opaque. Upstream's rich activity payloads are appropriate only for its separate T3 Connect path; do not reuse them for paired delivery or add project/thread titles, prompts or thread destinations. Taps resolve references through the authenticated environment, and Connect sign-out must not clear the paired native registrations.[^paired-delivery]
+Reuse the shared Connect notification policy and native presentation, not a second set of alert rules. Rich titles, status and thread routes are allowed inside encrypted paired payloads; do not send them to FCM in plaintext or add conversation content. The phone retains the private key and supplies only its public key through the existing authenticated registration. Preserve registration binding, freshness, ordering, opt-out, session revocation and independent per-environment state. Connect sign-out must not clear paired keys or activity. Thread access after a notification tap still requires the environment's normal authentication.[^paired-delivery]
 
 Google still processes device identifiers and delivery metadata. This reduces transmitted content, not a compliance guarantee. Private binaries must retain their package and signing identity and use the same Firebase project as the sending server.[^paired-operations]
 

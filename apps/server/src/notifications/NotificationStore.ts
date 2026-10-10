@@ -13,12 +13,16 @@ import * as Schema from "effect/Schema";
 import * as Semaphore from "effect/Semaphore";
 
 import * as ServerSecretStore from "../auth/ServerSecretStore.ts";
+import {
+  RelayAgentActivityState,
+  RelayAgentActivityAggregateState,
+} from "@t3tools/contracts/relay";
 
-const Registration = Schema.Struct({
+const LegacyRegistration = Schema.Struct({
   ...PairedNotificationRegistration.fields,
   sessionId: AuthSessionId,
 });
-const Observation = Schema.Struct({
+const LegacyObservation = Schema.Struct({
   threadId: ThreadId,
   identity: Schema.String,
   phase: Schema.NullOr(Schema.String),
@@ -34,15 +38,47 @@ const Notification = Schema.Struct({
     Schema.Struct({ registrationId: PairedNotificationId, delivered: Schema.Boolean }),
   ),
 });
+const LegacyState = Schema.Struct({
+  version: Schema.optionalKey(Schema.Never),
+  registrations: Schema.Array(LegacyRegistration),
+  observations: Schema.Array(LegacyObservation),
+  notifications: Schema.Array(Notification),
+});
+const PendingDelivery = Schema.Struct({
+  id: PairedNotificationId,
+  queuedAt: Schema.Number,
+  silent: Schema.Boolean,
+});
+const Registration = Schema.Struct({
+  ...LegacyRegistration.fields,
+  lastAggregate: Schema.NullOr(RelayAgentActivityAggregateState),
+  lastUpdatedAt: Schema.Number,
+  pending: Schema.NullOr(PendingDelivery),
+});
+const Observation = Schema.Struct({
+  threadId: ThreadId,
+  identity: Schema.String,
+  activity: Schema.NullOr(RelayAgentActivityState),
+  observedAt: Schema.Number,
+});
 const State = Schema.Struct({
+  version: Schema.Literal(2),
   registrations: Schema.Array(Registration),
   observations: Schema.Array(Observation),
+  // Keep old opaque tap references until their normal expiry; new payloads contain authenticated routes.
   notifications: Schema.Array(Notification),
 });
 export type NotificationState = typeof State.Type;
-const emptyState: NotificationState = { registrations: [], observations: [], notifications: [] };
+const emptyState: NotificationState = {
+  version: 2,
+  registrations: [],
+  observations: [],
+  notifications: [],
+};
 const KEY = "paired-notifications";
-const decode = Schema.decodeUnknownEffect(Schema.fromJsonString(State));
+const decode = Schema.decodeUnknownEffect(
+  Schema.fromJsonString(Schema.Union([State, LegacyState])),
+);
 const encode = Schema.encodeEffect(Schema.fromJsonString(State));
 
 export class NotificationStoreError extends Schema.TaggedError<NotificationStoreError>()(
@@ -71,11 +107,24 @@ const make = Effect.gen(function* () {
   const stored = yield* secrets
     .get(KEY)
     .pipe(Effect.mapError((cause) => new NotificationStoreError({ cause })));
-  let state: NotificationState = Option.isSome(stored)
+  const decoded = Option.isSome(stored)
     ? yield* decode(new TextDecoder().decode(stored.value)).pipe(
         Effect.mapError((cause) => new NotificationStoreError({ cause })),
       )
     : emptyState;
+  let state: NotificationState =
+    decoded.version === 2
+      ? decoded
+      : {
+          ...emptyState,
+          registrations: decoded.registrations.map((entry) => ({
+            ...entry,
+            lastAggregate: null,
+            lastUpdatedAt: 0,
+            pending: null,
+          })),
+          notifications: decoded.notifications,
+        };
   return NotificationStore.of({
     read: Effect.sync(() => state),
     update: (transform) =>
