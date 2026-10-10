@@ -26,8 +26,19 @@ class T3AgentNotificationsModule : Module() {
       appContext.reactContext?.let { AgentNotifications.clear(it) }
     }
 
-    Function("configurePaired") { registrationIds: List<String>, scheme: String ->
-      appContext.reactContext?.let { AgentNotifications.configurePaired(it, registrationIds, scheme) }
+    Function("configurePaired") {
+        registrationIds: List<String>,
+        scheme: String,
+        ongoingEnabled: Boolean
+      ->
+      appContext.reactContext?.let {
+        AgentNotifications.configurePaired(it, registrationIds, scheme, ongoingEnabled)
+      }
+    }
+
+    AsyncFunction("pairedNotificationPublicKey") { registrationId: String ->
+      val context = requireNotNull(appContext.reactContext)
+      PairedNotificationKeys.publicKey(context, registrationId)
     }
 
     Function("showShowcaseActivity") { scheme: String, data: Map<String, String> ->

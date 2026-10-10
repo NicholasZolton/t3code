@@ -14,8 +14,8 @@ import {
 
 import {
   sanitizeAgentActivityAggregateState,
-  sanitizeApnsNotificationPayload,
-} from "./agentActivityPayloads.ts";
+  sanitizeAgentNotificationPayload,
+} from "@t3tools/shared/agentActivityPayloads";
 import {
   expiresAtForJob,
   makeApnsDeliveryJobPayload,
@@ -170,7 +170,7 @@ export const make = Effect.gen(function* () {
           bundleId: input.bundleId,
           apsEnvironment: input.apsEnvironment,
           aggregate: null,
-          notification: sanitizeApnsNotificationPayload(input.notification),
+          notification: sanitizeAgentNotificationPayload(input.notification),
           jobId,
           createdAt: DateTime.formatIso(now),
           expiresAt: expiresAtForJob(now.epochMilliseconds),

@@ -3,6 +3,22 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./agentActivityPayloads": {
+      "types": "./src/agentActivityPayloads.ts",
+      "import": "./src/agentActivityPayloads.ts"
+    },
+    "./agentActivityAggregate": {
+      "types": "./src/agentActivityAggregate.ts",
+      "import": "./src/agentActivityAggregate.ts"
+    },
+    "./agentActivityAlerts": {
+      "types": "./src/agentActivityAlerts.ts",
+      "import": "./src/agentActivityAlerts.ts"
+    },
+    "./agentActivityAndroid": {
+      "types": "./src/agentActivityAndroid.ts",
+      "import": "./src/agentActivityAndroid.ts"
+    },
     "./FcmClient": {
       "types": "./src/FcmClient.ts",
       "import": "./src/FcmClient.ts"

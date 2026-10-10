@@ -23,9 +23,11 @@ import { useSavedRemoteConnections } from "../../state/use-remote-environment-re
 import type { Preferences } from "../../persistence/mobile-preferences";
 import {
   configurePairedAndroidNotifications,
+  pairedNotificationPublicKey,
   supportsPairedAndroidNotifications,
 } from "./androidNotifications";
 import { requestAgentNotificationPermission } from "./notificationPermissions";
+import { makeAgentAwarenessPreferences } from "./registrationPayload";
 
 type Registration = NonNullable<Preferences["pairedNotifications"]>[string];
 interface RegistrationStatus {
@@ -56,7 +58,15 @@ export function pairedNotificationConnection(
 export class PairedNotificationSetupError extends Schema.TaggedError<PairedNotificationSetupError>()(
   "PairedNotificationSetupError",
   {
-    reason: Schema.Literals(["connection", "configuration", "permission", "token", "registration"]),
+    reason: Schema.Literals([
+      "connection",
+      "configuration",
+      "permission",
+      "token",
+      "registration",
+      "encryption",
+      "server-version",
+    ]),
   },
 ) {
   override get message(): string {
@@ -71,6 +81,10 @@ export class PairedNotificationSetupError extends Schema.TaggedError<PairedNotif
         return "Could not obtain a Firebase token. Check this app build's Google services configuration.";
       case "registration":
         return "This environment did not accept the notification registration.";
+      case "encryption":
+        return "Could not prepare this phone's encrypted notification key.";
+      case "server-version":
+        return "Update this server to support encrypted agent notifications.";
     }
   }
 }
@@ -98,18 +112,28 @@ const updateRegistration = Effect.fn("updatePairedNotificationRegistration")(fun
   }
   const packageName = Constants.expoConfig?.android?.package;
   if (!packageName) return yield* new PairedNotificationSetupError({ reason: "token" });
+  const current = appAtomRegistry.get(mobilePreferencesAtom);
+  const preferences = AsyncResult.isSuccess(current) ? current.value : {};
+  const encryptionPublicKey = yield* Effect.tryPromise({
+    try: () => pairedNotificationPublicKey(registration.registrationId),
+    catch: () => new PairedNotificationSetupError({ reason: "encryption" }),
+  });
   const status = yield* registerPairedNotifications(target, {
     registrationId: registration.registrationId,
     pushToken: observedToken ?? (yield* pushToken),
     packageName,
+    encryptionPublicKey,
+    preferences: makeAgentAwarenessPreferences({ notificationsEnabled: true, preferences }),
   });
   if (!status.configured)
     return yield* new PairedNotificationSetupError({ reason: "configuration" });
+  if (status.encryptedActivitySupported !== true)
+    return yield* new PairedNotificationSetupError({ reason: "server-version" });
   if (status.registrationId !== registration.registrationId)
     return yield* new PairedNotificationSetupError({ reason: "registration" });
   setStatus(connection.environmentId, {
     registered: true,
-    message: "Generic alerts sent directly by this server",
+    message: "Encrypted alerts and activity sent directly by this server",
   });
 });
 
@@ -127,10 +151,26 @@ export const enablePairedNotifications = Effect.fn("enablePairedNotifications")(
   const status = yield* getPairedNotificationStatus(target);
   if (!status.configured)
     return yield* new PairedNotificationSetupError({ reason: "configuration" });
+  if (status.encryptedActivitySupported !== true)
+    return yield* new PairedNotificationSetupError({ reason: "server-version" });
   const permission = yield* requestAgentNotificationPermission;
   if (permission.type !== "granted")
     return yield* new PairedNotificationSetupError({ reason: "permission" });
-  yield* updateRegistration(connection, { registrationId, enabled: true });
+  const current = appAtomRegistry.get(mobilePreferencesAtom);
+  const preferences = AsyncResult.isSuccess(current) ? current.value : {};
+  const enabled = Object.values(preferences.pairedNotifications ?? {})
+    .filter((registration) => registration.enabled)
+    .map((registration) => registration.registrationId);
+  configurePairedAndroidNotifications(
+    [...enabled, registrationId],
+    preferences.liveActivitiesEnabled !== false,
+  );
+  yield* updateRegistration(connection, { registrationId, enabled: true }).pipe(
+    Effect.catch((error) => {
+      configurePairedAndroidNotifications(enabled, preferences.liveActivitiesEnabled !== false);
+      return Effect.fail(error);
+    }),
+  );
 }, registrationLock.withPermit);
 
 // Keep token updates and cold starts working even without a T3 Connect account.
@@ -155,7 +195,7 @@ export function usePairedNotificationSync(): void {
       const registration = registrations[connection.environmentId];
       return registration?.enabled ? [registration.registrationId] : [];
     });
-    configurePairedAndroidNotifications(enabled);
+    configurePairedAndroidNotifications(enabled, preferences.value.liveActivitiesEnabled !== false);
     const synchronize = async (observedToken?: string): Promise<void> => {
       const permission = await Notifications.getPermissionsAsync().catch(() => null);
       if (cancelled || permission === null) return;
@@ -184,11 +224,14 @@ export function usePairedNotificationSync(): void {
                 }),
               ),
             );
-          } catch {
+          } catch (error) {
             if (!cancelled)
               setStatus(connection.environmentId, {
                 registered: false,
-                message: "Reconnect or enable again to refresh registration",
+                message:
+                  error instanceof Error
+                    ? error.message
+                    : "Reconnect or enable again to refresh registration",
               });
           }
         }),

@@ -22,8 +22,8 @@ import {
   isTerminalPhase,
   notificationForActivity,
   sanitizeAgentActivityAggregateState,
-  sanitizeApnsNotificationPayload,
-} from "./agentActivityPayloads.ts";
+  sanitizeAgentNotificationPayload,
+} from "@t3tools/shared/agentActivityPayloads";
 import * as Apns from "./ApnsClient.ts";
 import {
   ApnsDeliveryJobLiveActivityAggregateMissing,
@@ -49,12 +49,12 @@ import {
   alertForTerminalAggregate,
   newlyTerminalRows,
   shouldAlertForActivity,
-} from "./agentActivityAlerts.ts";
+} from "@t3tools/shared/agentActivityAlerts";
 export {
   alertForAttentionTransition,
   alertForNewlyTerminal,
   alertForTerminalAggregate,
-} from "./agentActivityAlerts.ts";
+} from "@t3tools/shared/agentActivityAlerts";
 
 const MIN_LIVE_ACTIVITY_UPDATE_INTERVAL_MS = 15_000;
 // How long a just-armed card may sit with an empty aggregate before an end is
@@ -870,7 +870,7 @@ export const make = Effect.gen(function* () {
     let deliveryTarget = input.target;
     const now = yield* DateTime.now;
     const epochSeconds = Math.floor(now.epochMilliseconds / 1_000);
-    const notification = sanitizeApnsNotificationPayload(input.notification);
+    const notification = sanitizeAgentNotificationPayload(input.notification);
     yield* Effect.annotateCurrentSpan({
       "relay.environment_id": notification.environmentId,
       "relay.thread_id": notification.threadId,
