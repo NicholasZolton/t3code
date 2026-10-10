@@ -45,9 +45,8 @@ import {
   RelayFcmDeliveryQueue,
   RelayFcmDeliveryDeadLetterQueue,
 } from "./queues.ts";
-import * as WebCrypto from "./WebCrypto.ts";
-import * as FcmAssertionSigner from "./agentActivity/FcmAssertionSigner.ts";
-import * as FcmClient from "./agentActivity/FcmClient.ts";
+import * as FcmAssertionSigner from "@t3tools/shared/FcmAssertionSigner";
+import * as FcmClient from "@t3tools/shared/FcmClient";
 import * as FcmDeliveryQueueSender from "./agentActivity/FcmDeliveryQueueSender.ts";
 import * as FcmDeliveries from "./agentActivity/FcmDeliveries.ts";
 import * as FcmDeliveryQueueConsumer from "./agentActivity/FcmDeliveryQueueConsumer.ts";
@@ -287,7 +286,10 @@ export const layer = Api.make(
             FcmClient.layer.pipe(
               Layer.provide(FcmAssertionSigner.layer),
               Layer.provide(
-                Layer.succeed(WebCrypto.WebCrypto, { subtle: globalThis.crypto.subtle }),
+                Layer.succeed(FcmAssertionSigner.WebCrypto, { subtle: globalThis.crypto.subtle }),
+              ),
+              Layer.provide(
+                Layer.effect(FcmClient.FcmConfiguration, RelayConfiguration.RelayConfiguration),
               ),
             ),
           ),

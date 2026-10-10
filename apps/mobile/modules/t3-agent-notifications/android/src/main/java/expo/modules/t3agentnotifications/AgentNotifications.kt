@@ -22,6 +22,8 @@ class AgentMessagingService : ExpoFirebaseMessagingService() {
   override fun onMessageReceived(remoteMessage: RemoteMessage) {
     if (remoteMessage.data["t3_kind"] == "agent_activity") {
       AgentNotifications.receive(this, remoteMessage.data)
+    } else if (remoteMessage.data["t3_kind"] == "paired_alert") {
+      AgentNotifications.receivePaired(this, remoteMessage.data)
     } else {
       super.onMessageReceived(remoteMessage)
     }
@@ -51,6 +53,51 @@ object AgentNotifications {
   private const val MAX_MESSAGE_AGE_MS = 10 * 60 * 1000L
   private const val RUNNING_LIFETIME_MS = 2 * 60 * 60 * 1000L
   private const val MAX_LIFETIME_MS = 24 * 60 * 60 * 1000L
+  private const val PAIRED_STORE = "t3-paired-notifications"
+  private const val PAIRED_TAG = "t3-paired-alert:"
+
+  /** Paired subscriptions are independent of the T3 Connect account lifecycle. */
+  @Synchronized
+  fun configurePaired(context: Context, registrationIds: List<String>, scheme: String) {
+    val prefs = context.getSharedPreferences(PAIRED_STORE, Context.MODE_PRIVATE)
+    prefs.edit().putStringSet("registrations", registrationIds.toSet())
+      .putString("scheme", scheme).apply()
+    manager(context).activeNotifications.filter {
+      it.tag?.startsWith(PAIRED_TAG) == true &&
+        it.tag?.removePrefix(PAIRED_TAG) !in registrationIds
+    }.forEach { manager(context).cancel(it.tag, it.id) }
+  }
+
+  @Synchronized
+  fun receivePaired(context: Context, data: Map<String, String>) {
+    val prefs = context.getSharedPreferences(PAIRED_STORE, Context.MODE_PRIVATE)
+    val registrationId = data["registration_id"] ?: return
+    val notificationId = data["notification_id"] ?: return
+    val updatedAt = data["updated_at"]?.toLongOrNull() ?: return
+    if (registrationId !in prefs.getStringSet("registrations", emptySet()).orEmpty() ||
+      System.currentTimeMillis() - updatedAt !in -MAX_MESSAGE_AGE_MS..MAX_MESSAGE_AGE_MS ||
+      !NotificationManagerCompat.from(context).areNotificationsEnabled()
+    ) return
+    val body = when (data["phase"]) {
+      "waiting_for_approval" -> "An agent needs your approval."
+      "waiting_for_input" -> "An agent needs your input."
+      "completed" -> "An agent finished."
+      "failed" -> "An agent failed."
+      else -> return
+    }
+    val seen = prefs.getString("seen", null)?.split('\n').orEmpty()
+    if (notificationId in seen) return
+    prefs.edit().putString("seen", (seen.takeLast(63) + notificationId).joinToString("\n")).apply()
+    channels(context)
+    val scheme = prefs.getString("scheme", "t3code") ?: "t3code"
+    val id = notificationId.hashCode()
+    val notification = base(context, ALERT_CHANNEL)
+      .setContentTitle("T3 Code").setContentText(body)
+      .setAutoCancel(true)
+      .setContentIntent(contentIntent(context, scheme, "/notifications/$registrationId/$notificationId", id))
+      .build()
+    manager(context).notify("$PAIRED_TAG$registrationId", id, notification)
+  }
 
   @Synchronized
   fun configure(
@@ -346,7 +393,7 @@ object AgentNotifications {
     path: String?,
     id: Int
   ): PendingIntent? {
-    val threadPath = path?.takeIf { it.startsWith("/threads/") }
+    val threadPath = path?.takeIf { it.startsWith("/threads/") || it.startsWith("/notifications/") }
     val route = threadPath?.takeUnless { it.contains('?') || it.contains('#') } ?: "/"
     val intent = context.packageManager.getLaunchIntentForPackage(context.packageName)
       ?: return null

@@ -17,7 +17,7 @@ import * as EnvironmentLinks from "../environments/EnvironmentLinks.ts";
 import * as AgentActivityRows from "./AgentActivityRows.ts";
 import * as LiveActivities from "./LiveActivities.ts";
 import * as FcmDeliveryQueueSender from "./FcmDeliveryQueueSender.ts";
-import * as FcmClient from "./FcmClient.ts";
+import * as FcmClient from "@t3tools/shared/FcmClient";
 import * as FcmDeliveries from "./FcmDeliveries.ts";
 import { TestClock } from "effect/testing";
 import { androidActivityData, fitFcmData } from "./fcmPayloads.ts";
@@ -108,6 +108,7 @@ function harness() {
         }),
     }),
     Layer.succeed(FcmClient.FcmClient, {
+      configured: true,
       send: (input) =>
         Effect.suspend(() =>
           current.deliveryFailure

@@ -1,5 +1,9 @@
 # Wiki update log
 
+## 2026-10-10
+
+- **Compatibility decision**: Recorded the experimental [paired Android notification](paired-notifications.md) authorization and opaque-payload boundary. T3 Connect delivery remains a separate path; physical-phone delivery remains unverified.
+
 ## 2026-10-08
 
 - **Integration**: [PR #37](https://github.com/NicholasZolton/t3code/pull/37) reached fork `main` at `e5365adddc`. Refreshed [upstream integration](upstream-integration.md): all 280 newer commits through `9a3070bcf0` are incorporated, with zero ancestry gap, upstream worktree-location and skill-refresh adoption, and preserved canonical checkout grouping.

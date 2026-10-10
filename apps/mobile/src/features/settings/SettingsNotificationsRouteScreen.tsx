@@ -40,6 +40,7 @@ import { SettingsRow } from "./components/SettingsRow";
 import { SettingsSection } from "./components/SettingsSection";
 import { SettingsSwitchRow } from "./components/SettingsSwitchRow";
 import { SettingsScreen } from "./components/SettingsScreen";
+import { PairedNotificationSettings } from "./PairedNotificationSettings";
 import { resolveAgentAwarenessPlatformPresentation } from "./SettingsRouteScreen.logic";
 
 type NotificationStatus = "checking" | "enabled" | "disabled" | "unsupported";
@@ -66,9 +67,12 @@ export function SettingsNotificationsRouteScreen() {
           contentInsetAdjustmentBehavior="automatic"
           contentContainerClassName="px-5 pt-4"
         >
-          <Text className="text-base text-foreground-muted">
-            Notifications require T3 Connect in this app build.
-          </Text>
+          <PairedNotificationSettings />
+          {Platform.OS !== "android" ? (
+            <Text className="text-base text-foreground-muted">
+              iOS notifications require T3 Connect in this app build.
+            </Text>
+          ) : null}
         </ScrollView>
       </SettingsScreen>
     );
@@ -432,7 +436,8 @@ function ConfiguredSettingsNotificationsRouteScreen() {
           paddingBottom: Math.max(insets.bottom, 18) + 18,
         }}
       >
-        <SettingsSection title="Agent activity">
+        <PairedNotificationSettings />
+        <SettingsSection title="T3 Connect agent activity">
           <SettingsSwitchRow
             icon="bell.badge"
             label="Device Notifications"

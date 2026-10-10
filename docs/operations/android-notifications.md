@@ -1,6 +1,29 @@
 # Android notifications
 
-The Android app receives Firebase Cloud Messaging (FCM) data messages. The relay sends them directly through FCM HTTP v1; an Expo Push account is not required.
+The Android app receives Firebase Cloud Messaging (FCM) data messages. Either a paired environment or T3 Connect sends them directly through FCM HTTP v1; an Expo Push account is not required.
+
+## Self-hosted paired delivery
+
+Direct/Tailscale-paired Android clients can receive completion, failure, approval and input alerts without Clerk, T3 Connect or a separate watcher. Each server needs the Firebase service-account JSON in `T3CODE_FCM_SERVICE_ACCOUNT`; each APK needs a Google services file from the same Firebase project. Use a service account with the **Firebase Cloud Messaging API Admin** role (`roles/firebasecloudmessaging.admin`) on that project, and enable the Firebase Cloud Messaging API.
+
+Add these values to the fnox `local` profile using your existing encrypted provider:
+
+```sh
+fnox set --profile local --provider <your-age-provider> T3CODE_FCM_SERVICE_ACCOUNT < /private/path/service-account.json
+fnox set --profile local --provider <your-age-provider> T3CODE_ANDROID_GOOGLE_SERVICES_FILE /absolute/path/google-services.json
+```
+
+The first variable contains the JSON itself, not a file path. The second contains a local file path, not the JSON contents. Keep both source files outside the repository. The Google services file must contain the chosen APK package identifier; it does not contain the service-account private key.
+
+Run the server under `fnox exec --profile local --no-defaults -- <server-command>`. For SSH-managed servers, configure fnox and resolve the service-account variable **on the remote host when its launcher starts**; setting it only on the desktop does not forward it to SSH. Restart the server after changing the credentials. This capability is disabled when the variable is absent or the JSON is malformed. Existing T3 Connect credentials and delivery are unaffected.
+
+Build a new Android APK under the same fnox profile with `T3CODE_MOBILE_UPDATES_ENABLED=0` for a private binary; preserve its existing package identifier and [private signing identity](#private-fork-apk-signing). No Clerk or relay configuration is needed for paired delivery. On the phone, pair normally, then enable the environment under **Settings → Notifications → Paired environments**.
+
+These messages contain only random registration/notification IDs, the generic event phase and a timestamp. Titles, prompts, model names, filesystem paths, server addresses and thread IDs are not sent to Google. Android constructs generic notification text locally; tapping resolves the opaque reference over the phone's existing authenticated server connection. Google still processes the FCM token, Android package identifier, delivery timing and message metadata; payload minimization is not a compliance guarantee.
+
+The server must stay running with outbound Google access. Receiving an alert does not require Tailscale or a live phone-to-server connection; opening its thread does. Registrations belong to existing client sessions, and delivery rechecks authorization, expiry, opt-out and current thread state. The private file store retains pending delivery across restarts; failed sends retry every 30 seconds for up to five minutes. Notification references remain usable for up to seven days, subject to a 2,000-reference cap. Native ID deduplication prevents repeated presentation of retried messages. Already handed-off FCM messages cannot be recalled by server-side revocation.
+
+Paired delivery currently provides generic alerts only, not ongoing cards or iOS push. Its alerts can also appear in the foreground because the phone cannot identify the originating thread from the minimized payload. Test a locked/backgrounded phone, a process-exited phone, a cold-start tap, reconnecting after an offline tap, opt-out while offline, token rotation, and pairing revocation before relying on it. Android **Force stop** prevents delivery until the app is reopened.
 
 ## Android compatibility and automated checks
 
@@ -25,8 +48,8 @@ The lint command uses the K1 frontend because AGP's K2 frontend crashes while an
 1. Create a Firebase project and register each Android application identifier you intend to build: `com.t3tools.t3code.dev`, `com.t3tools.t3code.preview`, or `com.t3tools.t3code`.
 2. Download `google-services.json`. Set `T3CODE_ANDROID_GOOGLE_SERVICES_FILE` to its path when running Expo prebuild and building the app. The JSON must contain the selected variant's package identifier.
 3. Create a service-account key with permission to send FCM messages for that Firebase project. Keep this private JSON outside the repository and the app bundle.
-4. Enable the Firebase Cloud Messaging API in the Google project if it is not already enabled. For hosted delivery, set the relay's `FCM_SERVICE_ACCOUNT` secret to the service-account JSON.
-5. Build a new Android binary. A JavaScript-only update cannot install the native notification handler or Firebase configuration. Hosted delivery also needs the relay database migration and updated relay deployment; local verification can use the watcher below.
+4. Enable the Firebase Cloud Messaging API in the Google project if it is not already enabled. For paired delivery, set the server's `T3CODE_FCM_SERVICE_ACCOUNT`; for hosted delivery, set the relay's `FCM_SERVICE_ACCOUNT`. Both contain the service-account JSON.
+5. Build a new Android binary. A JavaScript-only update cannot install the native notification handler or Firebase configuration. Hosted delivery also needs the relay database migration and updated relay deployment; paired delivery does not use those services.
 
 For a local development build, from `apps/mobile`:
 
@@ -36,7 +59,7 @@ T3CODE_ANDROID_GOOGLE_SERVICES_FILE=/absolute/path/google-services.json \
 vp run android:dev
 ```
 
-For an EAS build, provide the same configuration through each selected build environment, using an EAS file variable named `T3CODE_ANDROID_GOOGLE_SERVICES_FILE` for the Google services file. Make the file available to fingerprint generation as well as the native build. FCM service-account credentials belong on the relay, not in EAS's app environment. If deploying a separate hosted relay, configure the build's T3 Connect public settings for that relay and Clerk application as described in [T3 Connect](../internals/t3-connect.md).
+For an EAS build, provide the same configuration through each selected build environment, using an EAS file variable named `T3CODE_ANDROID_GOOGLE_SERVICES_FILE` for the Google services file. Make the file available to fingerprint generation as well as the native build. FCM service-account credentials belong on the sending server or relay, not in EAS's app environment. If deploying a separate hosted relay, configure the build's T3 Connect public settings for that relay and Clerk application as described in [T3 Connect](../internals/t3-connect.md).
 
 Set `T3CODE_MOBILE_UPDATES_ENABLED=0` before prebuild and bundling a private binary to disable the repository's configured Expo OTA update source. A debug development-client APK requires Metro; a bundled release build is needed to verify cold-start notification taps without Expo's development launcher.
 

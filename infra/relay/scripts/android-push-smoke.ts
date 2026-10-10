@@ -9,9 +9,8 @@ import * as Schema from "effect/Schema";
 import * as FetchHttpClient from "effect/http/FetchHttpClient";
 
 import * as RelayConfiguration from "../src/Config.ts";
-import * as WebCrypto from "../src/WebCrypto.ts";
-import * as FcmAssertionSigner from "../src/agentActivity/FcmAssertionSigner.ts";
-import * as FcmClient from "../src/agentActivity/FcmClient.ts";
+import * as FcmAssertionSigner from "@t3tools/shared/FcmAssertionSigner";
+import * as FcmClient from "@t3tools/shared/FcmClient";
 
 const Device = Schema.Struct({
   token: Schema.NonEmptyString,
@@ -131,14 +130,13 @@ const main = Effect.gen(function* () {
       FcmClient.layer.pipe(
         Layer.provide(
           FcmAssertionSigner.layer.pipe(
-            Layer.provide(Layer.succeed(WebCrypto.WebCrypto, { subtle: globalThis.crypto.subtle })),
+            Layer.provide(
+              Layer.succeed(FcmAssertionSigner.WebCrypto, { subtle: globalThis.crypto.subtle }),
+            ),
           ),
         ),
         Layer.provide(
-          Layer.mergeAll(
-            Layer.succeed(RelayConfiguration.RelayConfiguration, config),
-            FetchHttpClient.layer,
-          ),
+          Layer.mergeAll(Layer.succeed(FcmClient.FcmConfiguration, config), FetchHttpClient.layer),
         ),
       ),
     ),

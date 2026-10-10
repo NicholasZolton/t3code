@@ -48,6 +48,7 @@ class AgentNotificationsTest {
       }
     )
     AgentNotifications.clear(context)
+    context.getSharedPreferences("t3-paired-notifications", Application.MODE_PRIVATE).edit().clear().apply()
     AgentNotifications.configure(context, "device", "user", "t3code-dev", true)
     // The fixtures alert for this thread; a resumed app is showing it.
     AgentNotifications.setThreadOnScreen("/threads/environment/thread")
@@ -67,6 +68,54 @@ class AgentNotificationsTest {
     "alert_body" to "Done: Test project",
     "alert_path" to "/threads/environment/thread",
   )
+
+  private fun pairedAlert(id: String = "opaque-notice") = mapOf(
+    "registration_id" to "opaque-registration",
+    "notification_id" to id,
+    "phase" to "completed",
+    "updated_at" to System.currentTimeMillis().toString(),
+  )
+
+  @Test
+  fun pairedAlertUsesGenericTextAndAnOpaqueTapRoute() {
+    AgentNotifications.configurePaired(context, listOf("opaque-registration"), "t3code-dev")
+    AgentNotifications.receivePaired(context, pairedAlert())
+    val notification = manager.activeNotifications.single().notification
+    assertEquals("T3 Code", notification.extras.getString(Notification.EXTRA_TITLE))
+    assertEquals("An agent finished.", notification.extras.getString(Notification.EXTRA_TEXT))
+    val intent = shadowOf(notification.contentIntent).savedIntent
+    assertEquals("t3code-dev://notifications/opaque-registration/opaque-notice", intent.data.toString())
+  }
+
+  @Test
+  fun pairedAlertsSurviveConnectSignOutAndDoNotRepeat() {
+    AgentNotifications.configurePaired(context, listOf("opaque-registration"), "t3code-dev")
+    AgentNotifications.clear(context)
+    AgentNotifications.receivePaired(context, pairedAlert())
+    AgentNotifications.receivePaired(context, pairedAlert())
+    assertEquals(1, manager.activeNotifications.size)
+  }
+
+  @Test
+  fun disablingPairedNotificationsClearsAlertsAndBlocksNewDelivery() {
+    AgentNotifications.configurePaired(context, listOf("opaque-registration"), "t3code-dev")
+    AgentNotifications.receivePaired(context, pairedAlert())
+    AgentNotifications.configurePaired(context, emptyList(), "t3code-dev")
+    AgentNotifications.receivePaired(context, pairedAlert("another"))
+    assertTrue(manager.activeNotifications.isEmpty())
+  }
+
+  @Test
+  fun pairedReceiverRejectsUnknownRegistrationsExpiredMessagesAndMissingPermission() {
+    AgentNotifications.receivePaired(context, pairedAlert())
+    assertTrue(manager.activeNotifications.isEmpty())
+    AgentNotifications.configurePaired(context, listOf("opaque-registration"), "t3code-dev")
+    AgentNotifications.receivePaired(context, pairedAlert() + ("updated_at" to (System.currentTimeMillis() - 3_600_000).toString()))
+    assertTrue(manager.activeNotifications.isEmpty())
+    shadowOf(manager).setNotificationsEnabled(false)
+    AgentNotifications.receivePaired(context, pairedAlert())
+    assertTrue(manager.activeNotifications.isEmpty())
+  }
 
   @Test
   fun alertHistoryEvictsOnlyTheOldestEntryAfterCapacity() {

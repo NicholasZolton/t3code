@@ -5,7 +5,11 @@ import * as Option from "effect/Option";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import * as Semaphore from "effect/Semaphore";
-import type { ProviderInstanceId, SidebarProjectGroupingMode } from "@t3tools/contracts";
+import {
+  PairedNotificationId,
+  type ProviderInstanceId,
+  type SidebarProjectGroupingMode,
+} from "@t3tools/contracts";
 import type { ComposerEnterBehavior } from "../lib/composerEnterBehavior";
 import type { FollowUpBehavior } from "../lib/followUpBehavior";
 import { MOBILE_THEME_IDS, type MobileThemeId, type MobileThemeMode } from "../lib/mobileTheme";
@@ -15,8 +19,20 @@ import { MobileStorageDecodeError, MobileStorageEncodeError } from "./mobile-sto
 
 const PREFERENCES_KEY = "t3code.preferences";
 const PREFERENCES_FALLBACK_KEY = "t3code.preferences.fallback";
+const decodePairedNotifications = Schema.decodeUnknownOption(
+  Schema.Record(
+    Schema.String,
+    Schema.Struct({
+      registrationId: PairedNotificationId,
+      enabled: Schema.Boolean,
+    }),
+  ),
+);
 
 export interface Preferences {
+  readonly pairedNotifications?: Readonly<
+    Record<string, { readonly registrationId: string; readonly enabled: boolean }>
+  >;
   readonly liveActivitiesEnabled?: boolean;
   readonly themeId?: MobileThemeId;
   readonly lightThemeId?: MobileThemeId;
@@ -93,6 +109,7 @@ export class MobilePreferencesStore extends Context.Service<
 
 function sanitizePreferences(parsed: Preferences): Preferences {
   const preferences: {
+    pairedNotifications?: Preferences["pairedNotifications"];
     liveActivitiesEnabled?: boolean;
     themeId?: MobileThemeId;
     lightThemeId?: MobileThemeId;
@@ -116,6 +133,9 @@ function sanitizePreferences(parsed: Preferences): Preferences {
     threadListSnoozedShelfExpanded?: boolean;
     threadListWorkingShelfExpanded?: boolean;
   } = {};
+
+  const paired = decodePairedNotifications(parsed.pairedNotifications);
+  if (Option.isSome(paired)) preferences.pairedNotifications = paired.value;
 
   if (typeof parsed.liveActivitiesEnabled === "boolean") {
     preferences.liveActivitiesEnabled = parsed.liveActivitiesEnabled;

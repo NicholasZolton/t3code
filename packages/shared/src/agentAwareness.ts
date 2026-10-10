@@ -84,8 +84,11 @@ export function projectThreadAwarenessV2(
   };
 }
 
-function resolveThreadAwarenessPhaseV2(
-  thread: ProjectThreadAwarenessV2Input["thread"],
+export function resolveThreadAwarenessPhaseV2(
+  thread: Pick<
+    ProjectThreadAwarenessV2Input["thread"],
+    "pendingRuntimeRequest" | "activityRunStatus" | "status" | "pendingBackgroundTasks"
+  >,
 ): AgentAwarenessPhase | null {
   if (thread.pendingRuntimeRequest?.kind === "user_input") {
     return "waiting_for_input";

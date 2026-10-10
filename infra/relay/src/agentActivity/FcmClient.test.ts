@@ -13,10 +13,9 @@ import * as HttpClientResponse from "effect/http/HttpClientResponse";
 import type * as HttpClientRequest from "effect/http/HttpClientRequest";
 
 import * as RelayConfiguration from "../Config.ts";
-import * as FcmClient from "./FcmClient.ts";
+import * as FcmClient from "@t3tools/shared/FcmClient";
 
-import * as WebCrypto from "../WebCrypto.ts";
-import * as FcmAssertionSigner from "./FcmAssertionSigner.ts";
+import * as FcmAssertionSigner from "@t3tools/shared/FcmAssertionSigner";
 
 const { privateKey, publicKey } = NodeCrypto.generateKeyPairSync("rsa", {
   modulusLength: 2048,
@@ -67,12 +66,14 @@ function layerTest(requests: HttpClientRequest.HttpClientRequest[], responses: R
   return FcmClient.layer.pipe(
     Layer.provide(
       FcmAssertionSigner.layer.pipe(
-        Layer.provide(Layer.succeed(WebCrypto.WebCrypto, { subtle: globalThis.crypto.subtle })),
+        Layer.provide(
+          Layer.succeed(FcmAssertionSigner.WebCrypto, { subtle: globalThis.crypto.subtle }),
+        ),
       ),
     ),
     Layer.provide(
       Layer.mergeAll(
-        Layer.succeed(RelayConfiguration.RelayConfiguration, config),
+        Layer.succeed(FcmClient.FcmConfiguration, config),
         Layer.succeed(HttpClient.HttpClient, http),
       ),
     ),
@@ -124,11 +125,11 @@ describe("FCM delivery", () => {
             Layer.provide(
               FcmAssertionSigner.layer.pipe(
                 Layer.provide(
-                  Layer.succeed(WebCrypto.WebCrypto, { subtle: globalThis.crypto.subtle }),
+                  Layer.succeed(FcmAssertionSigner.WebCrypto, { subtle: globalThis.crypto.subtle }),
                 ),
               ),
             ),
-            Layer.provide(Layer.succeed(RelayConfiguration.RelayConfiguration, config)),
+            Layer.provide(Layer.succeed(FcmClient.FcmConfiguration, config)),
             Layer.provide(Layer.succeed(HttpClient.HttpClient, http)),
           ),
         ),
@@ -163,7 +164,9 @@ describe("FCM delivery", () => {
     }).pipe(
       Effect.provide(
         FcmAssertionSigner.layer.pipe(
-          Layer.provide(Layer.succeed(WebCrypto.WebCrypto, { subtle: globalThis.crypto.subtle })),
+          Layer.provide(
+            Layer.succeed(FcmAssertionSigner.WebCrypto, { subtle: globalThis.crypto.subtle }),
+          ),
         ),
       ),
     ),

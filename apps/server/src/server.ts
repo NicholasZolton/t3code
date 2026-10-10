@@ -73,6 +73,8 @@ import * as EnvironmentTheme from "./environmentTheme.ts";
 import * as Keybindings from "./keybindings.ts";
 import * as ServerRuntimeStartup from "./serverRuntimeStartup.ts";
 import * as AgentAwarenessRelay from "./relay/AgentAwarenessRelay.ts";
+import * as PairedNotificationsRuntime from "./notifications/runtime.ts";
+import * as NotificationsHttp from "./notifications/http.ts";
 import { hasCloudPublicConfig } from "./cloud/publicConfig.ts";
 import * as ServerSettings from "./serverSettings.ts";
 import * as ProjectEnrichmentService from "./project/ProjectEnrichmentService.ts";
@@ -544,6 +546,7 @@ const layerProviderInstallationRefresh = Layer.effectDiscard(
 
 const layerRuntimeCoreDependenciesBase = Layer.mergeAll(
   AgentAwarenessRelay.layer,
+  PairedNotificationsRuntime.layer,
   // Asks T3 Connect to deliver webhooks it held while this environment was offline.
   HeldHooksWaker.layer,
   layerThreadSettlementWorker,
@@ -675,6 +678,7 @@ const layerMakeRoutes = Layer.mergeAll(
   Layer.mergeAll(
     HttpApiBuilder.layer(EnvironmentHttpApi).pipe(
       Layer.provide(AuthHttp.layer),
+      Layer.provide(NotificationsHttp.layer),
       Layer.provide(McpOAuthHttp.layer.pipe(Layer.provide(McpOAuth.layer))),
       Layer.provide(CloudHttp.layer),
       Layer.provide(OrchestrationHttp.layer),

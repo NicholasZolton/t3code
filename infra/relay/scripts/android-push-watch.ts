@@ -24,11 +24,9 @@ import * as RpcClient from "effect/rpc/RpcClient";
 import * as RpcSerialization from "effect/rpc/RpcSerialization";
 import * as Socket from "effect/socket/Socket";
 
-import * as RelayConfiguration from "../src/Config.ts";
 import { androidActivityData, fitFcmData } from "../src/agentActivity/fcmPayloads.ts";
-import * as WebCrypto from "../src/WebCrypto.ts";
-import * as FcmAssertionSigner from "../src/agentActivity/FcmAssertionSigner.ts";
-import * as FcmClient from "../src/agentActivity/FcmClient.ts";
+import * as FcmAssertionSigner from "@t3tools/shared/FcmAssertionSigner";
+import * as FcmClient from "@t3tools/shared/FcmClient";
 import * as FcmDeliveries from "../src/agentActivity/FcmDeliveries.ts";
 import { makeAggregateState } from "../src/agentActivity/agentActivityAggregate.ts";
 
@@ -103,24 +101,16 @@ const main = Effect.gen(function* () {
   const layerFcm = FcmClient.layer.pipe(
     Layer.provide(
       FcmAssertionSigner.layer.pipe(
-        Layer.provide(Layer.succeed(WebCrypto.WebCrypto, { subtle: globalThis.crypto.subtle })),
+        Layer.provide(
+          Layer.succeed(FcmAssertionSigner.WebCrypto, { subtle: globalThis.crypto.subtle }),
+        ),
       ),
     ),
     Layer.provide(
       Layer.mergeAll(
         FetchHttpClient.layer,
-        Layer.succeed(RelayConfiguration.RelayConfiguration, {
-          relayIssuer: "http://localhost",
-          apns: null,
+        Layer.succeed(FcmClient.FcmConfiguration, {
           fcmServiceAccount: Redacted.make(credentials),
-          clerkSecretKey: Redacted.make(""),
-          clerkPublishableKey: "",
-          clerkJwtAudience: "",
-          apnsDeliveryJobSigningSecret: Redacted.make(""),
-          cloudMintPrivateKey: Redacted.make(""),
-          cloudMintPublicKey: "",
-          managedEndpointBaseDomain: undefined,
-          managedEndpointNamespace: undefined,
         }),
       ),
     ),
