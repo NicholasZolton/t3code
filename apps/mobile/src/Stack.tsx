@@ -34,6 +34,8 @@ import {
 } from "./components/RenderErrorBoundary";
 import { ArchivedThreadsRouteScreen } from "./features/archive/ArchivedThreadsRouteScreen";
 import { useAgentNotificationNavigation } from "./features/agent-awareness/notificationNavigation";
+import { usePairedNotificationSync } from "./features/agent-awareness/pairedNotifications";
+import { PairedNotificationRouteScreen } from "./features/agent-awareness/PairedNotificationRouteScreen";
 import { ConnectOnboardingRouteScreen } from "./features/cloud/ConnectOnboardingRouteScreen";
 import { useConnectOnboardingNavigation } from "./features/cloud/connectOnboardingNavigation";
 import { AttachmentFileScreen } from "./features/files/AttachmentFileScreen";
@@ -603,6 +605,7 @@ function RootStackLayout(props: {
   const pathname = path.startsWith("/") ? path : `/${path}`;
   const workspaceLocation = workspaceLocationFromState(props.state);
   useAgentNotificationNavigation(workspaceLocation.pathname);
+  usePairedNotificationSync();
   // Presents the T3 Connect onboarding sheet after an in-session sign-in.
   useConnectOnboardingNavigation();
   // Launcher app shortcuts: routes shortcut taps and tracks opened threads.
@@ -699,6 +702,11 @@ const RootStackConfig = createWorkspaceStackNavigator({
     Thread: createNativeStackScreen({
       screen: ThreadRouteScreen,
       linking: THREAD_LINKING_PREFIX,
+      options: GLASS_HEADER_OPTIONS,
+    }),
+    PairedNotification: createNativeStackScreen({
+      screen: PairedNotificationRouteScreen,
+      linking: "notifications/:registrationId/:notificationId",
       options: GLASS_HEADER_OPTIONS,
     }),
     ThreadTerminal: createNativeStackScreen({

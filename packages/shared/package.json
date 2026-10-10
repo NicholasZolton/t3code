@@ -3,6 +3,14 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./FcmClient": {
+      "types": "./src/FcmClient.ts",
+      "import": "./src/FcmClient.ts"
+    },
+    "./FcmAssertionSigner": {
+      "types": "./src/FcmAssertionSigner.ts",
+      "import": "./src/FcmAssertionSigner.ts"
+    },
     "./orchestrationV2ThreadError": {
       "types": "./src/orchestrationV2ThreadError.ts",
       "import": "./src/orchestrationV2ThreadError.ts"

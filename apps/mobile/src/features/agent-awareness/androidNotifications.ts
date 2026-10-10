@@ -3,6 +3,7 @@ import { requireOptionalNativeModule } from "expo";
 import { Linking, Platform } from "react-native";
 
 interface AndroidAgentNotifications {
+  configurePaired?(registrationIds: ReadonlyArray<string>, scheme: string): void;
   configure(deviceId: string, userId: string, scheme: string, ongoingEnabled: boolean): void;
   clear(): void;
   setThreadOnScreen?(path: string | null): void;
@@ -17,6 +18,14 @@ const native =
 
 export function supportsAndroidAgentNotifications(): boolean {
   return typeof native?.configure === "function" && typeof native?.clear === "function";
+}
+
+export function supportsPairedAndroidNotifications(): boolean {
+  return typeof native?.configurePaired === "function";
+}
+
+export function configurePairedAndroidNotifications(registrationIds: ReadonlyArray<string>): void {
+  native?.configurePaired?.(registrationIds, appScheme());
 }
 
 function appScheme(): string {

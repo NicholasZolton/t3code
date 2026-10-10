@@ -3,7 +3,10 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
 
-import * as WebCrypto from "../WebCrypto.ts";
+export class WebCrypto extends Context.Service<
+  WebCrypto,
+  { readonly subtle: typeof globalThis.crypto.subtle }
+>()("@t3tools/shared/FcmAssertionSigner/WebCrypto") {}
 
 const encodeJson = Schema.encodeSync(Schema.fromJsonString(Schema.Unknown));
 
@@ -32,12 +35,12 @@ export class FcmAssertionSigner extends Context.Service<
       readonly issuedAt: number;
     }) => Effect.Effect<string, FcmAssertionSigningError>;
   }
->()("t3code-relay/agentActivity/FcmAssertionSigner") {}
+>()("@t3tools/shared/FcmAssertionSigner") {}
 
 export const make = Effect.gen(function* () {
-  const { subtle } = yield* WebCrypto.WebCrypto;
+  const { subtle } = yield* WebCrypto;
   return FcmAssertionSigner.of({
-    sign: Effect.fn("relay.fcm.assertion")(function* (input) {
+    sign: Effect.fn("fcm.assertion")(function* (input) {
       return yield* Effect.tryPromise({
         try: async () => {
           const encoder = new TextEncoder();

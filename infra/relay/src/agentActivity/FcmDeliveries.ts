@@ -21,7 +21,7 @@ import * as EnvironmentLinks from "../environments/EnvironmentLinks.ts";
 import * as AgentActivityRows from "./AgentActivityRows.ts";
 import * as LiveActivities from "./LiveActivities.ts";
 import * as FcmDeliveryQueueSender from "./FcmDeliveryQueueSender.ts";
-import * as FcmClient from "./FcmClient.ts";
+import * as FcmClient from "@t3tools/shared/FcmClient";
 import { androidActivityData, fitFcmData } from "./fcmPayloads.ts";
 import { makeAggregateState, statusForPhase } from "./agentActivityAggregate.ts";
 import { isExpiredAgentActivityState, notificationForActivity } from "./agentActivityPayloads.ts";

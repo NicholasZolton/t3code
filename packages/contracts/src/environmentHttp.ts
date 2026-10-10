@@ -452,6 +452,78 @@ class EnvironmentMetadataHttpApi extends HttpApiGroup.make("metadata").add(
   }),
 ) {}
 
+export const PairedNotificationPhase = Schema.Literals([
+  "waiting_for_approval",
+  "waiting_for_input",
+  "completed",
+  "failed",
+]);
+export type PairedNotificationPhase = typeof PairedNotificationPhase.Type;
+
+export const PairedNotificationId = Schema.String.check(Schema.isUUID(4));
+
+export const PairedNotificationRegistration = Schema.Struct({
+  registrationId: PairedNotificationId,
+  pushToken: TrimmedNonEmptyString.pipe(Schema.check(Schema.isMaxLength(4096))),
+  packageName: TrimmedNonEmptyString.pipe(Schema.check(Schema.isMaxLength(255))),
+});
+export type PairedNotificationRegistration = typeof PairedNotificationRegistration.Type;
+
+export const PairedNotificationRegistrationId = Schema.Struct({
+  registrationId: PairedNotificationId,
+});
+export const PairedNotificationReference = Schema.Struct({
+  registrationId: PairedNotificationId,
+  notificationId: PairedNotificationId,
+});
+export type PairedNotificationReference = typeof PairedNotificationReference.Type;
+
+export const PairedNotificationStatus = Schema.Struct({
+  configured: Schema.Boolean,
+  registrationId: Schema.NullOr(PairedNotificationId),
+});
+export type PairedNotificationStatus = typeof PairedNotificationStatus.Type;
+
+export const PairedNotificationDestination = Schema.Struct({
+  environmentId: ExecutionEnvironmentDescriptor.fields.environmentId,
+  threadId: ThreadId,
+});
+export type PairedNotificationDestination = typeof PairedNotificationDestination.Type;
+
+class EnvironmentNotificationsHttpApi extends HttpApiGroup.make("notifications")
+  .add(
+    HttpApiEndpoint.get("status", "/api/notifications", {
+      headers: OptionalBearerHeaders,
+      success: PairedNotificationStatus,
+      error: EnvironmentScopedOperationErrors,
+    }),
+  )
+  .add(
+    HttpApiEndpoint.post("register", "/api/notifications/register", {
+      headers: OptionalBearerHeaders,
+      payload: PairedNotificationRegistration,
+      success: PairedNotificationStatus,
+      error: EnvironmentScopedOperationErrors,
+    }),
+  )
+  .add(
+    HttpApiEndpoint.post("unregister", "/api/notifications/unregister", {
+      headers: OptionalBearerHeaders,
+      payload: PairedNotificationRegistrationId,
+      success: PairedNotificationStatus,
+      error: EnvironmentScopedOperationErrors,
+    }),
+  )
+  .add(
+    HttpApiEndpoint.post("resolve", "/api/notifications/resolve", {
+      headers: OptionalBearerHeaders,
+      payload: PairedNotificationReference,
+      success: Schema.NullOr(PairedNotificationDestination),
+      error: EnvironmentScopedOperationErrors,
+    }),
+  )
+  .middleware(EnvironmentAuthenticatedAuth) {}
+
 class EnvironmentAuthHttpApi extends HttpApiGroup.make("auth")
   .add(
     HttpApiEndpoint.get("session", "/api/auth/session", {
@@ -761,6 +833,7 @@ class EnvironmentWebhooksHttpApi extends HttpApiGroup.make("webhooks")
 export class EnvironmentHttpApi extends HttpApi.make("environment")
   .add(EnvironmentMetadataHttpApi)
   .add(EnvironmentAuthHttpApi)
+  .add(EnvironmentNotificationsHttpApi)
   .add(EnvironmentMcpOAuthHttpApi)
   .add(EnvironmentOrchestrationHttpApi)
   .add(EnvironmentPullRequestsHttpApi)

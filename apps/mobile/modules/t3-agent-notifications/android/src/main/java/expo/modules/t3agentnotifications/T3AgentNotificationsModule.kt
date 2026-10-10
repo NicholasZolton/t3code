@@ -26,6 +26,10 @@ class T3AgentNotificationsModule : Module() {
       appContext.reactContext?.let { AgentNotifications.clear(it) }
     }
 
+    Function("configurePaired") { registrationIds: List<String>, scheme: String ->
+      appContext.reactContext?.let { AgentNotifications.configurePaired(it, registrationIds, scheme) }
+    }
+
     Function("showShowcaseActivity") { scheme: String, data: Map<String, String> ->
       appContext.reactContext?.let { AgentNotifications.showcase(it, scheme, data) }
     }

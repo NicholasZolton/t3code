@@ -8,8 +8,12 @@ import * as Schema from "effect/Schema";
 import * as HttpClient from "effect/http/HttpClient";
 import * as HttpClientRequest from "effect/http/HttpClientRequest";
 
-import * as RelayConfiguration from "../Config.ts";
 import * as FcmAssertionSigner from "./FcmAssertionSigner.ts";
+
+export class FcmConfiguration extends Context.Service<
+  FcmConfiguration,
+  { readonly fcmServiceAccount?: Redacted.Redacted<string> | null }
+>()("@t3tools/shared/FcmConfiguration") {}
 
 const FCM_HTTP_STAGE_TIMEOUT = "10 seconds";
 
@@ -52,6 +56,7 @@ export class FcmClientError extends Schema.TaggedError<FcmClientError>()("FcmCli
 export class FcmClient extends Context.Service<
   FcmClient,
   {
+    readonly configured: boolean;
     readonly send: (input: {
       readonly token: string;
       readonly packageName: string | null;
@@ -59,10 +64,10 @@ export class FcmClient extends Context.Service<
       readonly alert: boolean;
     }) => Effect.Effect<{ readonly unregistered: boolean }, FcmClientError>;
   }
->()("t3code-relay/agentActivity/FcmClient") {}
+>()("@t3tools/shared/FcmClient") {}
 
 export const make = Effect.gen(function* () {
-  const config = yield* RelayConfiguration.RelayConfiguration;
+  const config = yield* FcmConfiguration;
   const signer = yield* FcmAssertionSigner.FcmAssertionSigner;
   const client = yield* HttpClient.HttpClient;
   const account = config.fcmServiceAccount
@@ -115,7 +120,8 @@ export const make = Effect.gen(function* () {
   );
 
   return FcmClient.of({
-    send: Effect.fn("relay.fcm.send")(function* (input) {
+    configured: Option.isSome(account),
+    send: Effect.fn("fcm.send")(function* (input) {
       if (new TextEncoder().encode(encodeJson(input.data)).length > 4096)
         return yield* new FcmClientError({ operation: "send", status: null });
       if (Option.isNone(account))
