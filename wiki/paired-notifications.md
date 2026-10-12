@@ -6,7 +6,7 @@ tags: [fork, android, notifications, privacy]
 status: experimental
 generated:
   by: opencode/gpt-6.1-sol
-  at: 2026-10-10T19:02:34Z
+  at: 2026-10-12T00:22:28Z
 sources:
   - id: paired-delivery
     resource: ../apps/server/src/notifications/PairedNotifications.ts
@@ -14,6 +14,9 @@ sources:
   - id: paired-operations
     resource: ../docs/operations/android-notifications.md
     title: Firebase, fnox and private APK operational requirements
+  - id: desktop-credentials
+    resource: ../apps/desktop/src/shell/DesktopShellEnvironment.ts
+    title: macOS Keychain fallback before local backend startup
 ---
 
 # Paired Android notifications
@@ -24,6 +27,10 @@ Reuse the shared Connect notification policy and native presentation, not a seco
 
 Google still processes device identifiers and delivery metadata. This reduces transmitted content, not a compliance guarantee. Private binaries must retain their package and signing identity and use the same Firebase project as the sending server.[^paired-operations]
 
+Finder/Dock launches cannot rely on a fnox-wrapped shell. The macOS desktop can load the existing Firebase credential from login Keychain before spawning its local server, while preserving an explicitly supplied environment variable. Keep this fallback desktop-local: it must not forward credentials to SSH hosts or require a checkout-specific secret manager.[^desktop-credentials]
+
 [^paired-delivery]: [Paired notification service](../apps/server/src/notifications/PairedNotifications.ts).
 
 [^paired-operations]: [Android notification operations](../docs/operations/android-notifications.md#self-hosted-paired-delivery).
+
+[^desktop-credentials]: [Desktop startup environment](../apps/desktop/src/shell/DesktopShellEnvironment.ts).
