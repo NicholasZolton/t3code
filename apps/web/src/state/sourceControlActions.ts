@@ -16,6 +16,7 @@ import {
   type EnvironmentId,
   type GitResolvePullRequestResult,
   type SourceControlCloneProtocol,
+  type SourceControlProviderKind,
   type SourceControlRepositoryVisibility,
   type ThreadId,
   type VcsDriverKind,
@@ -279,7 +280,7 @@ export function useSourceControlPublishRepositoryAction(scope: SourceControlActi
   );
   const action = useCallback(
     async (input: {
-      provider: "github" | "gitlab" | "forgejo" | "bitbucket" | "azure-devops";
+      provider: SourceControlProviderKind;
       repository: string;
       visibility: SourceControlRepositoryVisibility;
       remoteName: string;

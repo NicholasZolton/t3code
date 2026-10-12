@@ -100,7 +100,7 @@ function layerPool(labelRef: Ref.Ref<string>): Layer.Layer<DesktopBackendPool.De
           dispatchMenuAction: () => Effect.die("unexpected menu action"),
           dispatchSnapShotEvent: () => Effect.void,
           zoomMain: () => Effect.die("unexpected zoom"),
-          openMainDevTools: Effect.die("unexpected DevTools"),
+          runMainContentsCommand: () => Effect.die("unexpected main contents command"),
           syncAppearance: Effect.void,
         } satisfies DesktopWindow.DesktopWindow["Service"]),
       ),

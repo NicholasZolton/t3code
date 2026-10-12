@@ -6,7 +6,7 @@ import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 import * as NodeUtil from "node:util";
 import { CritOpenError, type CritOpenInput } from "@t3tools/contracts";
-import { HostProcessPlatform } from "@t3tools/shared/hostProcess";
+import * as HostProcess from "@t3tools/shared/HostProcess";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -109,7 +109,7 @@ export function createCritManager(
   const command = options.command ?? "crit";
   const portlessCommand = options.portlessCommand ?? "portless";
   const outputDir = options.outputDir ?? NodePath.join(NodeOS.homedir(), ".crit");
-  const isWindows = HostProcessPlatform.defaultValue() === "win32";
+  const isWindows = HostProcess.Platform.defaultValue() === "win32";
   const reviews = new Set<ManagedReview>();
 
   const open = async (input: CritOpenInput): Promise<string | null> => {

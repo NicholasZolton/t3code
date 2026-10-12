@@ -398,7 +398,7 @@ describeJj("JjCheckpoints diff", () => {
 
         assert.deepStrictEqual(parseTurnDiffFilesFromNumstat(numstat), [
           { path: "kept.txt", additions: 1, deletions: 1 },
-          { path: "rename-new.txt", additions: 0, deletions: 0 },
+          { path: "rename-new.txt", previousPath: "rename-old.txt", additions: 0, deletions: 0 },
         ]);
 
         const patch = yield* context.checkpoints.diffCheckpoints({

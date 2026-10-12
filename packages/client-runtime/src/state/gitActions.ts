@@ -3,11 +3,7 @@ import type {
   GitStackedAction,
   VcsStatusResult,
 } from "@t3tools/contracts";
-import {
-  DEFAULT_CHANGE_REQUEST_TERMINOLOGY,
-  getChangeRequestTerminology,
-  type ChangeRequestTerminology,
-} from "@t3tools/shared/sourceControl";
+import { sourceControlClients, type ChangeRequestTerminology } from "../sourceControlClients.ts";
 import {
   DEFAULT_VCS_TERMINOLOGY,
   resolveVcsTerminology,
@@ -56,9 +52,7 @@ export type GitActionRequestInput = Pick<
 function resolveChangeRequestTerminology(
   gitStatus: VcsStatusResult | null,
 ): ChangeRequestTerminology {
-  return gitStatus?.sourceControlProvider
-    ? getChangeRequestTerminology(gitStatus.sourceControlProvider)
-    : DEFAULT_CHANGE_REQUEST_TERMINOLOGY;
+  return sourceControlClients.get(gitStatus?.sourceControlProvider?.kind).changeRequest;
 }
 
 /** jj has no detached HEAD, so the "you are not on a ref" hint is phrased per system. */
@@ -94,7 +88,6 @@ export function buildMenuItems(
   const canCreatePr =
     !blocked &&
     hasBranch &&
-    !hasChanges &&
     !hasOpenPr &&
     hasDefaultBranchDelta &&
     !isBehind &&
@@ -371,11 +364,11 @@ export function getGitActionDisabledReason(input: {
   if (!hasBranch) {
     return noRefHint(gitStatus, vcs, `creating a ${terminology.singular}`);
   }
-  if (hasChanges) {
-    return `Commit local changes before creating a ${terminology.singular}.`;
-  }
   if (!gitStatus.hasUpstream && !hasPrimaryRemote) {
     return `Add an "origin" remote before creating a ${terminology.singular}.`;
+  }
+  if (!hasDefaultBranchDelta) {
+    return `No local commits to include in a ${terminology.shortLabel}.`;
   }
   if (isBehind) {
     return `${vcs.refNounTitle} is behind upstream. Pull/rebase before creating a ${terminology.singular}.`;
@@ -409,7 +402,7 @@ export function resolveDefaultBranchActionDialogCopy(input: {
   const branchLabel = input.branchName;
   const vcs = input.vcsTerminology ?? DEFAULT_VCS_TERMINOLOGY;
   const suffix = ` on "${branchLabel}". You can continue on this ${vcs.refNoun} or create a feature ${vcs.refNoun} and run the same action there.`;
-  const terminology = input.terminology ?? DEFAULT_CHANGE_REQUEST_TERMINOLOGY;
+  const terminology = input.terminology ?? sourceControlClients.get(undefined).changeRequest;
 
   if (input.action === "push" || input.action === "commit_push") {
     if (input.includesCommit) {

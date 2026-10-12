@@ -57,6 +57,7 @@ export interface JjWorkspaceOpsDeps {
   readonly path: Path.Path;
   readonly worktreesDir: string;
   readonly bookmarkTo: JjRemoteOps["bookmarkTo"];
+  readonly homeDirectory: string;
 }
 
 export type JjWorkspaceOps = Pick<
@@ -172,6 +173,7 @@ export const makeJjWorkspaces = (deps: JjWorkspaceOpsDeps): JjWorkspaceOps => {
         options?.worktreesDirectory ?? "",
         worktreesDir,
         path,
+        deps.homeDirectory,
       );
       if (workspaceDirectory === null && input.path == null) {
         return yield* jjFailure(

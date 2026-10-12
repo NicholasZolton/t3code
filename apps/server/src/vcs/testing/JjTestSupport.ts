@@ -12,8 +12,9 @@ import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
+import { SourceControlProviderKind } from "@t3tools/contracts";
 
-import * as SourceControlProvider from "../../sourceControl/SourceControlProvider.ts";
+import * as SourceControlProvider from "@t3tools/source-control-core/server/SourceControlProvider";
 import * as SourceControlProviderRegistry from "../../sourceControl/SourceControlProviderRegistry.ts";
 import { isJjVersionSupported, parseJjVersion } from "../JjAvailability.ts";
 import * as JjVcsDriver from "../JjVcsDriver.ts";
@@ -180,7 +181,11 @@ export const changeId = (cwd: string, revset: string) =>
   jjOut(cwd, ["log", "-r", revset, "--no-graph", "-T", "change_id"]);
 
 const unknownSourceControlProvider = SourceControlProvider.SourceControlProvider.pipe(
-  Effect.provide(Layer.mock(SourceControlProvider.SourceControlProvider)({ kind: "unknown" })),
+  Effect.provide(
+    Layer.mock(SourceControlProvider.SourceControlProvider)({
+      kind: SourceControlProviderKind.make("unknown"),
+    }),
+  ),
 );
 
 /** Resolves to an unknown-kind provider. Unstubbed members fail loudly, which a status poll must not hit. */

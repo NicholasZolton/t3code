@@ -84,7 +84,13 @@ export function UsageLimitsSection({
                   <PoolWindowCard
                     key={`${window.kind}:${window.id}`}
                     pool={window}
-                    color={pool.driver === "claudeAgent" ? colors.claude : colors.codex}
+                    color={
+                      pool.driver === "claudeAgent"
+                        ? colors.claude
+                        : pool.driver === "antigravity"
+                          ? colors.antigravity
+                          : colors.codex
+                    }
                     now={now}
                     environmentIds={
                       selectedEnvironmentIds === null ? null : [...selectedEnvironmentIds]

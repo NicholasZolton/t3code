@@ -38,17 +38,8 @@ import * as GitVcsDriver from "../vcs/GitVcsDriver.ts";
 import * as VcsDriverRegistry from "../vcs/VcsDriverRegistry.ts";
 import { ServerSettingsService } from "../serverSettings.ts";
 import { makeWorkspaceOwnership, type WorkspaceKind } from "../vcs/WorkspaceOwnership.ts";
-import { inspectWorkspaceFiles } from "../vcs/WorkspaceFileSafety.ts";
 import { workspaceNameForRef } from "../jj/JjWorkspaceNaming.ts";
 import { workspaceSettings, makeWorkspaceQueries } from "../project/WorkspaceSettings.ts";
-
-export interface WorkspaceCleanupInspection {
-  readonly revision: string;
-  readonly refName: string | null;
-  readonly hasWorkingTreeChanges: boolean;
-  readonly hasUnpreservedFiles: boolean;
-  readonly isSecondary: boolean;
-}
 
 /**
  * The workflow surface every VCS kind implements. `GitWorkflowService` routes by kind; the Git and
@@ -136,6 +127,15 @@ type WorkflowKind = "git" | "jj";
 export class GitWorkflowService extends Context.Service<
   GitWorkflowService,
   VcsWorkflowOps & {
+    /**
+     * Whether a ref in any namespace ends in this name: a local branch, a
+     * remote-tracking branch of any remote, a tag. Git falls back to these
+     * when a branch name is not a revision by itself.
+     */
+    readonly hasRefNamed: (input: {
+      readonly cwd: string;
+      readonly refName: string;
+    }) => Effect.Effect<boolean, GitCommandError>;
     readonly deleteLocalBranch: (
       input: GitVcsDriver.GitDeleteLocalBranchInput,
     ) => Effect.Effect<void, GitCommandError>;
@@ -143,18 +143,6 @@ export class GitWorkflowService extends Context.Service<
       input: VcsCreateWorktreeInput & { readonly path: string },
       options?: GitVcsDriver.CreateWorktreeOptions,
     ) => Effect.Effect<void, GitCommandError>;
-    readonly inspectWorkspaceForCleanup: (
-      cwd: string,
-    ) => Effect.Effect<WorkspaceCleanupInspection, GitCommandError>;
-    readonly workspaceIntegrationBase: (input: {
-      readonly cwd: string;
-      readonly refresh: boolean;
-    }) => Effect.Effect<string | null, GitCommandError>;
-    readonly isRevisionAncestor: (input: {
-      readonly cwd: string;
-      readonly from: string;
-      readonly to: string;
-    }) => Effect.Effect<boolean, GitCommandError>;
     readonly branchPullRequest: GitManager.GitManager["Service"]["branchPullRequest"];
     /** Whether a Git or Jujutsu driver owns this directory. */
     readonly isRepository: (cwd: string) => Effect.Effect<boolean, GitManagerServiceError>;
@@ -289,7 +277,7 @@ export const make = Effect.gen(function* () {
       input: VcsCreateWorktreeInput,
       options?: GitVcsDriver.CreateWorktreeOptions,
     ) {
-      const settings = yield* workspaceSettings(input).pipe(
+      const { settings } = yield* workspaceSettings(input).pipe(
         withWorkspaceQueries,
         Effect.provideService(ServerSettingsService, settingsService),
       );
@@ -430,6 +418,26 @@ export const make = Effect.gen(function* () {
       () => Effect.succeed(nonRepositoryLocalStatus()),
       { git: gitManager.localStatus, jj: jjWorkflow.localStatus },
     ),
+    hasRefNamed: (input) =>
+      // No ref name holds a pattern character, and one here would widen the match.
+      /[*?[\\]/.test(input.refName)
+        ? Effect.succeed(false)
+        : route("GitWorkflowService.hasRefNamed", commandRouting, {
+            git: () =>
+              git
+                .execute({
+                  operation: "GitWorkflowService.hasRefNamed",
+                  cwd: input.cwd,
+                  args: [
+                    "for-each-ref",
+                    "--count=1",
+                    "--format=%(refname)",
+                    `refs/**/${input.refName}`,
+                  ],
+                })
+                .pipe(Effect.map((result) => result.stdout.trim().length > 0)),
+            jj: () => jjWorkflow.hasCommit(input),
+          })(input),
     remoteStatus: (input, options) =>
       routeOr("GitWorkflowService.remoteStatus", workflowRouting, () => Effect.succeed(null), {
         git: (statusInput: VcsStatusInput) => gitManager.remoteStatus(statusInput, options),
@@ -507,65 +515,6 @@ export const make = Effect.gen(function* () {
         yield* workspaceOps[kind].pruneWorktrees({ cwd: repositoryCwd });
         yield* createWorkspaceWithKind(kind, input, options);
       }).pipe(commandFailure("GitWorkflowService.ensureWorkspace", input.cwd)),
-    inspectWorkspaceForCleanup: (cwd) =>
-      Effect.gen(function* () {
-        if ((yield* resolveWorkflowKind(cwd)) === "jj")
-          return yield* jjWorkflow.inspectWorkspaceForCleanup(cwd);
-        const local = yield* git.statusDetailsLocal(cwd);
-        const head = yield* git.resolveCommit({ cwd, revision: "HEAD" });
-        const marker = yield* fileSystem.stat(path.join(cwd, ".git"));
-        const unpreserved = yield* inspectWorkspaceFiles({
-          cwd,
-          repositoryCwd: cwd,
-          revision: head.commitSha,
-          fileSystem,
-          path,
-          execute: git.execute,
-        });
-        return {
-          revision: head.commitSha,
-          refName: local.branch,
-          hasWorkingTreeChanges: local.hasWorkingTreeChanges,
-          hasUnpreservedFiles: unpreserved.hasUnpreservedFiles,
-          isSecondary: marker.type === "File",
-        };
-      }).pipe(commandFailure("GitWorkflowService.inspectWorkspaceForCleanup", cwd)),
-    workspaceIntegrationBase: (input) =>
-      Effect.gen(function* () {
-        if ((yield* resolveWorkflowKind(input.cwd)) === "jj")
-          return yield* jjWorkflow.workspaceIntegrationBase(input);
-        const remote = yield* git.resolvePrimaryRemoteName(input.cwd);
-        const refName = yield* git.resolveDefaultBranchName(input.cwd, remote);
-        if (refName === null) return null;
-        if (input.refresh)
-          yield* git.fetchRemoteTrackingBranch({
-            cwd: input.cwd,
-            remoteName: remote,
-            remoteBranch: refName,
-          });
-        return (yield* git.resolveCommit({
-          cwd: input.cwd,
-          revision: `refs/remotes/${remote}/${refName}`,
-        })).commitSha;
-      }).pipe(commandFailure("GitWorkflowService.workspaceIntegrationBase", input.cwd)),
-    isRevisionAncestor: (input) =>
-      Effect.gen(function* () {
-        const cwd = yield* ownership.repositoryCwd(input.cwd);
-        const result = yield* git.execute({
-          operation: "GitWorkflowService.isRevisionAncestor",
-          cwd,
-          args: ["merge-base", "--is-ancestor", input.from, input.to],
-          allowNonZeroExit: true,
-        });
-        if (result.exitCode > 1)
-          return yield* new GitCommandError({
-            operation: "GitWorkflowService.isRevisionAncestor",
-            command: "git merge-base",
-            cwd,
-            detail: result.stderr,
-          });
-        return result.exitCode === 0;
-      }).pipe(commandFailure("GitWorkflowService.isRevisionAncestor", input.cwd)),
     branchPullRequest: (input, options) =>
       route("GitWorkflowService.branchPullRequest", workflowRouting, {
         git: (request: typeof input) => gitManager.branchPullRequest(request, options),

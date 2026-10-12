@@ -1,7 +1,7 @@
 // @effect-diagnostics nodeBuiltinImport:off - Exercise the SSH launch shell against an owned HTTP process.
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, it } from "@effect/vitest";
-import { HostProcessPlatform } from "@t3tools/shared/hostProcess";
+import * as HostProcess from "@t3tools/shared/HostProcess";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
@@ -19,7 +19,7 @@ const encodeRuntime = Schema.encodeEffect(
 const LaunchResult = Schema.Struct({ remotePort: Schema.Int, serverKind: Schema.String });
 const decodeLaunchResult = Schema.decodeUnknownEffect(Schema.fromJsonString(LaunchResult));
 
-describe.skipIf(HostProcessPlatform.defaultValue() === "win32")(
+describe.skipIf(HostProcess.Platform.defaultValue() === "win32")(
   "SSH default-home server reuse",
   () => {
     it.live.each(["managed", "missing-pid"] as const)(

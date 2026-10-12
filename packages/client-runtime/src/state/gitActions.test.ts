@@ -38,7 +38,7 @@ describe("the folded web behaviour", () => {
     );
     assert.equal(
       reason(status({ aheadCount: 3, aheadOfDefaultCount: 0 })),
-      "No local commits to include in a pull request.",
+      "No local commits to include in a PR.",
     );
   });
   it("gates the change-request item on aheadOfDefaultCount, not aheadCount", () => {

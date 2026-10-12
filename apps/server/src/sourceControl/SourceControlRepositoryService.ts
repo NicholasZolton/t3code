@@ -12,7 +12,7 @@ import {
   type SourceControlCloneRepositoryInput,
   type SourceControlCloneRepositoryResult,
   type SourceControlCloneProtocol,
-  type SourceControlProviderKind,
+  SourceControlProviderKind,
   type SourceControlPublishRepositoryInput,
   type SourceControlPublishRepositoryResult,
   type SourceControlRepositoryCloneUrls,
@@ -22,15 +22,16 @@ import {
 
 import * as ServerConfig from "../config.ts";
 import * as JjWorkflow from "../jj/JjWorkflow.ts";
-import { expandHomePathWith } from "../pathExpansion.ts";
+import { expandHomePath } from "@t3tools/provider-core/server/pathExpansion";
 import {
   parseGitCloneProgressLine,
   type GitCloneProgressLine,
 } from "../project/gitCloneProgress.ts";
 import * as GitVcsDriver from "../vcs/GitVcsDriver.ts";
 import * as VcsDriverRegistry from "../vcs/VcsDriverRegistry.ts";
-import * as BitbucketApi from "./BitbucketApi.ts";
+import * as BitbucketApi from "@t3tools/source-control-bitbucket/server/BitbucketApi";
 import * as SourceControlProviderRegistry from "./SourceControlProviderRegistry.ts";
+import * as HostProcess from "@t3tools/shared/HostProcess";
 const isSourceControlRepositoryError = Schema.is(SourceControlRepositoryError);
 const isSourceControlProviderError = Schema.is(SourceControlProviderError);
 const isBitbucketRepositoryLocatorError = Schema.is(BitbucketApi.BitbucketRepositoryLocatorError);
@@ -212,12 +213,12 @@ export const make = Effect.gen(function* () {
       if (trimmed.length === 0) {
         return yield* new SourceControlRepositoryError({
           operation: "cloneRepository",
-          provider: "unknown",
+          provider: SourceControlProviderKind.make("unknown"),
           detail: "Choose a destination path before cloning.",
         });
       }
 
-      return path.resolve(expandHomePathWith(trimmed, path));
+      return path.resolve(expandHomePath(trimmed, yield* HostProcess.HomeDirectory));
     },
   );
 
@@ -232,7 +233,7 @@ export const make = Effect.gen(function* () {
               (cause) =>
                 new SourceControlRepositoryError({
                   operation: "cloneRepository",
-                  provider: "unknown",
+                  provider: SourceControlProviderKind.make("unknown"),
                   detail: "Destination path already exists and is not a directory.",
                   cause,
                 }),
@@ -241,7 +242,7 @@ export const make = Effect.gen(function* () {
         if (entries.length > 0) {
           return yield* new SourceControlRepositoryError({
             operation: "cloneRepository",
-            provider: "unknown",
+            provider: SourceControlProviderKind.make("unknown"),
             detail: "Destination path already exists and is not empty.",
           });
         }
@@ -263,7 +264,8 @@ export const make = Effect.gen(function* () {
     const preparedDestination = yield* prepareDestination(input.destinationPath);
     let repository: SourceControlRepositoryInfo | null = null;
     let remoteUrl = input.remoteUrl?.trim() ?? null;
-    let provider: SourceControlProviderKind = input.provider ?? "unknown";
+    let provider: SourceControlProviderKind =
+      input.provider ?? SourceControlProviderKind.make("unknown");
 
     if (input.provider && input.repository) {
       repository = yield* lookupRepository({
@@ -338,7 +340,7 @@ export const make = Effect.gen(function* () {
           (cause) =>
             new SourceControlRepositoryError({
               operation: "cloneRepository",
-              provider: input.provider ?? "unknown",
+              provider: input.provider ?? SourceControlProviderKind.make("unknown"),
               detail:
                 stderrTail.length > 0
                   ? stderrTail.join(" ")
@@ -373,7 +375,7 @@ export const make = Effect.gen(function* () {
         (cause) =>
           new SourceControlRepositoryError({
             operation: "discardClone",
-            provider: "unknown",
+            provider: SourceControlProviderKind.make("unknown"),
             detail: "The clone destination could not be inspected.",
             cause,
           }),
@@ -382,7 +384,7 @@ export const make = Effect.gen(function* () {
     if (entries.length > 0 && !entries.includes(".git")) {
       return yield* new SourceControlRepositoryError({
         operation: "discardClone",
-        provider: "unknown",
+        provider: SourceControlProviderKind.make("unknown"),
         detail: "Destination path contains files that are not from the clone.",
       });
     }
@@ -396,7 +398,7 @@ export const make = Effect.gen(function* () {
         (cause) =>
           new SourceControlRepositoryError({
             operation: "discardClone",
-            provider: "unknown",
+            provider: SourceControlProviderKind.make("unknown"),
             detail: "The partial clone could not be removed.",
             cause,
           }),
@@ -488,13 +490,23 @@ export const make = Effect.gen(function* () {
     lookupRepository: (input) =>
       lookupRepository(input).pipe(mapRepositoryError("lookupRepository", input.provider)),
     prepareClone: (input) =>
-      prepareClone(input).pipe(mapRepositoryError("cloneRepository", input.provider ?? "unknown")),
+      prepareClone(input).pipe(
+        mapRepositoryError(
+          "cloneRepository",
+          input.provider ?? SourceControlProviderKind.make("unknown"),
+        ),
+      ),
     cloneRepository: (input, options) =>
       cloneRepository(input, options).pipe(
-        mapRepositoryError("cloneRepository", input.provider ?? "unknown"),
+        mapRepositoryError(
+          "cloneRepository",
+          input.provider ?? SourceControlProviderKind.make("unknown"),
+        ),
       ),
     discardClone: (destinationPath) =>
-      discardClone(destinationPath).pipe(mapRepositoryError("discardClone", "unknown")),
+      discardClone(destinationPath).pipe(
+        mapRepositoryError("discardClone", SourceControlProviderKind.make("unknown")),
+      ),
     publishRepository: (input) =>
       publishRepository(input).pipe(mapRepositoryError("publishRepository", input.provider)),
   });

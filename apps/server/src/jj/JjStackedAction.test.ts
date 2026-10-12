@@ -43,6 +43,7 @@ const textGeneration: TextGeneration.TextGeneration["Service"] = {
     ),
   generateBranchName: () => Effect.succeed({ branch: "feature/implement-the-change" }),
   generateThreadTitle: () => Effect.succeed({ title: "Implement the change" }),
+  generateReviewGuide: () => Effect.die("not exercised"),
 };
 
 const ServicesLayer = Layer.mergeAll(

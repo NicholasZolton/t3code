@@ -1,22 +1,30 @@
 ---
 type: Integration Record
 title: Upstream integration
-description: Completed main integrations and fork compatibility exceptions.
+description: Main integrations, pending branch integrations, and fork compatibility exceptions.
 tags: [upstream, fork, integration]
 status: stable
 generated:
   by: opencode/gpt-6.1-sol
-  at: 2026-10-08T18:51:57Z
+  at: 2026-10-12T05:12:43Z
 verified:
   - by: opencode/gpt-6.1-sol
-    at: 2026-10-08T18:51:57Z
+    at: 2026-10-12T05:12:43Z
 snapshot:
-  at: 2026-10-08T18:51:57Z
-  fork_main: e5365adddc46e74a197f1f698a6ec79f12b92d99
-  upstream_main: 9a3070bcf023c3c025633659addeef4cf628133a
+  at: 2026-10-12T05:12:43Z
+  fork_main: e373457c74fd6b224a9019c4d8c20c6fa06fe7d9
+  upstream_main: e688034b5f5505f92fcf1d78ba853c9c0107f9f1
   shared_baseline: 9a3070bcf023c3c025633659addeef4cf628133a
   last_main_integration: 2bc0f738329c83c0a7e146018d640a512634f876
+  branch_integration: eec69e1928b4aadf52e78fd2b14f9df6aa1f5f44
+  missing_upstream_on_main: 374
 sources:
+  - id: october-12-branch-integration
+    resource: "Local Git object eec69e1928b4aadf52e78fd2b14f9df6aa1f5f44 on NicholasZolton/sync-upstream-changes-1, with parents e373457c74fd6b224a9019c4d8c20c6fa06fe7d9 and e688034b5f5505f92fcf1d78ba853c9c0107f9f1; not pushed or incorporated into fork main"
+    title: Ancestry-preserving branch integration through October 12
+  - id: october-12-review-git
+    resource: "Local Git verification at 2026-10-12T05:12:43Z: origin/main e373457c74fd6b224a9019c4d8c20c6fa06fe7d9 shares baseline 9a3070bcf023c3c025633659addeef4cf628133a with upstream e688034b5f5505f92fcf1d78ba853c9c0107f9f1 and lacks 374 upstream commits; branch integration eec69e1928b4aadf52e78fd2b14f9df6aa1f5f44 incorporates that entire upstream tip with zero remaining branch ancestry gap"
+    title: Main and branch integration boundaries verified separately
   - id: october-8-main-integration
     resource: https://github.com/NicholasZolton/t3code/pull/37
     title: Completed October 8 full upstream integration into fork main
@@ -81,7 +89,7 @@ sources:
     resource: https://github.com/pingdotgg/t3code/blob/65731f986ba2175063b0182deb6a143f8f323b74/packages/contracts/src/environment.ts
     title: Orchestration wire protocol version 2
   - id: upstream-current-manifest
-    resource: https://github.com/pingdotgg/t3code/blob/9a3070bcf023c3c025633659addeef4cf628133a/apps/server/src/provider/model-manifest.json
+    resource: https://github.com/pingdotgg/t3code/blob/e688034b5f5505f92fcf1d78ba853c9c0107f9f1/apps/server/src/provider/model-manifest.json
     title: OpenCode version policy at the reviewed upstream tip
   - id: main-integration
     resource: https://github.com/NicholasZolton/t3code/pull/27
@@ -121,10 +129,10 @@ sources:
     title: Pairing with the running server and remembering Tailscale Serve settings
   - id: ssh-recovery
     resource: ../packages/ssh/src/tunnel.ts
-    title: Fork-side SSH recovery implementation, checked 2026-10-08T17:34:18Z
+    title: Fork-side SSH recovery implementation, checked 2026-10-12T05:12:43Z
   - id: upstream-ssh-recovery
-    resource: https://github.com/pingdotgg/t3code/blob/9a3070bcf023c3c025633659addeef4cf628133a/packages/ssh/src/tunnel.ts
-    title: Upstream still stops servers during stale-tunnel cleanup and failed reuse probes at the October 8 review
+    resource: https://github.com/pingdotgg/t3code/blob/e688034b5f5505f92fcf1d78ba853c9c0107f9f1/packages/ssh/src/tunnel.ts
+    title: Upstream still stops servers during stale-tunnel cleanup and failed reuse probes at the October 12 review
   - id: ssh-recovery-issue
     resource: https://github.com/pingdotgg/t3code/issues/15608
     title: Upstream report of remote work stopping on disconnect and stale-tunnel recovery
@@ -141,16 +149,30 @@ sources:
 
 # Upstream integration
 
-**The October 8 sync is complete on fork `main`: all 280 newer upstream commits
-through `9a3070bcf0` are incorporated.** The fetched `origin/main` is
-`e5365adddc`; its shared baseline is the reviewed upstream tip, with zero
-remaining ancestry gap.[^october-8-review-git]
+**The October 12 sync is integrated on a branch, not fork `main`.** Fetched
+`origin/main` is `e373457c74`; its upstream baseline remains `9a3070bcf0`, with
+374 commits missing through the reviewed tip `e688034b5f`. Branch merge
+`eec69e1928` incorporates all 374 with no remaining branch ancestry gap.
+[^october-12-review-git]
 
 This is a revision-pinned snapshot, not a claim about newer upstream work.
 Refresh it after the next review or integration using the
 [maintenance guidance](maintenance.md).
 
-## Latest completed upstream sync
+## Pending branch integration
+
+Merge `eec69e1928b4aadf52e78fd2b14f9df6aa1f5f44` preserves fork parent
+`e373457c74fd6b224a9019c4d8c20c6fa06fe7d9` and upstream parent
+`e688034b5f5505f92fcf1d78ba853c9c0107f9f1`. It has not been pushed, filed as
+a PR, deployed, or incorporated into fork `main`.[^october-12-branch-integration]
+
+The branch adopts upstream's extracted provider and source-control packages,
+legacy provider-settings removal, desktop main-contents commands, and Git-only
+storage cleanup. Fork features use those upstream boundaries rather than parallel
+implementations. Jujutsu cleanup and reused OpenCode child sessions retain the
+compatibility exceptions below.[^october-12-branch-integration]
+
+## Latest completed main sync
 
 [PR #37](https://github.com/NicholasZolton/t3code/pull/37) merged on October 8,
 2026, at 18:49:13 UTC, landing at `e5365adddc`.
@@ -296,6 +318,13 @@ for upstream's 0.0.46 threshold. Remote compatibility metadata still cannot repl
 the bundled OpenCode policy. Older 2.x versions are outside the supported baseline.
 [^upstream-current-manifest][^reviewed-upstream-main]
 
+Reused OpenCode child sessions still need fork admission and execution tracking.
+At `e688034b5f`, parent reports identify the child session but not the individual
+execution. Once a child is reused, ambiguous reports must not attach stale results
+or settle the new call; observed execution can settle it without a result. Preserve
+this safeguard until upstream can attribute reports to individual runs.
+[^october-12-branch-integration]
+
 ## Jujutsu migration boundary
 
 The fork selectively ports [upstream #13816](https://github.com/pingdotgg/t3code/pull/13816)
@@ -308,6 +337,13 @@ Preserve this mixed-backend boundary during future syncs. The
 [architecture notes](../docs/internals/jujutsu.md) explain checkpoint preservation and
 explicit ref synchronization; the [user guide](../docs/user/source-control.md#jujutsu-repositories)
 covers enabling Jujutsu and disabling VCS agent hints globally or per project.
+
+The October 12 branch uses upstream Git-only storage cleanup and retains every
+Jujutsu workspace instead of maintaining a separate automatic removal path.
+Jujutsu checkpoints still pin native snapshots: they lack the extra Git checkpoint
+commit's capture-time HEAD metadata, so authored-path filtering stays disabled and
+turn diffs retain all changes. Snapshot capture and restore remain available.
+[^october-12-branch-integration]
 
 ## SSH runtime release handoff
 
@@ -333,7 +369,7 @@ killing it or launching a competing server against the same T3 home. Explicit
 Disconnect, desktop shutdown, and requested runner changes retain their existing
 behavior.[^ssh-recovery]
 
-At the October 8 review, upstream `9a3070bcf0` still has both destructive
+At the October 12 review, upstream `e688034b5f` still has both destructive
 recovery paths reported in issue #15608. Preserve this boundary during later syncs
 unless upstream supplies equivalent recovery behavior.[^upstream-ssh-recovery][^ssh-recovery-issue]
 
@@ -389,7 +425,7 @@ git log --reverse --oneline origin/main..upstream/main
 
 [^ssh-recovery]: Fork-side SSH implementation and its focused readiness-recovery regressions.
 
-[^upstream-ssh-recovery]: Exact upstream source reviewed on October 8.
+[^upstream-ssh-recovery]: Exact upstream source reviewed on October 12.
 
 [^ssh-recovery-issue]: Open upstream issue and its stale-tunnel reconnect reproduction.
 
@@ -442,3 +478,7 @@ git log --reverse --oneline origin/main..upstream/main
 [^upstream-worktree-location]: Upstream location resolution and managed-directory history selected for the completed sync.
 
 [^upstream-skill-refresh]: Upstream workspace discovery freshness and refresh machinery selected for the completed sync.
+
+[^october-12-branch-integration]: Local-only merge, its exact parents, and retained compatibility decisions; not a main integration.
+
+[^october-12-review-git]: Separate ancestry checks against fetched fork main and the integrated branch.

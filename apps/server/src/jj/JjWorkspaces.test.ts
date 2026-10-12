@@ -43,6 +43,7 @@ const withRepo = <A, E>(
         fileSystem,
         path,
         worktreesDir,
+        homeDirectory: base,
         bookmarkTo: remotes.bookmarkTo,
       });
 

@@ -9,11 +9,8 @@ import {
   resolveVcsTerminology,
   type VcsTerminology,
 } from "@t3tools/shared/vcs";
-import {
-  DEFAULT_CHANGE_REQUEST_TERMINOLOGY,
-  getChangeRequestTerminology,
-  type ChangeRequestTerminology,
-} from "../sourceControlPresentation";
+import { sourceControlClients } from "@t3tools/client-runtime/source-control-clients";
+import type { ChangeRequestTerminology } from "@t3tools/client-runtime/source-control-clients";
 
 export type GitActionIconName = "commit" | "push" | "pr";
 
@@ -73,9 +70,7 @@ export function resolveGitActionResultToastTiming(
 function resolveChangeRequestTerminology(
   gitStatus: VcsStatusResult | null,
 ): ChangeRequestTerminology {
-  return gitStatus?.sourceControlProvider
-    ? getChangeRequestTerminology(gitStatus.sourceControlProvider)
-    : DEFAULT_CHANGE_REQUEST_TERMINOLOGY;
+  return sourceControlClients.get(gitStatus?.sourceControlProvider?.kind).changeRequest;
 }
 
 export function resolveGitActionProgressPresentation(input: {
@@ -135,7 +130,7 @@ export function buildGitActionProgressStages(input: {
   terminology?: ChangeRequestTerminology;
   vcsTerminology?: VcsTerminology;
 }): string[] {
-  const terminology = input.terminology ?? DEFAULT_CHANGE_REQUEST_TERMINOLOGY;
+  const terminology = input.terminology ?? sourceControlClients.get(undefined).changeRequest;
   const vcs = input.vcsTerminology ?? DEFAULT_VCS_TERMINOLOGY;
   const branchStages = input.featureBranch ? [`Preparing feature ${vcs.refNoun}...`] : [];
   const pushStage = input.pushTarget ? `Pushing to ${input.pushTarget}...` : "Pushing...";
@@ -191,7 +186,6 @@ export function buildMenuItems(
   const canCreatePr =
     !isBusy &&
     hasBranch &&
-    !hasChanges &&
     !hasOpenPr &&
     hasDefaultBranchDelta &&
     !isBehind &&
@@ -424,7 +418,7 @@ export function resolveDefaultBranchActionDialogCopy(input: {
   const branchLabel = input.branchName;
   const vcs = input.vcsTerminology ?? DEFAULT_VCS_TERMINOLOGY;
   const suffix = ` on "${branchLabel}". You can continue on this ${vcs.refNoun} or create a feature ${vcs.refNoun} and run the same action there.`;
-  const terminology = input.terminology ?? DEFAULT_CHANGE_REQUEST_TERMINOLOGY;
+  const terminology = input.terminology ?? sourceControlClients.get(undefined).changeRequest;
 
   if (input.action === "push" || input.action === "commit_push") {
     if (input.includesCommit) {

@@ -1,4 +1,4 @@
-import { type ThreadId } from "@t3tools/contracts";
+import { type ProjectId, type ThreadId } from "@t3tools/contracts";
 import {
   hasProjectSettingsOverrides,
   resolveProjectSettings,
@@ -31,10 +31,10 @@ export const workspaceSettings = Effect.fnUntraced(function* (input: {
 }) {
   const service = yield* ServerSettingsService;
   const settings = yield* service.getSettings;
-  if (!hasProjectSettingsOverrides(settings)) return settings;
+  if (!hasProjectSettingsOverrides(settings)) return { settings, projectId: null };
   const threads = yield* Effect.serviceOption(ProjectionStore.ProjectionStoreV2);
   const projects = yield* Effect.serviceOption(ProjectStore.ProjectStoreV2);
-  const projectId = yield* Effect.gen(function* () {
+  const projectId: ProjectId | null = yield* Effect.gen(function* () {
     if (input.threadId !== undefined && Option.isSome(threads)) {
       return (yield* threads.value.getThreadShell(input.threadId))?.projectId ?? null;
     }
@@ -46,5 +46,5 @@ export const workspaceSettings = Effect.fnUntraced(function* (input: {
     }
     return null;
   }).pipe(Effect.orElseSucceed(() => null));
-  return resolveProjectSettings(settings, projectId).settings;
+  return { settings: resolveProjectSettings(settings, projectId).settings, projectId };
 });
