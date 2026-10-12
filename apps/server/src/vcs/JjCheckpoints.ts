@@ -128,6 +128,8 @@ export const makeJjCheckpointOps = (deps: JjCheckpointDeps): VcsDriver.VcsCheckp
   );
 
   return {
+    // jj refs name native snapshots, not Git's extra checkpoint commits with capture-time HEAD.
+    listAuthoredPaths: () => Effect.succeed(null),
     captureCheckpoint: Effect.fn("JjVcsDriver.checkpoints.captureCheckpoint")(function* (input) {
       const operation = "JjVcsDriver.checkpoints.captureCheckpoint";
       const gitDir = yield* deps.ensureGitDir(operation, input.cwd);

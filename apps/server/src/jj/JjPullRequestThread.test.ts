@@ -5,10 +5,11 @@ import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
 
 import type { ChangeRequest, ThreadId } from "@t3tools/contracts";
+import { SourceControlProviderKind } from "@t3tools/contracts";
 
 import * as GitManager from "../git/GitManager.ts";
 import type * as ProjectSetupScriptRunner from "../project/ProjectSetupScriptRunner.ts";
-import * as SourceControlProvider from "../sourceControl/SourceControlProvider.ts";
+import * as SourceControlProvider from "@t3tools/source-control-core/server/SourceControlProvider";
 import * as SourceControlProviderRegistry from "../sourceControl/SourceControlProviderRegistry.ts";
 import * as JjVcsDriver from "../vcs/JjVcsDriver.ts";
 import { describeJj, runGit, runJj, withJjRepo } from "../vcs/testing/JjTestSupport.ts";
@@ -41,7 +42,7 @@ const providersFor = (summary: ChangeRequest) =>
           SourceControlProvider.SourceControlProvider.pipe(
             Effect.provide(
               Layer.mock(SourceControlProvider.SourceControlProvider)({
-                kind: "github",
+                kind: SourceControlProviderKind.make("github"),
                 getChangeRequest: () => Effect.succeed(summary),
               }),
             ),
@@ -75,6 +76,7 @@ const withRepo = <A, E>(
         fileSystem,
         path,
         worktreesDir: path.join(base, "worktrees"),
+        homeDirectory: base,
         bookmarkTo: remotes.bookmarkTo,
       });
       const setupScriptRuns: Array<string> = [];

@@ -13,7 +13,7 @@ import * as FcmAssertionSigner from "./FcmAssertionSigner.ts";
 export class FcmConfiguration extends Context.Service<
   FcmConfiguration,
   { readonly fcmServiceAccount?: Redacted.Redacted<string> | null }
->()("@t3tools/shared/FcmConfiguration") {}
+>()("@t3tools/shared/FcmClient/FcmConfiguration") {}
 
 const FCM_HTTP_STAGE_TIMEOUT = "10 seconds";
 

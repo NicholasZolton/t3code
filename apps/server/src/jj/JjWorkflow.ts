@@ -4,14 +4,14 @@ import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
-import * as Option from "effect/Option";
+import * as HostProcess from "@t3tools/shared/HostProcess";
 
 import { GitCommandError } from "@t3tools/contracts";
 
 import { ServerConfig } from "../config.ts";
 import type { ChangeRequestStepServices, ChangeRequestVcsReads } from "../git/GitManager.ts";
 import * as GitManager from "../git/GitManager.ts";
-import type { VcsWorkflowOps, WorkspaceCleanupInspection } from "../git/GitWorkflowService.ts";
+import type { VcsWorkflowOps } from "../git/GitWorkflowService.ts";
 import * as ProjectSetupScriptRunner from "../project/ProjectSetupScriptRunner.ts";
 import * as ProviderRegistry from "../provider/ProviderRegistry.ts";
 import * as ServerSettings from "../serverSettings.ts";
@@ -28,11 +28,8 @@ import { makeJjRemotes } from "./JjRemotes.ts";
 import { makeJjStackedAction } from "./JjStackedAction.ts";
 import { makeJjStatus, resolveUpstreamContext, resolveWorkspaceRefName } from "./JjStatus.ts";
 import { makeJjWorkspaces } from "./JjWorkspaces.ts";
-import { inspectWorkspaceFiles } from "../vcs/WorkspaceFileSafety.ts";
 import { refNameToRevset } from "../vcs/JjRevset.ts";
 import type { JjWorkspace } from "../vcs/JjVcsDriver.ts";
-import { workspaceNameForRef } from "./JjWorkspaceNaming.ts";
-import { detectPrTemplate } from "../sourceControl/PrTemplateDetection.ts";
 import { workspaceSettings, makeWorkspaceQueries } from "../project/WorkspaceSettings.ts";
 
 const RANGE_COMMIT_SUMMARY_MAX_OUTPUT_BYTES = 64 * 1024;
@@ -49,13 +46,6 @@ export class JjWorkflow extends Context.Service<
     readonly registeredWorkspaces: (
       cwd: string,
     ) => Effect.Effect<ReadonlyArray<JjWorkspace>, GitCommandError>;
-    readonly inspectWorkspaceForCleanup: (
-      cwd: string,
-    ) => Effect.Effect<WorkspaceCleanupInspection, GitCommandError>;
-    readonly workspaceIntegrationBase: (input: {
-      readonly cwd: string;
-      readonly refresh: boolean;
-    }) => Effect.Effect<string | null, GitCommandError>;
     /**
      * Publish a fresh repository to a hosting remote: `git remote add` then the bookmark move and
      * push, because in a colocated repository Git's own HEAD is usually detached.
@@ -164,6 +154,7 @@ export const make = Effect.gen(function* () {
     fileSystem,
     path,
     worktreesDir: config.worktreesDir,
+    homeDirectory: yield* HostProcess.HomeDirectory,
     bookmarkTo: remotes.bookmarkTo,
   });
   const status = yield* makeJjStatus({ driver, process, gitManager, sourceControlProviders });
@@ -284,19 +275,6 @@ export const make = Effect.gen(function* () {
         }),
       recentSubjects: (historyCwd) =>
         GitManager.readRecentCommitSubjects(executeGit, historyCwd, rangeHead),
-      changeRequestTemplate: (templateCwd, baseRevision) =>
-        resolveRevision(baseRevision).pipe(
-          Effect.mapError((cause) =>
-            jjFailure(
-              "JjWorkflow.changeRequestTemplate",
-              templateCwd,
-              "Could not resolve the template revision.",
-              cause,
-            ),
-          ),
-          Effect.flatMap((revision) => detectPrTemplate(templateCwd, revision, executeGit)),
-          Effect.orElseSucceed(() => Option.none()),
-        ),
       providerCwd: paths.mainWorkspaceRoot,
       configuredBaseRef: (configCwd, name) =>
         readConfigValue(configCwd, `branch.${name}.gh-merge-base`),
@@ -391,79 +369,6 @@ export const make = Effect.gen(function* () {
             ),
           ),
         ),
-    inspectWorkspaceForCleanup: (cwd) =>
-      Effect.gen(function* () {
-        const paths = yield* driver.ensureUsable("JjWorkflow.inspectWorkspaceForCleanup", cwd);
-        const change = yield* driver.currentChange(cwd);
-        const segment = yield* driver.currentSegment(cwd);
-        const refName = yield* resolveWorkspaceRefName(driver, cwd, segment);
-        const hasUnpreservedFiles = yield* inspectWorkspaceFiles({
-          cwd,
-          repositoryCwd: cwd,
-          revision: change.commitId,
-          fileSystem,
-          path,
-          execute: executeGit,
-        });
-        const bookmarks = yield* driver.listBookmarks(cwd);
-        const workspace = (yield* driver.listWorkspaces(cwd)).find(
-          (entry) => entry.root === paths.workspaceRoot,
-        );
-        const owned =
-          workspace !== undefined &&
-          refName !== null &&
-          workspace.name === workspaceNameForRef(refName);
-        const base =
-          refName === null
-            ? null
-            : bookmarks.find((entry) => entry.remote === null && entry.name === refName);
-        return {
-          revision: change.parentCommitIds[0] ?? change.commitId,
-          refName,
-          hasWorkingTreeChanges:
-            !change.empty ||
-            change.conflict ||
-            !owned ||
-            base?.conflict === true ||
-            change.parentCommitIds.length !== 1,
-          hasUnpreservedFiles: hasUnpreservedFiles.hasUnpreservedFiles,
-          isSecondary: paths.isSecondaryWorkspace,
-        };
-      }).pipe(
-        Effect.mapError((cause) =>
-          jjFailure(
-            "JjWorkflow.inspectWorkspaceForCleanup",
-            cwd,
-            "Could not inspect workspace preservation.",
-            cause,
-          ),
-        ),
-      ),
-    workspaceIntegrationBase: (input) =>
-      Effect.gen(function* () {
-        const remote = yield* remotes.requirePrimaryRemoteName(
-          "JjWorkflow.workspaceIntegrationBase",
-          input.cwd,
-        );
-        const refName = yield* driver.resolveDefaultBookmark(input.cwd);
-        if (refName === null) return null;
-        if (input.refresh)
-          yield* remotes.fetchRemote({ cwd: input.cwd, remoteName: remote, refName });
-        return (yield* remotes.resolveRemoteTrackingCommit({
-          cwd: input.cwd,
-          refName,
-          fallbackRemoteName: remote,
-        })).commitSha;
-      }).pipe(
-        Effect.mapError((cause) =>
-          jjFailure(
-            "JjWorkflow.workspaceIntegrationBase",
-            input.cwd,
-            "Could not resolve the integration base.",
-            cause,
-          ),
-        ),
-      ),
     hasCommit,
     status: status.status,
     localStatus: status.localStatus,
@@ -487,7 +392,7 @@ export const make = Effect.gen(function* () {
             cause,
           ),
         ),
-        Effect.flatMap((settings) =>
+        Effect.flatMap(({ settings }) =>
           pullRequestThread.preparePullRequestThread(input, {
             worktreesDirectory: settings.worktreesDirectory,
             projectFolders: settings.worktreeProjectFolders,

@@ -19,6 +19,7 @@ import {
   mergeEnvironmentSettings,
   persistClientSettingsPatch,
   useClientSettings,
+  useMigrateModelPreferences,
 } from "../../hooks/useSettings";
 import { serverEnvironment } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
@@ -42,6 +43,7 @@ export function useScopedSettings<T = UnifiedSettings>(
   const { target } = useSettingsScope();
   const clientSettings = useClientSettings();
   const serverSettings = target?.settings ?? DEFAULT_SERVER_SETTINGS;
+  useMigrateModelPreferences(target?.environmentId ?? null, target?.settings ?? null);
   const settings = useMemo(
     () => mergeEnvironmentSettings(serverSettings, clientSettings),
     [clientSettings, serverSettings],
@@ -83,32 +85,38 @@ function useRunScopedPlan() {
               Cause.fail(
                 new EnvironmentAuthorizationError({
                   requiredScope: missing,
-                  message: "This connection cannot change these settings.",
+                  message: "This connection lacks permission to change these settings.",
                 }),
               ),
             );
           return persistServer(request);
         },
         persistClientSettingsPatch,
-      ).then(({ failedEnvironments, ignoredEnvironments, savedEnvironmentCount }) => {
-        if (failedEnvironments.length === 0 && ignoredEnvironments.length === 0) return;
-        toastManager.add({
-          type: "error",
-          title:
-            savedEnvironmentCount > 0 ? "Setting saved on some environments" : "Setting not saved",
-          description: [
-            failedEnvironments.length > 0
-              ? `Could not update ${failedEnvironments.map((environment) => environment.label).join(", ")}.`
-              : "",
-            ignoredEnvironments.length > 0
-              ? `${ignoredEnvironments.map((environment) => environment.label).join(", ")} did not apply the setting. Update T3 Code there and try again.`
-              : "",
-            savedEnvironmentCount > 0 ? "The other selected environments saved the change." : "",
-          ]
-            .filter(Boolean)
-            .join(" "),
-        });
-      });
+      ).then(
+        ({ failedEnvironments, ignoredEnvironments, savedEnvironments, savedEnvironmentCount }) => {
+          if (failedEnvironments.length === 0 && ignoredEnvironments.length === 0) return;
+          toastManager.add({
+            type: "error",
+            title:
+              savedEnvironmentCount > 0
+                ? "Setting saved on some environments"
+                : "Setting not saved",
+            description: [
+              ...(ignoredEnvironments.length > 0
+                ? [
+                    `${ignoredEnvironments.map((environment) => environment.label).join(", ")} did not apply the setting. Update T3 Code there and try again.`,
+                  ]
+                : []),
+              ...failedEnvironments.map(
+                ({ label, message }) => `Could not save on ${label}: ${message}`,
+              ),
+              ...(savedEnvironmentCount > 0
+                ? [`Saved on ${savedEnvironments.map(({ label }) => label).join(", ")}.`]
+                : []),
+            ].join("\n"),
+          });
+        },
+      );
     },
     [persistServer],
   );

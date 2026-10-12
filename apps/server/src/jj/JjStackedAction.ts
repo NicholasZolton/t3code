@@ -3,6 +3,7 @@ import * as Ref from "effect/Ref";
 
 import {
   GitCommandError,
+  SourceControlProviderKind,
   type GitActionProgressEvent,
   type GitActionProgressPhase,
   type GitRunStackedActionInput,
@@ -461,7 +462,9 @@ export const makeJjStackedAction = (deps: JjStackedActionDeps): JjStackedActionO
   ) {
     const terms = yield* sourceControlProviders.resolve({ cwd }).pipe(
       Effect.map((provider) => getChangeRequestTerminologyForKind(provider.kind)),
-      Effect.orElseSucceed(() => getChangeRequestTerminologyForKind("unknown")),
+      Effect.orElseSucceed(() =>
+        getChangeRequestTerminologyForKind(SourceControlProviderKind.make("unknown")),
+      ),
     );
     const summary = summarizeGitActionResult(result, terms);
     const isDefaultRef =

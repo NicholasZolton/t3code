@@ -3,15 +3,18 @@ import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 
-import { ProviderInstanceId, TextGenerationError } from "@t3tools/contracts";
+import {
+  ProviderInstanceId,
+  SourceControlProviderKind,
+  TextGenerationError,
+} from "@t3tools/contracts";
 
 import * as ProviderRegistry from "../provider/ProviderRegistry.ts";
 import * as ServerSettings from "../serverSettings.ts";
-import * as SourceControlProvider from "../sourceControl/SourceControlProvider.ts";
+import * as SourceControlProvider from "@t3tools/source-control-core/server/SourceControlProvider";
 import * as SourceControlProviderRegistry from "../sourceControl/SourceControlProviderRegistry.ts";
 import * as TextGeneration from "../textGeneration/TextGeneration.ts";
 import { resolveBranchHeadContext } from "./GitManager.ts";
-import * as Option from "effect/Option";
 import {
   runChangeRequestStep,
   type ChangeRequestVcsReads,
@@ -35,11 +38,13 @@ const textGeneration: TextGeneration.TextGeneration["Service"] = {
   generatePrContent: () => Effect.succeed({ title: "Add the thing", body: "Body" }),
   generateBranchName: () => Effect.succeed({ branch: "feature/add-the-thing" }),
   generateThreadTitle: () => Effect.succeed({ title: "Add the thing" }),
+  generateReviewGuide: () => Effect.die("not exercised"),
 };
 
 function makeLayer(created: Array<{ readonly baseRefName: string; readonly cwd: string }>) {
   const providerLayer = Layer.mock(SourceControlProvider.SourceControlProvider)({
-    kind: "github",
+    kind: SourceControlProviderKind.make("github"),
+    headBranchProbe: ({ headSelectors }) => ({ headSelectors, limit: 1 }),
     listChangeRequests: () => Effect.succeed([]),
     getDefaultBranch: () => Effect.succeed("main"),
     createChangeRequest: (input) =>
@@ -70,7 +75,6 @@ function readsFor(providerCwd: string): ChangeRequestVcsReads {
     readRangeContext: () =>
       Effect.succeed({ commitSummary: "abc feat", diffSummary: "1 file", diffPatch: "diff" }),
     recentSubjects: () => Effect.succeed([]),
-    changeRequestTemplate: () => Effect.succeed(Option.none()),
     providerCwd,
     configuredBaseRef: () => Effect.succeed("release/v2"),
     headContext: (cwd, refName, upstreamRef) =>
