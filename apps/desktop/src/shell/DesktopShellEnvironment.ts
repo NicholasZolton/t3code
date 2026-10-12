@@ -94,6 +94,8 @@ const WINDOWS_SHELL_CANDIDATES = ["pwsh.exe", "powershell.exe"] as const;
 const LOGIN_SHELL_TIMEOUT = Duration.seconds(5);
 const LAUNCHCTL_TIMEOUT = Duration.seconds(2);
 const PROCESS_TERMINATE_GRACE = Duration.seconds(1);
+const FCM_SERVICE_ACCOUNT_ENV_NAME = "T3CODE_FCM_SERVICE_ACCOUNT";
+const MAC_NOTIFICATION_KEYCHAIN_SERVICE = "T3 Code paired notifications";
 
 const trimNonEmpty = (value: string | null | undefined): Option.Option<string> =>
   Option.fromNullishOr(value).pipe(
@@ -500,17 +502,36 @@ const installPosixEnvironment = Effect.fn("desktop.shellEnvironment.installPosix
   },
 );
 
-const installShellEnvironment = (
+// Finder launches do not inherit the shell that originally configured paired delivery.
+const readMacNotificationCredential: Effect.Effect<Option.Option<string>> = Effect.tryPromise(
+  async (): Promise<string | null> => {
+    const { Entry } = await import("@napi-rs/keyring");
+    return new Entry(MAC_NOTIFICATION_KEYCHAIN_SERVICE, FCM_SERVICE_ACCOUNT_ENV_NAME).getPassword();
+  },
+).pipe(
+  Effect.map(trimNonEmpty),
+  Effect.catch(() =>
+    Effect.logWarning("Could not load paired notification credentials from macOS Keychain.").pipe(
+      Effect.as(Option.none<string>()),
+    ),
+  ),
+);
+
+const installShellEnvironment = Effect.fn("desktop.shellEnvironment.install")(function* (
   config: ShellEnvironmentConfig,
-): Effect.Effect<void, never, ChildProcessSpawner.ChildProcessSpawner | FileSystem.FileSystem> => {
-  if (config.platform === "win32") {
-    return installWindowsEnvironment(config);
-  }
+): Effect.fn.Return<void, never, ChildProcessSpawner.ChildProcessSpawner | FileSystem.FileSystem> {
+  if (config.platform === "win32") return yield* installWindowsEnvironment(config);
   if (config.platform === "darwin" || config.platform === "linux") {
-    return installPosixEnvironment(config);
+    yield* installPosixEnvironment(config);
   }
-  return Effect.void;
-};
+  if (
+    config.platform !== "darwin" ||
+    Option.isSome(trimNonEmpty(config.env[FCM_SERVICE_ACCOUNT_ENV_NAME]))
+  )
+    return;
+  const credential = yield* readMacNotificationCredential;
+  if (Option.isSome(credential)) config.env[FCM_SERVICE_ACCOUNT_ENV_NAME] = credential.value;
+});
 
 /** @public Service construction is part of the canonical Effect module API. */
 export const make = Effect.gen(function* () {

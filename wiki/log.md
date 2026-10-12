@@ -1,5 +1,9 @@
 # Wiki update log
 
+## 2026-10-12
+
+- **Compatibility decision**: [Paired Android notifications](paired-notifications.md) use a desktop-local macOS Keychain fallback for normal app launches. Explicit environment credentials retain precedence; SSH hosts still need their own configuration.
+
 ## 2026-10-10
 
 - **Compatibility decision**: [Paired Android notifications](paired-notifications.md) now reuse Connect policy and presentation with encrypted rich payloads and phone-side environment aggregation. Recorded the earlier successful physical-phone generic delivery separately from pending encrypted-delivery rollout.

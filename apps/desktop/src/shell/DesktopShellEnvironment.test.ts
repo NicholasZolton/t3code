@@ -9,9 +9,19 @@ import * as Sink from "effect/Sink";
 import * as Stream from "effect/Stream";
 import * as ChildProcess from "effect/process/ChildProcess";
 import * as ChildProcessSpawner from "effect/process/ChildProcessSpawner";
+import { beforeEach, vi } from "vite-plus/test";
 
 import * as DesktopEnvironment from "../app/DesktopEnvironment.ts";
 import * as DesktopShellEnvironment from "./DesktopShellEnvironment.ts";
+
+const keychain = vi.hoisted(() => ({
+  getPassword: vi.fn<() => string | null>(() => null),
+}));
+vi.mock("@napi-rs/keyring", () => ({
+  Entry: class {
+    getPassword = keychain.getPassword;
+  },
+}));
 
 const textEncoder = new TextEncoder();
 
@@ -100,6 +110,76 @@ function runShellEnvironment(input: {
 }
 
 describe("DesktopShellEnvironment", () => {
+  beforeEach(() => {
+    keychain.getPassword.mockReset().mockReturnValue(null);
+  });
+
+  it.effect("loads paired notification credentials from Keychain for a macOS GUI launch", () =>
+    Effect.gen(function* () {
+      const env: NodeJS.ProcessEnv = { PATH: "/usr/bin" };
+      const credential: string = JSON.stringify(
+        { private_key: "test-only-key\nsecond-line" },
+        null,
+        2,
+      );
+      keychain.getPassword.mockReturnValue(credential);
+
+      yield* runShellEnvironment({
+        env,
+        platform: "darwin",
+        handler: () => envOutput({ PATH: "/usr/bin" }),
+      });
+
+      assert.equal(env.T3CODE_FCM_SERVICE_ACCOUNT, credential);
+    }),
+  );
+
+  it.effect("preserves an inherited notification credential without accessing Keychain", () =>
+    Effect.gen(function* () {
+      const env: NodeJS.ProcessEnv = {
+        PATH: "/usr/bin",
+        T3CODE_FCM_SERVICE_ACCOUNT: "inherited-account",
+      };
+      keychain.getPassword.mockReturnValue("stored-account");
+
+      yield* runShellEnvironment({
+        env,
+        platform: "darwin",
+        handler: () => envOutput({ PATH: "/usr/bin" }),
+      });
+
+      assert.equal(env.T3CODE_FCM_SERVICE_ACCOUNT, "inherited-account");
+      assert.equal(keychain.getPassword.mock.calls.length, 0);
+    }),
+  );
+
+  it.effect("continues startup without exposing a failed Keychain read", () => {
+    const env: NodeJS.ProcessEnv = { PATH: "/usr/bin" };
+    const privateDetail: string = "test-only-private-error-detail";
+    keychain.getPassword.mockImplementation(() => {
+      throw new Error(privateDetail);
+    });
+    const messages: Array<unknown> = [];
+    const logger = Logger.make(({ message }) => {
+      messages.push(message);
+    });
+
+    return runShellEnvironment({
+      env,
+      platform: "darwin",
+      handler: () => envOutput({ PATH: "/usr/bin" }),
+    }).pipe(
+      Effect.andThen(
+        Effect.sync(() => {
+          assert.equal(env.T3CODE_FCM_SERVICE_ACCOUNT, undefined);
+          assert.lengthOf(messages, 1);
+          assert.notInclude(JSON.stringify(messages), privateDetail);
+        }),
+      ),
+      Effect.provide(Logger.layer([logger], { mergeWithExisting: false })),
+    );
+  });
+
   it.effect("hydrates PATH and missing SSH_AUTH_SOCK from the login shell on macOS", () =>
     Effect.gen(function* () {
       const env: NodeJS.ProcessEnv = {
@@ -126,6 +206,7 @@ describe("DesktopShellEnvironment", () => {
       assert.equal(env.PATH, "/opt/homebrew/bin:/usr/bin:/Users/test/.local/bin");
       assert.equal(env.SSH_AUTH_SOCK, "/tmp/secretive.sock");
       assert.equal(env.HOMEBREW_PREFIX, "/opt/homebrew");
+      assert.equal(env.T3CODE_FCM_SERVICE_ACCOUNT, undefined);
     }),
   );
 
@@ -275,6 +356,7 @@ describe("DesktopShellEnvironment", () => {
       assert.equal(env.PATH, "/home/linuxbrew/.linuxbrew/bin:/usr/bin");
       assert.equal(env.SSH_AUTH_SOCK, "/tmp/secretive.sock");
       assert.equal(env.T3CODE_TELEMETRY_ENABLED, "false");
+      assert.equal(keychain.getPassword.mock.calls.length, 0);
     }),
   );
 
