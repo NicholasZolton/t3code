@@ -5,7 +5,7 @@ and publish repositories, create pull requests, and review changes.
 
 ## Review turn changes
 
-A turn's changed files and diff show only the turn's own work. When a turn pulls, merges, or
+In Git repositories, a turn's changed files and diff show only the turn's own work. When a turn pulls, merges, or
 rebases, the files Git brought in are left out. A file stays in the list when the turn edited it,
 committed it, or fixed a conflict in it. Use the branch comparison to review everything that changed
 against your base branch. Restore still returns the complete saved workspace.
@@ -250,7 +250,7 @@ against the Git store in that repository, so a Jujutsu project gets the same hos
 Git one. Install Jujutsu 0.42.0 or newer on the machine running the server.
 
 Terms follow the repository: bookmarks instead of branches, workspaces instead of worktrees, changes
-instead of commits. Checkpoints, turn diffs, and revert work the same way. A revert restores your
+instead of commits. Checkpoints and revert work the same way. A revert restores your
 working copy with `jj restore`, so `jj undo` takes it back.
 
 ### Choosing the version control system
@@ -273,6 +273,8 @@ Jujutsu workspace. Run it from the main checkout; Git worktrees continue to use 
 
 ### What is different under Jujutsu
 
+- Turn diffs include all changes between checkpoints, including changes brought in by a pull or rebase.
+- Automatic storage cleanup does not remove Jujutsu workspaces.
 - **Git hooks do not run** for commits made through T3 Code. Hooks that read the Git index, such as
   `lint-staged` or a staged-diff format check, see nothing under Jujutsu, so T3 Code skips them
   rather than reporting a hook run that did nothing. Run them yourself if you depend on them.

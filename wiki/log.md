@@ -2,6 +2,8 @@
 
 ## 2026-10-12
 
+- **Branch integration**: [Upstream integration](upstream-integration.md) records local merge `eec69e1928` through upstream `e688034b5f`, with all 374 missing commits incorporated on the branch. Fork `main` remains at `e373457c74` with that gap still pending. Adopted upstream package boundaries and Git-only cleanup; Jujutsu workspaces remain retained and ambiguous reused-child OpenCode reports remain guarded.
+
 - **Compatibility decision**: [Paired Android notifications](paired-notifications.md) use a desktop-local macOS Keychain fallback for normal app launches. Explicit environment credentials retain precedence; SSH hosts still need their own configuration.
 
 ## 2026-10-10

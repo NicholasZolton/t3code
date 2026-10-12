@@ -55,13 +55,18 @@ Git but jj has forgotten it, so `jj restore --from <id>` fails with `Revision ..
 Restore recovers by writing a temp `refs/heads/t3-restore-<uuid>`, running `jj git import`, retrying,
 then deleting both. See [`JjCheckpoints.ts`](../../apps/server/src/vcs/JjCheckpoints.ts).
 
-Capture pins one snapshot read and inspects uncaptured paths using a private Git index. Cleanup
-checks ignored local data separately: checkpoint coverage alone cannot justify deleting a directory.
+Capture pins one snapshot read and inspects uncaptured paths using a private Git index. Explicit
+workspace removal checks ignored local data separately: checkpoint coverage alone cannot justify
+deleting a directory. Automatic storage cleanup retains jj workspaces rather than applying Git cleanup.
 Committed unbookmarked work must move onto the workspace's recreation bookmark before deregistration.
 Nothing in T3 Code may run
 `jj abandon`, `jj op abandon`, `jj util gc`, `git reset`, `git clean` or `git restore` in a jj repo.
 Restore is `jj restore`, so change id, description, bookmarks and other workspaces all survive, and
 the user can `jj undo` it.
+
+Git's authored-path filter reads capture-time HEAD from an extra checkpoint commit's parent. Native
+jj snapshots have no such metadata, so their turn diffs stay complete instead of guessing which files
+were imported and hiding user work.
 
 ## `@-` is HEAD, and root is never a revision
 
