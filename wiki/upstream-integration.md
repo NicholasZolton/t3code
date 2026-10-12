@@ -1,30 +1,35 @@
 ---
 type: Integration Record
 title: Upstream integration
-description: Main integrations, pending branch integrations, and fork compatibility exceptions.
+description: Completed main integrations and fork compatibility exceptions.
 tags: [upstream, fork, integration]
 status: stable
 generated:
   by: opencode/gpt-6.1-sol
-  at: 2026-10-12T05:12:43Z
+  at: 2026-10-12T06:04:06Z
 verified:
   - by: opencode/gpt-6.1-sol
-    at: 2026-10-12T05:12:43Z
+    at: 2026-10-12T06:04:06Z
 snapshot:
-  at: 2026-10-12T05:12:43Z
-  fork_main: e373457c74fd6b224a9019c4d8c20c6fa06fe7d9
+  at: 2026-10-12T06:04:06Z
+  fork_main: f4a2d2472c90d7828be6830cfee01f4b76d7f2f7
   upstream_main: e688034b5f5505f92fcf1d78ba853c9c0107f9f1
-  shared_baseline: 9a3070bcf023c3c025633659addeef4cf628133a
-  last_main_integration: 2bc0f738329c83c0a7e146018d640a512634f876
-  branch_integration: eec69e1928b4aadf52e78fd2b14f9df6aa1f5f44
-  missing_upstream_on_main: 374
+  shared_baseline: e688034b5f5505f92fcf1d78ba853c9c0107f9f1
+  last_main_integration: eec69e1928b4aadf52e78fd2b14f9df6aa1f5f44
+  missing_upstream_on_main: 0
 sources:
+  - id: october-12-main-integration
+    resource: https://github.com/NicholasZolton/t3code/pull/44
+    title: Completed October 12 full upstream integration into fork main
+  - id: october-12-fork-main
+    resource: https://github.com/NicholasZolton/t3code/commit/f4a2d2472c90d7828be6830cfee01f4b76d7f2f7
+    title: Fork main after PR 44 merged with upstream ancestry preserved
   - id: october-12-branch-integration
-    resource: "Local Git object eec69e1928b4aadf52e78fd2b14f9df6aa1f5f44 on NicholasZolton/sync-upstream-changes-1, with parents e373457c74fd6b224a9019c4d8c20c6fa06fe7d9 and e688034b5f5505f92fcf1d78ba853c9c0107f9f1; not pushed or incorporated into fork main"
-    title: Ancestry-preserving branch integration through October 12
+    resource: https://github.com/NicholasZolton/t3code/commit/eec69e1928b4aadf52e78fd2b14f9df6aa1f5f44
+    title: Ancestry-preserving upstream merge now incorporated into fork main
   - id: october-12-review-git
-    resource: "Local Git verification at 2026-10-12T05:12:43Z: origin/main e373457c74fd6b224a9019c4d8c20c6fa06fe7d9 shares baseline 9a3070bcf023c3c025633659addeef4cf628133a with upstream e688034b5f5505f92fcf1d78ba853c9c0107f9f1 and lacks 374 upstream commits; branch integration eec69e1928b4aadf52e78fd2b14f9df6aa1f5f44 incorporates that entire upstream tip with zero remaining branch ancestry gap"
-    title: Main and branch integration boundaries verified separately
+    resource: "Local Git verification at 2026-10-12T06:04:06Z: fetched origin/main f4a2d2472c90d7828be6830cfee01f4b76d7f2f7 contains integration eec69e1928b4aadf52e78fd2b14f9df6aa1f5f44 and upstream e688034b5f5505f92fcf1d78ba853c9c0107f9f1; the merge base is the pinned upstream tip, with all 374 previously missing commits incorporated and zero remaining main ancestry gap; PR 44 merged at 2026-10-12T06:03:14Z"
+    title: Completed main integration boundary verified against pinned upstream
   - id: october-8-main-integration
     resource: https://github.com/NicholasZolton/t3code/pull/37
     title: Completed October 8 full upstream integration into fork main
@@ -149,30 +154,35 @@ sources:
 
 # Upstream integration
 
-**The October 12 sync is integrated on a branch, not fork `main`.** Fetched
-`origin/main` is `e373457c74`; its upstream baseline remains `9a3070bcf0`, with
-374 commits missing through the reviewed tip `e688034b5f`. Branch merge
-`eec69e1928` incorporates all 374 with no remaining branch ancestry gap.
+**The October 12 sync has reached fork `main`.** [PR #44](https://github.com/NicholasZolton/t3code/pull/44)
+merged at `f4a2d2472c`, incorporating all 374 previously missing commits through
+the reviewed upstream tip `e688034b5f`. That tip is now the shared baseline,
+with no remaining main ancestry gap.
 [^october-12-review-git]
 
 This is a revision-pinned snapshot, not a claim about newer upstream work.
 Refresh it after the next review or integration using the
 [maintenance guidance](maintenance.md).
 
-## Pending branch integration
+## Latest completed main sync
+
+[PR #44](https://github.com/NicholasZolton/t3code/pull/44) merged on October 12,
+2026, at 06:03:14 UTC, landing at `f4a2d2472c`.
+[^october-12-main-integration][^october-12-fork-main]
 
 Merge `eec69e1928b4aadf52e78fd2b14f9df6aa1f5f44` preserves fork parent
 `e373457c74fd6b224a9019c4d8c20c6fa06fe7d9` and upstream parent
-`e688034b5f5505f92fcf1d78ba853c9c0107f9f1`. It has not been pushed, filed as
-a PR, deployed, or incorporated into fork `main`.[^october-12-branch-integration]
+`e688034b5f5505f92fcf1d78ba853c9c0107f9f1`. Both parents are incorporated into
+fork `main`; the sync was not squashed. Main integration is not a remote deployment.
+[^october-12-branch-integration]
 
-The branch adopts upstream's extracted provider and source-control packages,
+The sync adopts upstream's extracted provider and source-control packages,
 legacy provider-settings removal, desktop main-contents commands, and Git-only
 storage cleanup. Fork features use those upstream boundaries rather than parallel
 implementations. Jujutsu cleanup and reused OpenCode child sessions retain the
 compatibility exceptions below.[^october-12-branch-integration]
 
-## Latest completed main sync
+## Previous main sync
 
 [PR #37](https://github.com/NicholasZolton/t3code/pull/37) merged on October 8,
 2026, at 18:49:13 UTC, landing at `e5365adddc`.
@@ -255,16 +265,16 @@ migrates to upstream branch naming while preserving temporary branch names. The 
 | -------------------------------------------------- | --------------------------------------------------------------- |
 | Fork                                               | `NicholasZolton/t3code`, remote `origin`                        |
 | Upstream                                           | `pingdotgg/t3code`, remote `upstream`                           |
-| Main landing commit                                | `e5365adddc` — merge of PR #37                                  |
-| Upstream integration commit                        | `2bc0f73832` — `chore(sync): merge upstream through 9a3070bcf0` |
-| Fork-side parent                                   | `e4b289c26c`                                                    |
-| Upstream-side parent / shared baseline             | `9a3070bcf0`                                                    |
+| Main landing commit                                | `f4a2d2472c` — merge of PR #44                                  |
+| Upstream integration commit                        | `eec69e1928` — `chore(sync): merge upstream through e688034b5f` |
+| Fork-side parent                                   | `e373457c74`                                                    |
+| Upstream-side parent / shared baseline             | `e688034b5f`                                                    |
 | Missing commits at that integration's upstream tip | **0**                                                           |
 
 Default to upstream implementations. Retain fork code for explicit features
 or fixes upstream does not provide. Native OpenCode 2 and thread management now
 use upstream services; fork configuration and UI improvements remain layered on
-those paths.[^october-8-integration]
+those paths.[^october-12-branch-integration]
 
 ## Earlier integration boundaries
 
@@ -338,7 +348,7 @@ Preserve this mixed-backend boundary during future syncs. The
 explicit ref synchronization; the [user guide](../docs/user/source-control.md#jujutsu-repositories)
 covers enabling Jujutsu and disabling VCS agent hints globally or per project.
 
-The October 12 branch uses upstream Git-only storage cleanup and retains every
+The completed October 12 sync uses upstream Git-only storage cleanup and retains every
 Jujutsu workspace instead of maintaining a separate automatic removal path.
 Jujutsu checkpoints still pin native snapshots: they lack the extra Git checkpoint
 commit's capture-time HEAD metadata, so authored-path filtering stays disabled and
@@ -394,6 +404,7 @@ git merge-base origin/main upstream/main
 git merge-base --is-ancestor 696fd65db1 origin/main
 git merge-base --is-ancestor ab7e864a1a origin/main
 git merge-base --is-ancestor 2bc0f73832 origin/main
+git merge-base --is-ancestor eec69e1928 origin/main
 git merge-base --is-ancestor a8df093eb6 origin/main
 git rev-list --count origin/main..upstream/main
 git log --reverse --oneline origin/main..upstream/main
@@ -479,6 +490,10 @@ git log --reverse --oneline origin/main..upstream/main
 
 [^upstream-skill-refresh]: Upstream workspace discovery freshness and refresh machinery selected for the completed sync.
 
-[^october-12-branch-integration]: Local-only merge, its exact parents, and retained compatibility decisions; not a main integration.
+[^october-12-main-integration]: PR #44 and its recorded merge time.
 
-[^october-12-review-git]: Separate ancestry checks against fetched fork main and the integrated branch.
+[^october-12-fork-main]: Main landing commit retaining the complete upstream ancestry.
+
+[^october-12-branch-integration]: Full upstream merge, its exact parents, and retained compatibility decisions, now incorporated into main.
+
+[^october-12-review-git]: Completed main ancestry checks and zero missing commits against the October 12 pinned upstream tip.
