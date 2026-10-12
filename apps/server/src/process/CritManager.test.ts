@@ -6,9 +6,11 @@ import * as NodeFSP from "node:fs/promises";
 import * as NodeHttp from "node:http";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
-import { CheckpointRef, ThreadId } from "@t3tools/contracts";
+import { CheckpointRef, ThreadId, type CritOpenInput } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
+import * as HttpClient from "effect/http/HttpClient";
+import * as FetchHttpClient from "effect/http/FetchHttpClient";
 import { afterEach, it } from "@effect/vitest";
 import { createCritManager } from "./CritManager.ts";
 
@@ -16,6 +18,9 @@ const decodeArguments = Schema.decodeUnknownSync(
   Schema.fromJsonString(Schema.Array(Schema.String)),
 );
 const encodeJsonString = Schema.encodeSync(Schema.fromJsonString(Schema.String));
+const decodeForwardRoute = Schema.decodeUnknownSync(
+  Schema.fromJsonString(Schema.Struct({ port: Schema.Number })),
+);
 const decodeAlias = Schema.decodeSync(
   Schema.fromJsonString(Schema.Struct({ args: Schema.Array(Schema.String), port: Schema.String })),
 );
@@ -28,12 +33,159 @@ const decodeEnvironment = Schema.decodeUnknownSync(
   ),
 );
 const fixtures: Array<() => Promise<void>> = [];
+
+async function tailnetFixture(
+  options: {
+    readonly failForward?: boolean;
+    readonly requireSudo?: boolean;
+  } = {},
+): Promise<{
+  readonly directory: string;
+  readonly manager: ReturnType<typeof createCritManager>;
+  readonly forwardClosed: Promise<void>;
+  readonly browserConnected: Promise<void>;
+  readonly existingConfig: string;
+}> {
+  const directory = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "t3-crit-tailnet-test-"));
+  fixtures.push(() => NodeFSP.rm(directory, { recursive: true, force: true }));
+  let notifyClosed: () => void = () => undefined;
+  const forwardClosed = new Promise<void>((resolve) => {
+    notifyClosed = resolve;
+  });
+  let notifyConnected: () => void = () => undefined;
+  const browserConnected = new Promise<void>((resolve) => {
+    notifyConnected = resolve;
+  });
+  const control = NodeHttp.createServer((request, response) => {
+    if (request.url === "/connected") notifyConnected();
+    else notifyClosed();
+    response.end("ok");
+  });
+  await new Promise<void>((resolve) => control.listen(0, "127.0.0.1", resolve));
+  fixtures.push(() => new Promise<void>((resolve) => control.close(() => resolve())));
+  const address = control.address();
+  NodeAssert.ok(address && typeof address !== "string");
+  const closedUrl = `http://127.0.0.1:${address.port}/closed`;
+  const command = NodePath.join(directory, "crit");
+  const tailscaleCommand = NodePath.join(directory, "tailscale");
+  const sudoCommand = NodePath.join(directory, "sudo");
+  const configPath = NodePath.join(directory, "serve.json");
+  const existingConfig = JSON.stringify({
+    TCP: { "443": { HTTPS: true } },
+    Foreground: { existing: { TCP: { "8443": { HTTPS: true } } } },
+  });
+  await NodeFSP.writeFile(configPath, existingConfig);
+  await Promise.all([
+    NodeFSP.writeFile(
+      command,
+      `#!${process.execPath}
+const fs = require('node:fs');
+const http = require('node:http');
+const path = require('node:path');
+const args = process.argv.slice(2);
+const port = Number(args[args.indexOf('--port') + 1]);
+if (args.includes('stop')) process.exit(0);
+if (args.includes('status')) {
+  process.stdout.write(fs.readFileSync(path.join(process.env.HOME, 'status.json')));
+  process.exit(0);
+}
+fs.writeFileSync(path.join(process.env.HOME, 'status.json'), JSON.stringify({ sessions: [{ port }] }));
+fs.writeFileSync(${encodeJsonString(NodePath.join(directory, "review-home"))}, process.env.HOME);
+let connected = false;
+let reportedConnection = false;
+const server = http.createServer((req, res) => {
+  if (req.url === '/api/health') {
+    res.setHeader('content-type', 'application/json');
+    res.end(JSON.stringify({ status: 'ok', browser_clients: connected }));
+    if (connected && !reportedConnection) {
+      reportedConnection = true;
+      fetch(${encodeJsonString(`http://127.0.0.1:${address.port}/connected`)}, { method: 'POST' });
+    }
+    return;
+  }
+  connected = req.url !== '/close';
+  res.end('Crit review');
+});
+server.listen(port, '127.0.0.1', () => {
+  process.stderr.write('Started crit daemon at ' + args[args.indexOf('--public-url') + 1] + ' (session test)\\n');
+});
+process.on('SIGTERM', () => server.close(() => process.exit(0)));
+`,
+      { mode: 0o755 },
+    ),
+    NodeFSP.writeFile(
+      tailscaleCommand,
+      `#!${process.execPath}
+const fs = require('node:fs');
+const http = require('node:http');
+const args = process.argv.slice(2);
+if (args[0] === 'status') {
+  process.stdout.write(JSON.stringify({ BackendState: 'Running', Self: { DNSName: 'dev.tail123.ts.net.' } }));
+  process.exit(0);
+}
+if (args[1] === 'status') {
+  process.stdout.write(fs.readFileSync(${encodeJsonString(configPath)}));
+  process.exit(0);
+}
+if (${String(options.requireSudo ?? false)} && !process.env.T3_CRIT_TEST_ELEVATED) {
+  process.stderr.write('sending serve config: 401 Unauthorized: must be root\\n');
+  process.exit(1);
+}
+if (${String(options.failForward ?? false)}) process.exit(1);
+if (args.includes('--bg') || args.includes('off') || args.includes('reset') || args[0] !== 'serve') process.exit(2);
+const port = Number(args.find(arg => arg.startsWith('--https=')).split('=')[1]);
+const target = args.at(-1);
+const route = ${encodeJsonString(directory)} + '/route-' + port;
+const server = http.createServer((req, res) => {
+  const upstream = http.request(target + req.url, { method: req.method }, response => {
+    res.writeHead(response.statusCode, response.headers);
+    response.pipe(res);
+  });
+  upstream.on('error', () => { res.statusCode = 502; res.end(); });
+  req.pipe(upstream);
+});
+server.listen(0, '127.0.0.1', () => {
+  fs.writeFileSync(route, JSON.stringify({ port: server.address().port }));
+  process.stdout.write('Available within your tailnet:\\n\\nhttps://dev.tail123.ts.net:' + port + '/\\n');
+});
+process.on('SIGTERM', () => server.close(() => {
+  fs.unlinkSync(route);
+  fetch(${encodeJsonString(closedUrl)}, { method: 'POST' }).then(() => process.exit(0));
+}));
+`,
+      { mode: 0o755 },
+    ),
+    NodeFSP.writeFile(
+      sudoCommand,
+      `#!${process.execPath}
+const { spawn } = require('node:child_process');
+const args = process.argv.slice(2);
+if (args[0] !== '-n' || args[1] !== '--') process.exit(2);
+const child = spawn(args[2], args.slice(3), { stdio: 'inherit', env: { ...process.env, T3_CRIT_TEST_ELEVATED: '1' } });
+process.on('SIGTERM', () => child.kill('SIGTERM'));
+child.on('exit', code => process.exit(code ?? 0));
+`,
+      { mode: 0o755 },
+    ),
+  ]);
+  const manager = createCritManager({
+    command,
+    tailscaleCommand,
+    sudoCommand,
+    outputDir: directory,
+    browserCheckIntervalMs: 10,
+    browserDisconnectGraceMs: 0,
+  });
+  fixtures.push(() => manager.dispose());
+  return { directory, manager, forwardClosed, browserConnected, existingConfig };
+}
 afterEach(async () => {
   for (const cleanup of fixtures.splice(0).toReversed()) await cleanup();
 });
 
-for (const stopReason of ["browser disconnect", "one-hour lifetime"] as const)
-  it.effect(`opens the selected scope and stops only its CLI after ${stopReason}`, () =>
+it.effect.each(["browser disconnect", "one-hour lifetime"] as const)(
+  "opens the selected scope and stops only its CLI after %s",
+  (stopReason) =>
     Effect.gen(function* () {
       const directory = yield* Effect.promise(() =>
         NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "t3-crit-test-")),
@@ -118,7 +270,7 @@ for (const stopReason of ["browser disconnect", "one-hour lifetime"] as const)
       NodeAssert.equal(NodeFS.existsSync(stopHome), false);
       NodeAssert.equal(NodeFS.existsSync(outputDir), true);
     }),
-  );
+);
 
 it.effect("maps branch, turn, pull request, and commit selections to Crit scopes", () =>
   Effect.gen(function* () {
@@ -348,5 +500,103 @@ it.effect(
         { args: ["alias", name, "41234"], port: "58345" },
         { args: ["alias", "--remove", name], port: "58345" },
       ]);
+    }),
+);
+
+it.effect.each([false, true])(
+  "forwards concurrent Crit reviews without changing existing endpoints (sudo required: %s)",
+  (requireSudo) =>
+    Effect.gen(function* () {
+      const fixture = yield* Effect.promise(() => tailnetFixture({ requireSudo }));
+      const input: CritOpenInput = {
+        cwd: process.cwd(),
+        tailscale: true,
+        scope: { kind: "working-tree" },
+      };
+      const urls = yield* Effect.all([fixture.manager.open(input), fixture.manager.open(input)], {
+        concurrency: "unbounded",
+      });
+      NodeAssert.ok(urls[0] && urls[1]);
+      NodeAssert.notEqual(urls[0], urls[1]);
+      const ports = urls.map((url) => {
+        NodeAssert.ok(url);
+        const parsed = new URL(url);
+        NodeAssert.equal(parsed.protocol, "https:");
+        NodeAssert.equal(parsed.hostname, "dev.tail123.ts.net");
+        NodeAssert.ok(!["443", "8443"].includes(parsed.port));
+        return parsed.port;
+      });
+      const origins = yield* Effect.forEach(ports, (port) =>
+        Effect.promise(async () => {
+          const route = decodeForwardRoute(
+            await NodeFSP.readFile(NodePath.join(fixture.directory, `route-${port}`), "utf8"),
+          );
+          return `http://127.0.0.1:${route.port}`;
+        }),
+      );
+      const first = origins[0];
+      const second = origins[1];
+      NodeAssert.ok(first && second);
+      const response = yield* HttpClient.get(first);
+      NodeAssert.equal(yield* response.text, "Crit review");
+      yield* Effect.promise(() => fixture.browserConnected);
+      const closing = yield* HttpClient.get(`${first}/close`);
+      yield* closing.text;
+      yield* Effect.promise(() => fixture.forwardClosed);
+      NodeAssert.equal(
+        NodeFS.existsSync(NodePath.join(fixture.directory, `route-${ports[0]}`)),
+        false,
+      );
+      const remaining = yield* HttpClient.get(second);
+      NodeAssert.equal(yield* remaining.text, "Crit review");
+      yield* Effect.promise(() => fixture.manager.dispose());
+      NodeAssert.equal(
+        NodeFS.existsSync(NodePath.join(fixture.directory, `route-${ports[1]}`)),
+        false,
+      );
+      NodeAssert.equal(
+        yield* Effect.promise(() =>
+          NodeFSP.readFile(NodePath.join(fixture.directory, "serve.json"), "utf8"),
+        ),
+        fixture.existingConfig,
+      );
+    }).pipe(Effect.provide(FetchHttpClient.layer), Effect.scoped),
+);
+
+it.effect.each([
+  { requireSudo: false, message: /Tailscale Serve exited before forwarding Crit/ },
+  { requireSudo: true, message: /Allow non-interactive sudo for tailscale/ },
+])(
+  "cleans up a Crit launch when Tailscale cannot publish the review ($requireSudo)",
+  ({ requireSudo, message }) =>
+    Effect.gen(function* () {
+      const fixture = yield* Effect.promise(() =>
+        tailnetFixture({ failForward: true, requireSudo }),
+      );
+      const error = yield* fixture.manager
+        .open({
+          cwd: process.cwd(),
+          tailscale: true,
+          scope: { kind: "working-tree" },
+        })
+        .pipe(Effect.flip);
+      NodeAssert.match(error.message, message);
+      const reviewHome = yield* Effect.promise(() =>
+        NodeFSP.readFile(NodePath.join(fixture.directory, "review-home"), "utf8"),
+      );
+      NodeAssert.equal(NodeFS.existsSync(reviewHome), false);
+      yield* Effect.promise(() => fixture.manager.dispose());
+      NodeAssert.equal(
+        yield* Effect.promise(() =>
+          NodeFSP.readFile(NodePath.join(fixture.directory, "serve.json"), "utf8"),
+        ),
+        fixture.existingConfig,
+      );
+      NodeAssert.equal(
+        (yield* Effect.promise(() => NodeFSP.readdir(fixture.directory))).some((name) =>
+          name.startsWith("route-"),
+        ),
+        false,
+      );
     }),
 );

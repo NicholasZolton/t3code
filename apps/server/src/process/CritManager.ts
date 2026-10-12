@@ -2,6 +2,7 @@
 import * as NodeChildProcess from "node:child_process";
 import * as NodeCrypto from "node:crypto";
 import * as NodeFSP from "node:fs/promises";
+import * as NodeNet from "node:net";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 import * as NodeUtil from "node:util";
@@ -21,10 +22,128 @@ const decodeCritStatus = Schema.decodeUnknownSync(
     Schema.Struct({ sessions: Schema.Array(Schema.Struct({ port: Schema.Number })) }),
   ),
 );
+const decodeTailscaleStatus = Schema.decodeUnknownSync(
+  Schema.fromJsonString(
+    Schema.Struct({
+      BackendState: Schema.String,
+      Self: Schema.optional(
+        Schema.NullOr(Schema.Struct({ DNSName: Schema.optional(Schema.String) })),
+      ),
+    }),
+  ),
+);
+const TailscaleListeners = Schema.Struct({
+  TCP: Schema.optional(Schema.Record(Schema.String, Schema.Struct({}))),
+});
+const decodeTailscaleServe = Schema.decodeUnknownSync(
+  Schema.fromJsonString(
+    Schema.Struct({
+      ...TailscaleListeners.fields,
+      Foreground: Schema.optional(Schema.Record(Schema.String, TailscaleListeners)),
+    }),
+  ),
+);
+const FORWARD_START_TIMEOUT_MS = 10_000;
 const BROWSER_START_TIMEOUT_MS = 60_000;
 const BROWSER_CHECK_INTERVAL_MS = 2_000;
 const MAX_REVIEW_LIFETIME_MS = 60 * 60 * 1_000;
 const shellQuote = (value: string): string => `'${value.replaceAll("'", "'\\''")}'`;
+
+class TailscaleServePermissionError extends Error {
+  constructor() {
+    super("Tailscale needs permission to publish the Crit review.");
+  }
+}
+
+async function tailscaleTarget(command: string): Promise<{
+  readonly hostname: string;
+  readonly occupiedPorts: ReadonlySet<number>;
+}> {
+  const status = decodeTailscaleStatus(
+    (await execFile(command, ["status", "--json"], { timeout: FORWARD_START_TIMEOUT_MS })).stdout,
+  );
+  const hostname = status.Self?.DNSName?.replace(/\.$/, "") ?? "";
+  if (status.BackendState !== "Running" || !hostname.endsWith(".ts.net")) {
+    throw new Error("Tailscale must be connected to open this Crit review remotely.");
+  }
+  const config = decodeTailscaleServe(
+    (await execFile(command, ["serve", "status", "--json"], { timeout: FORWARD_START_TIMEOUT_MS }))
+      .stdout,
+  );
+  return {
+    hostname,
+    occupiedPorts: new Set(
+      [config, ...Object.values(config.Foreground ?? {})].flatMap((entry) =>
+        Object.keys(entry.TCP ?? {}).map(Number),
+      ),
+    ),
+  };
+}
+
+async function unusedTailnetPort(
+  occupiedPorts: ReadonlySet<number>,
+  allocatedPorts: ReadonlySet<number>,
+): Promise<number> {
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    const server = NodeNet.createServer();
+    const port = await new Promise<number>((resolve, reject) => {
+      server.once("error", reject);
+      server.listen(0, "127.0.0.1", () => {
+        const address = server.address();
+        if (address === null || typeof address === "string") {
+          reject(new Error("Could not reserve a port for the Crit review."));
+          return;
+        }
+        resolve(address.port);
+      });
+    });
+    await new Promise<void>((resolve, reject) =>
+      server.close((error) => (error ? reject(error) : resolve())),
+    );
+    if (!occupiedPorts.has(port) && !allocatedPorts.has(port)) return port;
+  }
+  throw new Error("Could not find an unused Tailscale port for the Crit review.");
+}
+
+function waitForTailscaleForward(child: NodeChildProcess.ChildProcess, url: string): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
+    let output = "";
+    let stderr = "";
+    const timeout = setTimeout(
+      () => finish(new Error("Tailscale did not forward the Crit review in time.")),
+      FORWARD_START_TIMEOUT_MS,
+    );
+    const finish = (error?: Error): void => {
+      clearTimeout(timeout);
+      child.stdout?.off("data", onData);
+      child.stderr?.off("data", onStderr);
+      child.off("error", onError);
+      child.off("close", onClose);
+      if (error) reject(error);
+      else resolve();
+    };
+    const onData = (chunk: Buffer): void => {
+      output = (output + chunk.toString()).slice(-4_096);
+      if (output.includes("Available within your tailnet:") && output.includes(url)) finish();
+    };
+    const onStderr = (chunk: Buffer): void => {
+      stderr = (stderr + chunk.toString()).slice(-4_096);
+    };
+    const onError = (): void => finish(new Error("Could not start Tailscale Serve for Crit."));
+    const onClose = (): void =>
+      finish(
+        /permission denied|access denied|must be root|operation not permitted/i.test(stderr)
+          ? new TailscaleServePermissionError()
+          : new Error(
+              "Tailscale Serve exited before forwarding Crit. Check Tailscale permissions.",
+            ),
+      );
+    child.stdout?.on("data", onData);
+    child.stderr?.on("data", onStderr);
+    child.once("error", onError);
+    child.once("close", onClose);
+  });
+}
 
 async function portlessAlias(command: string, args: string[], port: number): Promise<void> {
   const env = { ...process.env, PORTLESS_PORT: String(port), PORTLESS_SYNC_HOSTS: "0" };
@@ -100,6 +219,8 @@ export function createCritManager(
   options: {
     readonly command?: string;
     readonly portlessCommand?: string;
+    readonly tailscaleCommand?: string;
+    readonly sudoCommand?: string;
     readonly outputDir?: string;
     readonly browserCheckIntervalMs?: number;
     readonly browserDisconnectGraceMs?: number;
@@ -108,11 +229,18 @@ export function createCritManager(
 ) {
   const command = options.command ?? "crit";
   const portlessCommand = options.portlessCommand ?? "portless";
+  const tailscaleCommand = options.tailscaleCommand ?? "tailscale";
+  const sudoCommand = options.sudoCommand ?? "sudo";
   const outputDir = options.outputDir ?? NodePath.join(NodeOS.homedir(), ".crit");
   const isWindows = HostProcess.Platform.defaultValue() === "win32";
   const reviews = new Set<ManagedReview>();
+  const allocatedTailnetPorts = new Set<number>();
 
   const open = async (input: CritOpenInput): Promise<string | null> => {
+    if (input.tailscale && input.portlessPort) {
+      throw new Error("Choose either Tailscale or SSH forwarding for the Crit review.");
+    }
+    const tailnet = input.tailscale ? await tailscaleTarget(tailscaleCommand) : null;
     const args = await critArgs(input);
     let githubRepository: string | undefined;
     if (input.scope.kind === "pull-request" && input.scope.provider === "github") {
@@ -129,7 +257,6 @@ export function createCritManager(
     }
     const root = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "t3-crit-"));
     const alias = input.portlessPort ? `t3-crit-${NodeCrypto.randomUUID()}` : null;
-    const reviewUrl = alias ? `https://${alias}.localhost:${input.portlessPort}` : null;
     const providerBin = NodePath.join(root, "bin");
     if (input.scope.kind === "pull-request" && !isWindows) {
       try {
@@ -147,6 +274,22 @@ export function createCritManager(
         throw error;
       }
     }
+    let tailnetPort: number | null = null;
+    try {
+      if (tailnet) {
+        tailnetPort = await unusedTailnetPort(tailnet.occupiedPorts, allocatedTailnetPorts);
+        allocatedTailnetPorts.add(tailnetPort);
+      }
+    } catch (error) {
+      await NodeFSP.rm(root, { recursive: true, force: true });
+      throw error;
+    }
+    const reviewUrl =
+      tailnet && tailnetPort
+        ? `https://${tailnet.hostname}:${tailnetPort}`
+        : alias
+          ? `https://${alias}.localhost:${input.portlessPort}`
+          : null;
     const env = {
       ...process.env,
       HOME: root,
@@ -165,6 +308,7 @@ export function createCritManager(
         "127.0.0.1",
         "--output",
         outputDir,
+        ...(tailnetPort === null ? [] : ["--port", String(tailnetPort)]),
         ...(reviewUrl
           ? ["--no-open", "--public-url", reviewUrl, "--allow-unauthenticated-network"]
           : []),
@@ -188,6 +332,8 @@ export function createCritManager(
     child.once("error", resolveExit);
     let stopPromise: Promise<void> | undefined;
     let aliased = false;
+    let tailnetChild: NodeChildProcess.ChildProcess | undefined;
+    let tailnetExited: Promise<void> | undefined;
     const review: ManagedReview = {
       stop: () => {
         stopPromise ??= (async () => {
@@ -195,6 +341,13 @@ export function createCritManager(
           if (timer) clearInterval(timer);
           if (startupTimeout) clearTimeout(startupTimeout);
           if (lifetimeTimeout) clearTimeout(lifetimeTimeout);
+          if (tailnetChild) {
+            if (tailnetChild.exitCode === null && tailnetChild.signalCode === null) {
+              tailnetChild.kill("SIGTERM");
+            }
+            await tailnetExited;
+          }
+          if (tailnetPort !== null) allocatedTailnetPorts.delete(tailnetPort);
           if (aliased && alias && input.portlessPort) {
             await portlessAlias(
               portlessCommand,
@@ -257,6 +410,41 @@ export function createCritManager(
       if (alias && input.portlessPort) {
         await portlessAlias(portlessCommand, ["alias", alias, String(port)], input.portlessPort);
         aliased = true;
+      }
+      if (tailnetPort !== null && reviewUrl !== null) {
+        // Foreground Serve owns a separate session; exiting removes only this review's endpoint.
+        const forwardArgs: string[] = [
+          "serve",
+          `--https=${tailnetPort}`,
+          `http://127.0.0.1:${port}`,
+        ];
+        const startForward = async (elevated: boolean): Promise<void> => {
+          const forward: NodeChildProcess.ChildProcess = NodeChildProcess.spawn(
+            elevated ? sudoCommand : tailscaleCommand,
+            elevated ? ["-n", "--", tailscaleCommand, ...forwardArgs] : forwardArgs,
+            { stdio: ["ignore", "pipe", "pipe"] },
+          );
+          tailnetChild = forward;
+          tailnetExited = new Promise<void>((resolve) => {
+            forward.once("exit", resolve);
+            forward.once("error", resolve);
+          });
+          await waitForTailscaleForward(forward, reviewUrl);
+        };
+        try {
+          await startForward(false);
+        } catch (error) {
+          if (!(error instanceof TailscaleServePermissionError) || isWindows) throw error;
+          // Existing file shares make even an operator's proxy-only config require sudo.
+          try {
+            await startForward(true);
+          } catch {
+            throw new Error(
+              "Tailscale needs permission to forward Crit. Allow non-interactive sudo for tailscale or adjust the server's Tailscale permissions.",
+            );
+          }
+        }
+        void tailnetExited?.then(() => review.stop()).catch(() => undefined);
       }
       const started = Date.now();
       lifetimeTimeout = setTimeout(
