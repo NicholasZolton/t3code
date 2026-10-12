@@ -90,7 +90,6 @@ function makeFakeBrowserWindow() {
     }),
     once: vi.fn<(eventName: string, listener: (...args: readonly unknown[]) => void) => void>(),
     openDevTools: vi.fn(),
-    isDevToolsOpened: vi.fn(() => false),
     reload: vi.fn(),
     reloadIgnoringCache: vi.fn(),
     replaceMisspelling: vi.fn(),
