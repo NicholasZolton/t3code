@@ -2,6 +2,8 @@
 
 ## 2026-10-12
 
+- **Compatibility decision**: Recorded the [Crit remote review boundary](upstream-integration.md#crit-remote-review-boundary): review-owned, tailnet-only HTTPS endpoints stay separate from the environment's persistent publication. Implemented on this branch; live deployment remains separate.
+
 - **Integration**: [PR #44](https://github.com/NicholasZolton/t3code/pull/44) reached fork `main` at `f4a2d2472c`. Refreshed [upstream integration](upstream-integration.md): all 374 newer commits through `e688034b5f` are incorporated with upstream ancestry preserved and zero remaining gap. Remote deployment remains separate.
 
 - **Branch integration**: [Upstream integration](upstream-integration.md) records local merge `eec69e1928` through upstream `e688034b5f`, with all 374 missing commits incorporated on the branch. Fork `main` remains at `e373457c74` with that gap still pending. Adopted upstream package boundaries and Git-only cleanup; Jujutsu workspaces remain retained and ambiguous reused-child OpenCode reports remain guarded.

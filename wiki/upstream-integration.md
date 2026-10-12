@@ -6,7 +6,7 @@ tags: [upstream, fork, integration]
 status: stable
 generated:
   by: opencode/gpt-6.1-sol
-  at: 2026-10-12T06:04:06Z
+  at: 2026-10-12T21:22:55Z
 verified:
   - by: opencode/gpt-6.1-sol
     at: 2026-10-12T06:04:06Z
@@ -18,6 +18,12 @@ snapshot:
   last_main_integration: eec69e1928b4aadf52e78fd2b14f9df6aa1f5f44
   missing_upstream_on_main: 0
 sources:
+  - id: crit-tailnet-forwarding
+    resource: ../apps/server/src/process/CritManager.ts
+    title: Review-owned Crit forwarding, implemented on this branch; deployment is separate
+  - id: tailscale-foreground-serve
+    resource: https://github.com/tailscale/tailscale/blob/3caf7d9e7dcaba589cfc58beda596929733e4fea/cmd/tailscale/cli/serve_v2.go
+    title: Tailscale foreground Serve sessions and their connection-owned lifetime
   - id: october-12-main-integration
     resource: https://github.com/NicholasZolton/t3code/pull/44
     title: Completed October 12 full upstream integration into fork main
@@ -383,6 +389,21 @@ At the October 12 review, upstream `e688034b5f` still has both destructive
 recovery paths reported in issue #15608. Preserve this boundary during later syncs
 unless upstream supplies equivalent recovery behavior.[^upstream-ssh-recovery][^ssh-recovery-issue]
 
+## Crit remote review boundary
+
+Crit's frontend assumes its own origin root, so tailnet reviews use a separate,
+temporary HTTPS endpoint rather than a subpath of the T3 server. Preserve
+foreground Serve ownership: closing a review must remove only its endpoint,
+never the environment's persistent publication or another review. This branch
+supports Tailscale connections alongside SSH/Portless; T3 Connect-only forwarding
+is outside that boundary. Crit has no application authentication, so these endpoints
+must remain tailnet-only, not Funnel publications.[^crit-tailnet-forwarding][^tailscale-foreground-serve]
+
+Existing file shares can require elevated Serve access even for a proxy-only
+change. On Unix, retry permission failures with non-interactive `sudo -n`;
+never change the host's operator settings or persistent routes to open a
+review.[^crit-tailnet-forwarding]
+
 ## Private Android signing identity
 
 Installable private fork APKs use one persistent signing key, stored age-encrypted
@@ -435,6 +456,10 @@ git log --reverse --oneline origin/main..upstream/main
 [^tailscale-persistence]: `pair --tailscale` discovers the live server and remembers its HTTPS port for startup restoration.
 
 [^ssh-recovery]: Fork-side SSH implementation and its focused readiness-recovery regressions.
+
+[^crit-tailnet-forwarding]: The review manager keeps Crit on loopback and owns each temporary forward's lifetime.
+
+[^tailscale-foreground-serve]: Foreground Serve uses a nested configuration tied to its IPN watcher; closing that session removes its publication.
 
 [^upstream-ssh-recovery]: Exact upstream source reviewed on October 12.
 
