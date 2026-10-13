@@ -2,7 +2,9 @@
 
 ## 2026-10-13
 
-- **Branch integration**: [Upstream integration](upstream-integration.md#latest-branch-sync) records local merge `801585a0bd` through upstream `5070a83a32`, with zero branch gap. Fork `main` remains at `373e85e766` with 48 incoming commits pending; Git and Jujutsu share upstream's corrected named-base behavior. No push or deployment.
+- **Integration**: [PR #46](https://github.com/NicholasZolton/t3code/pull/46) reached fork `main` at `eb4dc2fd6e`. Refreshed [upstream integration](upstream-integration.md): all 48 incoming commits through `5070a83a32` are incorporated with upstream ancestry preserved; two subsequently inspected commits through `e9221e44da` remain unmerged. Remote deployment remains separate.
+
+- **Branch integration**: [Upstream integration](upstream-integration.md) recorded local merge `801585a0bd` through upstream `5070a83a32`, with zero branch gap. At that observation, fork `main` remained at `373e85e766` with 48 incoming commits pending; Git and Jujutsu shared upstream's corrected named-base behavior. No push or deployment had occurred.
 
 ## 2026-10-12
 
