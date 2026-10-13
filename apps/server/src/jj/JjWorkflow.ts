@@ -28,7 +28,7 @@ import { makeJjRemotes } from "./JjRemotes.ts";
 import { makeJjStackedAction } from "./JjStackedAction.ts";
 import { makeJjStatus, resolveUpstreamContext, resolveWorkspaceRefName } from "./JjStatus.ts";
 import { makeJjWorkspaces } from "./JjWorkspaces.ts";
-import { refNameToRevset } from "../vcs/JjRevset.ts";
+import { refNameToRevset, splitRemoteRefName } from "../vcs/JjRevset.ts";
 import type { JjWorkspace } from "../vcs/JjVcsDriver.ts";
 import { workspaceSettings, makeWorkspaceQueries } from "../project/WorkspaceSettings.ts";
 
@@ -276,8 +276,42 @@ export const make = Effect.gen(function* () {
       recentSubjects: (historyCwd) =>
         GitManager.readRecentCommitSubjects(executeGit, historyCwd, rangeHead),
       providerCwd: paths.mainWorkspaceRoot,
-      configuredBaseRef: (configCwd, name) =>
-        readConfigValue(configCwd, `branch.${name}.gh-merge-base`),
+      configuredBaseRef: Effect.fn("JjWorkflow.configuredBaseRef")(function* (
+        configCwd: string,
+        name: string,
+      ) {
+        const configured = yield* readConfigValue(configCwd, `branch.${name}.gh-merge-base`);
+        if (!configured) return null;
+        const configuredRef = configured.replace(/^refs\/(?:heads|remotes)\//u, "");
+        const bookmarks = yield* driver
+          .listBookmarks(configCwd)
+          .pipe(
+            Effect.mapError((cause) =>
+              jjFailure(
+                "JjWorkflow.configuredBaseRef",
+                configCwd,
+                "Could not resolve the configured pull request base.",
+                cause,
+              ),
+            ),
+          );
+        const remoteRef = splitRemoteRefName(
+          configuredRef,
+          bookmarks.flatMap((bookmark) => (bookmark.remote === null ? [] : [bookmark.remote])),
+        );
+        return (
+          bookmarks.find(
+            (bookmark) =>
+              !bookmark.conflict &&
+              bookmark.target !== null &&
+              ((bookmark.name === configuredRef &&
+                (bookmark.remote === null || bookmark.remote === upstream.primaryRemote)) ||
+                (remoteRef !== null &&
+                  bookmark.remote === remoteRef.remote &&
+                  bookmark.name === remoteRef.name)),
+          )?.name ?? null
+        );
+      }),
       headContext: (configCwd, name, upstreamRef) =>
         GitManager.resolveBranchHeadContext(readConfigValue, configCwd, {
           branch: name,
