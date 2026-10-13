@@ -1,5 +1,9 @@
 # Wiki update log
 
+## 2026-10-13
+
+- **Branch integration**: [Upstream integration](upstream-integration.md#latest-branch-sync) records local merge `801585a0bd` through upstream `5070a83a32`, with zero branch gap. Fork `main` remains at `373e85e766` with 48 incoming commits pending; Git and Jujutsu share upstream's corrected named-base behavior. No push or deployment.
+
 ## 2026-10-12
 
 - **Compatibility decision**: Recorded the [Crit remote review boundary](upstream-integration.md#crit-remote-review-boundary): review-owned, tailnet-only HTTPS endpoints stay separate from the environment's persistent publication. Implemented on this branch; live deployment remains separate.
