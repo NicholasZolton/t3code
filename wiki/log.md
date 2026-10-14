@@ -1,5 +1,9 @@
 # Wiki update log
 
+## 2026-10-14
+
+- **Branch integration**: [Upstream integration](upstream-integration.md#pending-october-14-branch-sync) records local merges `24ab07ed90` and `2f17f4f635` through upstream `6002c5c68c`, with all 42 newer commits incorporated and zero branch gap. Fork `main` remains at `1a005f7db3`; upstream's web settings-write detection replaces the overlapping fork check while mobile warnings and unreplaced fork behavior remain. No push, main integration, or remote deployment has occurred.
+
 ## 2026-10-13
 
 - **Integration**: [PR #46](https://github.com/NicholasZolton/t3code/pull/46) reached fork `main` at `eb4dc2fd6e`. Refreshed [upstream integration](upstream-integration.md): all 48 incoming commits through `5070a83a32` are incorporated with upstream ancestry preserved; two subsequently inspected commits through `e9221e44da` remain unmerged. Remote deployment remains separate.

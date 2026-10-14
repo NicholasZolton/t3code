@@ -92,31 +92,22 @@ function useRunScopedPlan() {
           return persistServer(request);
         },
         persistClientSettingsPatch,
-      ).then(
-        ({ failedEnvironments, ignoredEnvironments, savedEnvironments, savedEnvironmentCount }) => {
-          if (failedEnvironments.length === 0 && ignoredEnvironments.length === 0) return;
-          toastManager.add({
-            type: "error",
-            title:
-              savedEnvironmentCount > 0
-                ? "Setting saved on some environments"
-                : "Setting not saved",
-            description: [
-              ...(ignoredEnvironments.length > 0
-                ? [
-                    `${ignoredEnvironments.map((environment) => environment.label).join(", ")} did not apply the setting. Update T3 Code there and try again.`,
-                  ]
-                : []),
-              ...failedEnvironments.map(
-                ({ label, message }) => `Could not save on ${label}: ${message}`,
-              ),
-              ...(savedEnvironmentCount > 0
-                ? [`Saved on ${savedEnvironments.map(({ label }) => label).join(", ")}.`]
-                : []),
-            ].join("\n"),
-          });
-        },
-      );
+      ).then(({ failedEnvironments, savedEnvironments, savedEnvironmentCount }) => {
+        if (failedEnvironments.length === 0) return;
+        toastManager.add({
+          type: "error",
+          title:
+            savedEnvironmentCount > 0 ? "Setting saved on some environments" : "Setting not saved",
+          description: [
+            ...failedEnvironments.map(
+              ({ label, message }) => `Could not save on ${label}: ${message}`,
+            ),
+            ...(savedEnvironmentCount > 0
+              ? [`Saved on ${savedEnvironments.map(({ label }) => label).join(", ")}.`]
+              : []),
+          ].join("\n"),
+        });
+      });
     },
     [persistServer],
   );

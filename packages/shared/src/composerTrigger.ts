@@ -102,6 +102,14 @@ export function detectComposerTrigger(
   const tokenStart = tokenIdx + 1;
 
   const token = text.slice(tokenStart, cursor);
+  if (token.startsWith("/")) {
+    return {
+      kind: "slash-command",
+      query: token.slice(1),
+      rangeStart: tokenStart,
+      rangeEnd: cursor,
+    };
+  }
   const promptMatch = SAVED_PROMPT_TRIGGER_PATTERN.exec(token);
   if (promptMatch) {
     return {
