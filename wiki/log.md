@@ -2,7 +2,9 @@
 
 ## 2026-10-14
 
-- **Branch integration**: [Upstream integration](upstream-integration.md#pending-october-14-branch-sync) records local merges `24ab07ed90` and `2f17f4f635` through upstream `6002c5c68c`, with all 42 newer commits incorporated and zero branch gap. Fork `main` remains at `1a005f7db3`; upstream's web settings-write detection replaces the overlapping fork check while mobile warnings and unreplaced fork behavior remain. No push, main integration, or remote deployment has occurred.
+- **Integration**: [PR #47](https://github.com/NicholasZolton/t3code/pull/47) reached fork `main` at `65729a4646`. Refreshed [upstream integration](upstream-integration.md): all 42 incoming commits through `6002c5c68c` are incorporated with upstream ancestry preserved and zero gap against the pinned tip. The main local checkout is fast-forwarded; remote deployment remains separate.
+
+- **Branch integration**: [Upstream integration](upstream-integration.md#completed-october-14-sync) initially recorded local merges `24ab07ed90` and `2f17f4f635` through upstream `6002c5c68c`, with all 42 newer commits incorporated and zero branch gap. At that observation, fork `main` remained at `1a005f7db3`; upstream's web settings-write detection replaced the overlapping fork check while mobile warnings and unreplaced fork behavior remained. No push, main integration, or remote deployment had occurred.
 
 ## 2026-10-13
 

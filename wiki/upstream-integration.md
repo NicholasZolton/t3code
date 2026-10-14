@@ -6,31 +6,40 @@ tags: [upstream, fork, integration]
 status: stable
 generated:
   by: opencode/gpt-6.1-sol
-  at: 2026-10-14T04:13:20Z
+  at: 2026-10-14T15:40:24+00:00
 verified:
   - by: opencode/gpt-6.1-sol
-    at: 2026-10-14T04:13:20Z
+    at: 2026-10-14T15:40:24+00:00
 snapshot:
-  at: 2026-10-14T04:13:20Z
-  fork_main: 1a005f7db369b60533d98ef63177cf03e765b50d
+  at: 2026-10-14T15:40:24+00:00
+  fork_main: 65729a46467ede150ca3b42ad34f58e9f23d027f
   upstream_main: 6002c5c68c637de2cd2557bd6c40e46c153e39b1
-  shared_baseline: 5070a83a3248c537d3baaf063e719f179c49bb52
-  last_main_integration: 801585a0bd383420165e9139e323ee67f6507a9a
-  missing_upstream_on_main: 42
+  shared_baseline: 6002c5c68c637de2cd2557bd6c40e46c153e39b1
+  last_main_integration: 2f17f4f635e021d775c0f6c1ebe030bcba0f5d55
+  missing_upstream_on_main: 0
   missing_upstream_at_integrated_tip: 0
   branch_integration: 2f17f4f635e021d775c0f6c1ebe030bcba0f5d55
   branch_parent: 0a5dafd0eb94641d642324c727ed1c9683556c43
   missing_upstream_on_branch: 0
 sources:
+  - id: october-14-main-integration
+    resource: https://github.com/NicholasZolton/t3code/pull/47
+    title: Completed October 14 upstream integration into fork main
+  - id: october-14-fork-main
+    resource: https://github.com/NicholasZolton/t3code/commit/65729a46467ede150ca3b42ad34f58e9f23d027f
+    title: Fork main after PR 47 merged with upstream ancestry preserved
+  - id: october-14-main-review-git
+    resource: "Local Git verification at 2026-10-14T15:40:24+00:00: fetched origin/main and local main both equal 65729a46467ede150ca3b42ad34f58e9f23d027f, with parents 1a005f7db369b60533d98ef63177cf03e765b50d and ba5362c81a1082db1eac60f0d666ea8380474d7c. Both upstream merges 24ab07ed900d70c4fac0e06c58262d818e202753 and 2f17f4f635e021d775c0f6c1ebe030bcba0f5d55 are ancestors of main. The shared baseline equals upstream 6002c5c68c637de2cd2557bd6c40e46c153e39b1, with all 42 incoming commits incorporated and zero missing upstream commits. PR 47 merged at 2026-10-14T15:39:28Z."
+    title: Completed main ancestry checks against the pinned upstream tip
   - id: october-14-branch-integration
-    resource: "Local Git objects 24ab07ed900d70c4fac0e06c58262d818e202753 and 2f17f4f635e021d775c0f6c1ebe030bcba0f5d55 on NicholasZolton/merge-upstream-changes, not yet pushed or merged into main"
-    title: Ancestry-preserving branch integration through 6002c5c68c
+    resource: https://github.com/NicholasZolton/t3code/commit/2f17f4f635e021d775c0f6c1ebe030bcba0f5d55
+    title: Ancestry-preserving integration through 6002c5c68c, now incorporated into main
   - id: october-14-review-git
     resource: "Local Git verification at 2026-10-14T04:13:20Z: fetched origin/main 1a005f7db369b60533d98ef63177cf03e765b50d and upstream/main 6002c5c68c637de2cd2557bd6c40e46c153e39b1 share baseline 5070a83a3248c537d3baaf063e719f179c49bb52, with 42 missing upstream commits on main. Initial merge 24ab07ed900d70c4fac0e06c58262d818e202753 has fork main and upstream 11fd54fcbbfb39f824bb4c908d428c20d801267c as parents. Follow-up merge 2f17f4f635e021d775c0f6c1ebe030bcba0f5d55 has branch parent 0a5dafd0eb94641d642324c727ed1c9683556c43 and upstream 6002c5c68c637de2cd2557bd6c40e46c153e39b1 as parents, contains the initial merge, and has zero missing upstream commits. Of 115 incoming paths without prior fork changes, 114 are byte-identical to upstream; the only exception uses GITHUB_EVENT_PATH in the webhook workflow. Both web scoped-settings implementation paths now match upstream exactly. SSH recovery, OpenCode child execution tracking, and the bundled model manifest are unchanged in the incoming range."
-    title: Verified branch boundary and upstream-first resolutions, separate from main integration
+    title: Initial branch boundary and upstream-first resolutions before main integration
   - id: october-14-upstream
     resource: https://github.com/pingdotgg/t3code/commit/6002c5c68c637de2cd2557bd6c40e46c153e39b1
-    title: Pinned upstream tip for the pending branch integration
+    title: Pinned upstream tip for the completed October 14 integration
   - id: october-13-main-integration
     resource: https://github.com/NicholasZolton/t3code/pull/46
     title: Completed October 13 upstream integration into fork main
@@ -194,17 +203,23 @@ sources:
 
 # Upstream integration
 
-**The newest sync is local to the branch, not merged into fork `main`.** Merge
-`2f17f4f635` incorporates all 42 incoming commits through upstream `6002c5c68c`,
-with upstream ancestry preserved and zero branch gap. Fetched fork `main` remains
-at `1a005f7db3`, containing the completed PR #46 integration through `5070a83a32`
-but none of those 42 newer commits.[^october-14-review-git]
+**The newest sync is merged into fork `main`.** [PR #47](https://github.com/NicholasZolton/t3code/pull/47)
+landed at `65729a4646`, incorporating all 42 incoming commits through upstream
+`6002c5c68c` with upstream ancestry preserved and zero remaining main gap.
+The main local checkout is fast-forwarded to the same revision.
+[^october-14-main-review-git]
 
 This is a revision-pinned snapshot, not a claim about newer upstream work.
 Refresh it after the next review or integration using the
 [maintenance guidance](maintenance.md).
 
-## Pending October 14 branch sync
+## Completed October 14 sync
+
+[PR #47](https://github.com/NicholasZolton/t3code/pull/47) merged on October 14,
+2026, at 15:39:28 UTC. Its landing commit `65729a46467ede150ca3b42ad34f58e9f23d027f`
+preserves previous fork `main` `1a005f7db369b60533d98ef63177cf03e765b50d` and
+integrated branch tip `ba5362c81a1082db1eac60f0d666ea8380474d7c` as parents.
+[^october-14-main-integration][^october-14-fork-main]
 
 Merge `24ab07ed900d70c4fac0e06c58262d818e202753` preserves fork parent
 `1a005f7db369b60533d98ef63177cf03e765b50d` and upstream parent
@@ -212,8 +227,9 @@ Merge `24ab07ed900d70c4fac0e06c58262d818e202753` preserves fork parent
 `2f17f4f635e021d775c0f6c1ebe030bcba0f5d55`, with branch parent
 `0a5dafd0eb94641d642324c727ed1c9683556c43` and upstream parent
 `6002c5c68c637de2cd2557bd6c40e46c153e39b1`, includes the usage-source label fix
-published during final validation. Both merges are local candidates; pushing,
-main integration, and remote deployment are separate.[^october-14-branch-integration][^october-14-upstream]
+published during final validation. Both merges are incorporated into fork `main`;
+the sync was not squashed. Main integration is not a remote deployment.
+[^october-14-branch-integration][^october-14-main-review-git][^october-14-upstream]
 
 Upstream's generic dropped-settings detection replaces the fork's web worktree-only
 check and separate ignored-write result. Both web implementation paths now match
@@ -230,7 +246,7 @@ unchanged except for using the runner's `GITHUB_EVENT_PATH` instead of shell-tem
 interpolation in the webhook workflow; the imported retry behavior is unchanged.
 [^october-14-review-git]
 
-## Latest completed main sync
+## October 13 main sync
 
 [PR #46](https://github.com/NicholasZolton/t3code/pull/46) merged on October 13,
 2026, at 05:38:02 UTC, landing at `eb4dc2fd6e`.
@@ -255,9 +271,9 @@ Preserve those exceptions and the other unreplaced fork behavior.
 [^october-13-upstream][^upstream-ssh-recovery]
 
 The active-tool collection optimization (`540a3e89ed`) and pace-icon alignment
-fix (`e9221e44da`) were excluded from PR #46. They are now included in the pending
-October 14 branch sync, not yet in fork `main`.
-[^october-13-newer-upstream][^october-14-review-git]
+fix (`e9221e44da`) were excluded from PR #46. They are now included in the completed
+October 14 sync on fork `main`.
+[^october-13-newer-upstream][^october-14-main-review-git]
 
 ## October 12 main sync
 
@@ -628,8 +644,14 @@ git log --reverse --oneline origin/main..upstream/main
 
 [^shared-pr-workflow]: Shared change-request step with backend-specific saved-base normalization.
 
-[^october-14-branch-integration]: Local upstream merges and their exact fork and upstream parents; not a completed main integration.
+[^october-14-main-integration]: PR #47 and its recorded merge time.
 
-[^october-14-review-git]: Verified current main gap, zero branch gap, preserved compatibility exceptions, and upstream-first conflict resolutions.
+[^october-14-fork-main]: PR landing commit retaining upstream ancestry.
 
-[^october-14-upstream]: Exact upstream revision incorporated into the pending branch sync.
+[^october-14-main-review-git]: Completed main ancestry checks, exact revisions and parents, and zero gap against the pinned upstream tip.
+
+[^october-14-branch-integration]: Upstream integration merges and their exact parents, now incorporated into main.
+
+[^october-14-review-git]: Initial pre-integration main gap, zero branch gap, preserved compatibility exceptions, and upstream-first conflict resolutions.
+
+[^october-14-upstream]: Exact upstream revision incorporated into the completed October 14 sync.
