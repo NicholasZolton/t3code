@@ -2,7 +2,7 @@
 
 ## 2026-10-14
 
-- **Branch integration**: [Upstream integration](upstream-integration.md#pending-october-14-branch-sync) records local merge `24ab07ed90` through upstream `11fd54fcbb`, with all 41 newer commits incorporated and zero branch gap. Fork `main` remains at `1a005f7db3`; upstream's web settings-write detection replaces the overlapping fork check while mobile warnings and unreplaced fork behavior remain. No push, main integration, or remote deployment has occurred.
+- **Branch integration**: [Upstream integration](upstream-integration.md#pending-october-14-branch-sync) records local merges `24ab07ed90` and `2f17f4f635` through upstream `6002c5c68c`, with all 42 newer commits incorporated and zero branch gap. Fork `main` remains at `1a005f7db3`; upstream's web settings-write detection replaces the overlapping fork check while mobile warnings and unreplaced fork behavior remain. No push, main integration, or remote deployment has occurred.
 
 ## 2026-10-13
 

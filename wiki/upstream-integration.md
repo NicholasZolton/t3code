@@ -6,29 +6,30 @@ tags: [upstream, fork, integration]
 status: stable
 generated:
   by: opencode/gpt-6.1-sol
-  at: 2026-10-14T04:08:54Z
+  at: 2026-10-14T04:13:20Z
 verified:
   - by: opencode/gpt-6.1-sol
-    at: 2026-10-14T04:08:54Z
+    at: 2026-10-14T04:13:20Z
 snapshot:
-  at: 2026-10-14T04:08:54Z
+  at: 2026-10-14T04:13:20Z
   fork_main: 1a005f7db369b60533d98ef63177cf03e765b50d
-  upstream_main: 11fd54fcbbfb39f824bb4c908d428c20d801267c
+  upstream_main: 6002c5c68c637de2cd2557bd6c40e46c153e39b1
   shared_baseline: 5070a83a3248c537d3baaf063e719f179c49bb52
   last_main_integration: 801585a0bd383420165e9139e323ee67f6507a9a
-  missing_upstream_on_main: 41
+  missing_upstream_on_main: 42
   missing_upstream_at_integrated_tip: 0
-  branch_integration: 24ab07ed900d70c4fac0e06c58262d818e202753
+  branch_integration: 2f17f4f635e021d775c0f6c1ebe030bcba0f5d55
+  branch_parent: 0a5dafd0eb94641d642324c727ed1c9683556c43
   missing_upstream_on_branch: 0
 sources:
   - id: october-14-branch-integration
-    resource: "Local Git object 24ab07ed900d70c4fac0e06c58262d818e202753 on NicholasZolton/merge-upstream-changes, not yet pushed or merged into main"
-    title: Ancestry-preserving branch integration through 11fd54fcbb
+    resource: "Local Git objects 24ab07ed900d70c4fac0e06c58262d818e202753 and 2f17f4f635e021d775c0f6c1ebe030bcba0f5d55 on NicholasZolton/merge-upstream-changes, not yet pushed or merged into main"
+    title: Ancestry-preserving branch integration through 6002c5c68c
   - id: october-14-review-git
-    resource: "Local Git verification at 2026-10-14T04:08:54Z: fetched origin/main 1a005f7db369b60533d98ef63177cf03e765b50d and upstream/main 11fd54fcbbfb39f824bb4c908d428c20d801267c share baseline 5070a83a3248c537d3baaf063e719f179c49bb52, with 41 missing upstream commits on main. Merge 24ab07ed900d70c4fac0e06c58262d818e202753 has those exact fork and upstream tips as parents, contains both, and has zero missing upstream commits. Of 113 incoming paths without prior fork changes, 112 are byte-identical to upstream; the only exception uses GITHUB_EVENT_PATH in the webhook workflow. Both web scoped-settings implementation paths now match upstream exactly. SSH recovery, OpenCode child execution tracking, and the bundled model manifest are unchanged in the incoming range."
+    resource: "Local Git verification at 2026-10-14T04:13:20Z: fetched origin/main 1a005f7db369b60533d98ef63177cf03e765b50d and upstream/main 6002c5c68c637de2cd2557bd6c40e46c153e39b1 share baseline 5070a83a3248c537d3baaf063e719f179c49bb52, with 42 missing upstream commits on main. Initial merge 24ab07ed900d70c4fac0e06c58262d818e202753 has fork main and upstream 11fd54fcbbfb39f824bb4c908d428c20d801267c as parents. Follow-up merge 2f17f4f635e021d775c0f6c1ebe030bcba0f5d55 has branch parent 0a5dafd0eb94641d642324c727ed1c9683556c43 and upstream 6002c5c68c637de2cd2557bd6c40e46c153e39b1 as parents, contains the initial merge, and has zero missing upstream commits. Of 115 incoming paths without prior fork changes, 114 are byte-identical to upstream; the only exception uses GITHUB_EVENT_PATH in the webhook workflow. Both web scoped-settings implementation paths now match upstream exactly. SSH recovery, OpenCode child execution tracking, and the bundled model manifest are unchanged in the incoming range."
     title: Verified branch boundary and upstream-first resolutions, separate from main integration
   - id: october-14-upstream
-    resource: https://github.com/pingdotgg/t3code/commit/11fd54fcbbfb39f824bb4c908d428c20d801267c
+    resource: https://github.com/pingdotgg/t3code/commit/6002c5c68c637de2cd2557bd6c40e46c153e39b1
     title: Pinned upstream tip for the pending branch integration
   - id: october-13-main-integration
     resource: https://github.com/NicholasZolton/t3code/pull/46
@@ -133,7 +134,7 @@ sources:
     resource: https://github.com/pingdotgg/t3code/blob/65731f986ba2175063b0182deb6a143f8f323b74/packages/contracts/src/environment.ts
     title: Orchestration wire protocol version 2
   - id: upstream-current-manifest
-    resource: https://github.com/pingdotgg/t3code/blob/11fd54fcbbfb39f824bb4c908d428c20d801267c/apps/server/src/provider/model-manifest.json
+    resource: https://github.com/pingdotgg/t3code/blob/6002c5c68c637de2cd2557bd6c40e46c153e39b1/apps/server/src/provider/model-manifest.json
     title: OpenCode version policy at the reviewed upstream tip
   - id: main-integration
     resource: https://github.com/NicholasZolton/t3code/pull/27
@@ -175,7 +176,7 @@ sources:
     resource: ../packages/ssh/src/tunnel.ts
     title: Fork-side SSH recovery implementation, unchanged by the latest upstream range
   - id: upstream-ssh-recovery
-    resource: https://github.com/pingdotgg/t3code/blob/11fd54fcbbfb39f824bb4c908d428c20d801267c/packages/ssh/src/tunnel.ts
+    resource: https://github.com/pingdotgg/t3code/blob/6002c5c68c637de2cd2557bd6c40e46c153e39b1/packages/ssh/src/tunnel.ts
     title: Upstream SSH recovery remains unchanged at the latest reviewed tip
   - id: ssh-recovery-issue
     resource: https://github.com/pingdotgg/t3code/issues/15608
@@ -194,10 +195,10 @@ sources:
 # Upstream integration
 
 **The newest sync is local to the branch, not merged into fork `main`.** Merge
-`24ab07ed90` incorporates all 41 incoming commits through upstream `11fd54fcbb`,
+`2f17f4f635` incorporates all 42 incoming commits through upstream `6002c5c68c`,
 with upstream ancestry preserved and zero branch gap. Fetched fork `main` remains
 at `1a005f7db3`, containing the completed PR #46 integration through `5070a83a32`
-but none of those 41 newer commits.[^october-14-review-git]
+but none of those 42 newer commits.[^october-14-review-git]
 
 This is a revision-pinned snapshot, not a claim about newer upstream work.
 Refresh it after the next review or integration using the
@@ -207,7 +208,11 @@ Refresh it after the next review or integration using the
 
 Merge `24ab07ed900d70c4fac0e06c58262d818e202753` preserves fork parent
 `1a005f7db369b60533d98ef63177cf03e765b50d` and upstream parent
-`11fd54fcbbfb39f824bb4c908d428c20d801267c`. It is a local candidate; pushing,
+`11fd54fcbbfb39f824bb4c908d428c20d801267c`. Follow-up merge
+`2f17f4f635e021d775c0f6c1ebe030bcba0f5d55`, with branch parent
+`0a5dafd0eb94641d642324c727ed1c9683556c43` and upstream parent
+`6002c5c68c637de2cd2557bd6c40e46c153e39b1`, includes the usage-source label fix
+published during final validation. Both merges are local candidates; pushing,
 main integration, and remote deployment are separate.[^october-14-branch-integration][^october-14-upstream]
 
 Upstream's generic dropped-settings detection replaces the fork's web worktree-only
@@ -419,7 +424,7 @@ the bundled OpenCode policy. Older 2.x versions are outside the supported baseli
 [^upstream-current-manifest][^reviewed-upstream-main]
 
 Reused OpenCode child sessions still need fork admission and execution tracking.
-At `11fd54fcbb`, parent reports identify the child session but not the individual
+At `6002c5c68c`, parent reports identify the child session but not the individual
 execution. Once a child is reused, ambiguous reports must not attach stale results
 or settle the new call; observed execution can settle it without a result. Preserve
 this safeguard until upstream can attribute reports to individual runs.
@@ -469,7 +474,7 @@ killing it or launching a competing server against the same T3 home. Explicit
 Disconnect, desktop shutdown, and requested runner changes retain their existing
 behavior.[^ssh-recovery]
 
-At the latest review, upstream `11fd54fcbb` still has both destructive
+At the latest review, upstream `6002c5c68c` still has both destructive
 recovery paths reported in issue #15608. Preserve this boundary during later syncs
 unless upstream supplies equivalent recovery behavior.[^upstream-ssh-recovery][^ssh-recovery-issue]
 
@@ -511,7 +516,7 @@ git merge-base --is-ancestor ab7e864a1a origin/main
 git merge-base --is-ancestor 2bc0f73832 origin/main
 git merge-base --is-ancestor eec69e1928 origin/main
 git merge-base --is-ancestor 801585a0bd origin/main
-git merge-base --is-ancestor 24ab07ed90 origin/main
+git merge-base --is-ancestor 2f17f4f635 origin/main
 git merge-base --is-ancestor a8df093eb6 origin/main
 git rev-list --count origin/main..upstream/main
 git log --reverse --oneline origin/main..upstream/main
@@ -623,7 +628,7 @@ git log --reverse --oneline origin/main..upstream/main
 
 [^shared-pr-workflow]: Shared change-request step with backend-specific saved-base normalization.
 
-[^october-14-branch-integration]: Local upstream merge and its exact fork and upstream parents; not a completed main integration.
+[^october-14-branch-integration]: Local upstream merges and their exact fork and upstream parents; not a completed main integration.
 
 [^october-14-review-git]: Verified current main gap, zero branch gap, preserved compatibility exceptions, and upstream-first conflict resolutions.
 
