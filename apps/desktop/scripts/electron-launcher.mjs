@@ -281,6 +281,8 @@ function patchMainBundleInfoPlist(appBundlePath, iconPath, executableName) {
     setPlistString(infoPlistPath, key, value);
   }
   setPlistJson(infoPlistPath, "ApplePressAndHoldEnabled", false);
+  // macOS 26 offers Messages/Mail codes in every text field unless opted out.
+  setPlistJson(infoPlistPath, "NSAutoFillRequiresTextContentTypeForOneTimeCodeOnMac", true);
   setPlistJson(infoPlistPath, "CFBundleURLTypes", [
     {
       CFBundleURLName: APP_BUNDLE_ID,
