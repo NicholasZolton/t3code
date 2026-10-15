@@ -26,6 +26,7 @@ import { inspectWorkspaceFiles } from "../vcs/WorkspaceFileSafety.ts";
 import { T3_PROJECT_FILE_NAME } from "@t3tools/contracts";
 import { parseT3ProjectFile } from "@t3tools/shared/t3ProjectFile";
 import { resolveProjectFileBackedSetting } from "@t3tools/shared/projectSettings";
+import { JJ_WORKING_COPY_REVISION } from "@t3tools/shared/vcs";
 
 export { isT3WorkspaceName, workspaceNameForRef } from "./JjWorkspaceNaming.ts";
 const WORKSPACE_ADD_TIMEOUT_MS = 300_000;
@@ -137,9 +138,18 @@ export const makeJjWorkspaces = (deps: JjWorkspaceOpsDeps): JjWorkspaceOps => {
         });
       }
       const baseRef = remoteBase?.name ?? input.refName;
+      // Snapshot @ at provisioning time so initial files come along without a base bookmark.
       const baseRevset =
-        remoteBase === null ? refNameToRevset(baseRef, []) : localBookmarkRevset(baseRef);
-      const targetRef = input.newRefName ?? baseRef;
+        baseRef === JJ_WORKING_COPY_REVISION
+          ? (yield* driver
+              .currentChange(input.cwd)
+              .pipe(mapJjFailure(operation, input.cwd, "Could not snapshot the working copy.")))
+              .commitId
+          : remoteBase === null
+            ? refNameToRevset(baseRef, [])
+            : localBookmarkRevset(baseRef);
+      const targetRef =
+        input.newRefName ?? (baseRef === JJ_WORKING_COPY_REVISION ? baseRevset : baseRef);
       const targetRevset =
         input.newRefName === undefined ? baseRevset : localBookmarkRevset(targetRef);
       const workspaceName = workspaceNameForRef(targetRef);
@@ -348,7 +358,7 @@ export const makeJjWorkspaces = (deps: JjWorkspaceOpsDeps): JjWorkspaceOps => {
       );
 
       const baseRefNameForConfig =
-        input.baseRefName === undefined
+        input.baseRefName === undefined || input.baseRefName === JJ_WORKING_COPY_REVISION
           ? undefined
           : (splitRemoteRefName(input.baseRefName, remoteNames)?.name ?? input.baseRefName);
       yield* writeWorktreeGitConfig({

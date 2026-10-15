@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { JJ_VCS_TERMINOLOGY } from "@t3tools/shared/vcs";
+import { JJ_VCS_TERMINOLOGY, JJ_WORKING_COPY_REVISION } from "@t3tools/shared/vcs";
 
 import {
   filterNewTaskBranches,
@@ -109,6 +109,17 @@ describe("resolveNewTaskBranchWorktreePath", () => {
 });
 
 describe("resolveNewTaskBranchLabel", () => {
+  it("labels the working-copy base without applying the origin default", () => {
+    expect(
+      resolveNewTaskBranchLabel({
+        branchName: JJ_WORKING_COPY_REVISION,
+        startFromOrigin: true,
+        workspaceMode: "worktree",
+        terminology: JJ_VCS_TERMINOLOGY,
+      }),
+    ).toBe("From current working copy");
+  });
+
   it("identifies a deferred PR checkout independently of the origin default", () => {
     expect(
       resolveNewTaskBranchLabel({

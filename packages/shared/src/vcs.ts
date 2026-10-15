@@ -1,5 +1,21 @@
 import type { VcsDriverKind, VcsStatusLocalResult } from "@t3tools/contracts";
 
+/** A jj revision used only as a workspace base, never a named bookmark. */
+export const JJ_WORKING_COPY_REVISION = "@";
+export const JJ_WORKING_COPY_LABEL = "Current working copy";
+
+export function resolveWorktreeBaseRef(input: {
+  readonly defaultRef: string | null;
+  readonly currentRef: string | null;
+  readonly vcsKind: VcsDriverKind | undefined;
+}): string | null {
+  return (
+    input.defaultRef ??
+    input.currentRef ??
+    (input.vcsKind === "jj" ? JJ_WORKING_COPY_REVISION : null)
+  );
+}
+
 export interface VcsTerminology {
   readonly systemName: string;
   readonly refNoun: string;

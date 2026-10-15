@@ -1,4 +1,9 @@
-import { DEFAULT_VCS_TERMINOLOGY, type VcsTerminology } from "@t3tools/shared/vcs";
+import {
+  DEFAULT_VCS_TERMINOLOGY,
+  JJ_WORKING_COPY_LABEL,
+  JJ_WORKING_COPY_REVISION,
+  type VcsTerminology,
+} from "@t3tools/shared/vcs";
 import { AppActivityIndicator } from "../../components/AppActivityIndicator";
 import { MaterialListRow } from "../../components/MaterialListRow";
 import type { EnvironmentProject } from "@t3tools/client-runtime/state/shell";
@@ -377,6 +382,17 @@ export function NewTaskBranchPickerRouteScreen() {
       onLoadMore={flow.loadMoreBranches}
       selectionDisabled={switchingBranchName !== null}
       onSelect={selectBranch}
+      workingCopy={
+        flow.canSelectWorkingCopy
+          ? {
+              onSelect: () => {
+                flow.selectWorkingCopy();
+                flow.setBranchQuery("");
+                navigation.goBack();
+              },
+            }
+          : undefined
+      }
       worktree={
         flow.workspaceMode === "worktree"
           ? {
@@ -406,6 +422,7 @@ export function BranchPickerScreen(props: {
   readonly onLoadMore: () => void;
   readonly selectionDisabled?: boolean;
   readonly onSelect: (branch: VcsRef) => void;
+  readonly workingCopy?: { readonly onSelect: () => void } | undefined;
   readonly worktree?: {
     readonly startFromOrigin: boolean;
     readonly onChangeStartFromOrigin: (value: boolean) => void;
@@ -454,20 +471,38 @@ export function BranchPickerScreen(props: {
     ],
   );
 
-  const branchListHeader = props.worktree ? (
-    <View
-      className={cn(
-        "mb-3 overflow-hidden",
-        Platform.OS === "android" ? "rounded-[28px]" : "rounded-2xl",
-      )}
-    >
-      <ToggleRow
-        onValueChange={props.worktree.onChangeStartFromOrigin}
-        title="Start from origin"
-        value={props.worktree.startFromOrigin}
-      />
-    </View>
-  ) : null;
+  const showWorkingCopy =
+    props.workingCopy !== undefined &&
+    JJ_WORKING_COPY_LABEL.toLowerCase().includes(props.query.trim().toLowerCase());
+  const branchListHeader = (
+    <>
+      {showWorkingCopy ? (
+        <View className="mb-3 overflow-hidden rounded-2xl">
+          <SelectionRow
+            title={JJ_WORKING_COPY_LABEL}
+            selected={selectedBranchName === JJ_WORKING_COPY_REVISION}
+            disabled={props.selectionDisabled}
+            onPress={() => props.workingCopy?.onSelect()}
+            isLast
+          />
+        </View>
+      ) : null}
+      {props.worktree && selectedBranchName !== JJ_WORKING_COPY_REVISION ? (
+        <View
+          className={cn(
+            "mb-3 overflow-hidden",
+            Platform.OS === "android" ? "rounded-[28px]" : "rounded-2xl",
+          )}
+        >
+          <ToggleRow
+            onValueChange={props.worktree.onChangeStartFromOrigin}
+            title="Start from origin"
+            value={props.worktree.startFromOrigin}
+          />
+        </View>
+      ) : null}
+    </>
+  );
 
   const branchContent =
     props.branches.length === 0 ? (

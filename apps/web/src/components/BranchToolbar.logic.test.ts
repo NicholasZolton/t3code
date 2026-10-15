@@ -1,4 +1,8 @@
-import { GIT_VCS_TERMINOLOGY, JJ_VCS_TERMINOLOGY } from "@t3tools/shared/vcs";
+import {
+  GIT_VCS_TERMINOLOGY,
+  JJ_VCS_TERMINOLOGY,
+  JJ_WORKING_COPY_REVISION,
+} from "@t3tools/shared/vcs";
 import { EnvironmentId, type VcsRef } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 import {
@@ -182,6 +186,27 @@ describe("resolveBranchToolbarValue", () => {
 });
 
 describe("resolveBranchTriggerLabel", () => {
+  it("labels the working-copy base without applying the origin default", () => {
+    expect(
+      resolveBranchTriggerLabel({
+        activeWorktreePath: null,
+        effectiveEnvMode: "worktree",
+        resolvedActiveBranch: JJ_WORKING_COPY_REVISION,
+        resolvedActiveBranchIsRemote: false,
+        startFromOrigin: true,
+        terminology: JJ_VCS_TERMINOLOGY,
+      }),
+    ).toBe("From current working copy");
+    expect(
+      shouldIncludeBranchPickerItem({
+        itemValue: JJ_WORKING_COPY_REVISION,
+        normalizedQuery: "working copy",
+        createBranchItemValue: null,
+        checkoutPullRequestItemValue: null,
+      }),
+    ).toBe(true);
+  });
+
   it("names the empty state with the project's ref noun", () => {
     const input = {
       activeWorktreePath: null,

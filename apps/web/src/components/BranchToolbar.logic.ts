@@ -8,7 +8,12 @@ import type {
 import * as Schema from "effect/Schema";
 import { sanitizeNewRefName } from "@t3tools/shared/git";
 import { scoreSearchFields } from "@t3tools/shared/searchRanking";
-import { DEFAULT_VCS_TERMINOLOGY, type VcsTerminology } from "@t3tools/shared/vcs";
+import {
+  DEFAULT_VCS_TERMINOLOGY,
+  JJ_WORKING_COPY_LABEL,
+  JJ_WORKING_COPY_REVISION,
+  type VcsTerminology,
+} from "@t3tools/shared/vcs";
 import { toSortableTimestamp } from "../lib/threadSort";
 export {
   dedupeRemoteBranchesWithLocalMatches,
@@ -253,6 +258,9 @@ export function resolveBranchTriggerLabel(input: {
     return `Select ${terminology.refNoun}`;
   }
   if (effectiveEnvMode === "worktree" && !activeWorktreePath) {
+    if (resolvedActiveBranch === JJ_WORKING_COPY_REVISION) {
+      return `From ${JJ_WORKING_COPY_LABEL.toLowerCase()}`;
+    }
     const baseRef =
       startFromOrigin && resolvedActiveBranchIsRemote === false
         ? `origin/${resolvedActiveBranch}`
@@ -334,7 +342,10 @@ export function shouldIncludeBranchPickerItem(input: {
     return true;
   }
 
-  const lowerItemValue = itemValue.toLowerCase();
+  const lowerItemValue =
+    itemValue === JJ_WORKING_COPY_REVISION
+      ? JJ_WORKING_COPY_LABEL.toLowerCase()
+      : itemValue.toLowerCase();
   if (scoreSearchFields([lowerItemValue], normalizedQuery) !== null) {
     return true;
   }

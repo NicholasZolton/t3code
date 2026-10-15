@@ -37,7 +37,12 @@ import { useOpenPrLink } from "../lib/openPullRequestLink";
 import { usePaginatedBranches } from "../state/queries";
 import { useProject, useThreadShell } from "../state/entities";
 import { useEnvironmentQuery } from "../state/query";
-import { resolveVcsTerminology } from "@t3tools/shared/vcs";
+import {
+  JJ_WORKING_COPY_LABEL,
+  JJ_WORKING_COPY_REVISION,
+  resolveVcsTerminology,
+  resolveWorktreeBaseRef,
+} from "@t3tools/shared/vcs";
 import { readEnvironmentScope, useEnvironmentScope } from "~/state/session";
 import { threadEnvironment } from "../state/threads";
 import { useAtomCommand } from "../state/use-atom-command";
@@ -293,6 +298,10 @@ export function BranchToolbarBranchSelector({
   const prReference = parsePullRequestReference(trimmedBranchQuery);
   const isSelectingWorktreeBase =
     effectiveEnvMode === "worktree" && !envLocked && !activeWorktreePath;
+  const canSelectWorkingCopy =
+    isSelectingWorktreeBase &&
+    branchStatusQuery.data?.vcs?.kind === "jj" &&
+    !branchStatusQuery.data.vcs.unsupportedReason;
   const checkoutPullRequestItemValue =
     canChangeThreadBranch && prReference && onCheckoutPullRequestRequest
       ? `__checkout_pull_request__:${prReference}`
@@ -308,7 +317,7 @@ export function BranchToolbarBranchSelector({
     ? `__create_new_branch__:${trimmedBranchQuery}`
     : null;
   const branchPickerItems = useMemo(() => {
-    const items = [...branchNames];
+    const items = [...(canSelectWorkingCopy ? [JJ_WORKING_COPY_REVISION] : []), ...branchNames];
     if (createBranchItemValue && !hasExactBranchMatch) {
       items.push(createBranchItemValue);
     }
@@ -316,7 +325,13 @@ export function BranchToolbarBranchSelector({
       items.unshift(checkoutPullRequestItemValue);
     }
     return items;
-  }, [branchNames, checkoutPullRequestItemValue, createBranchItemValue, hasExactBranchMatch]);
+  }, [
+    branchNames,
+    canSelectWorkingCopy,
+    checkoutPullRequestItemValue,
+    createBranchItemValue,
+    hasExactBranchMatch,
+  ]);
   const filteredBranchPickerItems = useMemo(
     () =>
       normalizedDeferredBranchQuery.length === 0
@@ -343,7 +358,9 @@ export function BranchToolbarBranchSelector({
   const listedActiveBranch =
     resolvedActiveBranch === null ? null : (branchByName.get(resolvedActiveBranch) ?? null);
   const activeBranchRefQuery = useEnvironmentQuery(
-    branchCwd !== null && resolvedActiveBranch !== null
+    branchCwd !== null &&
+      resolvedActiveBranch !== null &&
+      resolvedActiveBranch !== JJ_WORKING_COPY_REVISION
       ? vcsEnvironment.listRefs({
           environmentId,
           input: {
@@ -546,7 +563,11 @@ export function BranchToolbarBranchSelector({
   );
   const worktreeBaseBranchCandidate = isInitialBranchesLoadPending
     ? null
-    : (defaultBranchName ?? currentGitBranch);
+    : resolveWorktreeBaseRef({
+        defaultRef: defaultBranchName,
+        currentRef: currentGitBranch,
+        vcsKind: canSelectWorkingCopy ? "jj" : undefined,
+      });
 
   // A started thread's server is creating its worktree and records the branch
   // itself; defaulting it here would reset the thread to the base checkout and
@@ -571,6 +592,12 @@ export function BranchToolbarBranchSelector({
     threadStarted,
     worktreeBaseBranchCandidate,
   ]);
+
+  useEffect(() => {
+    if (effectiveEnvMode === "local" && activeThreadBranch === JJ_WORKING_COPY_REVISION) {
+      setThreadBranch(currentGitBranch, activeWorktreePath, true);
+    }
+  }, [activeThreadBranch, activeWorktreePath, currentGitBranch, effectiveEnvMode, setThreadBranch]);
 
   // ---------------------------------------------------------------------------
   // Combobox / list plumbing
@@ -639,6 +666,12 @@ export function BranchToolbarBranchSelector({
       : `#${prNumber}${displayedPr?.title.trim() ? `: ${displayedPr.title}` : ""}`;
 
   function selectPickerItem(itemValue: string) {
+    if (itemValue === JJ_WORKING_COPY_REVISION && canSelectWorkingCopy && canUpdateThreadBranch) {
+      setThreadBranch(JJ_WORKING_COPY_REVISION, null);
+      handleOpenChange(false);
+      onComposerFocusRequest?.();
+      return;
+    }
     if (itemValue === checkoutPullRequestItemValue && prReference && onCheckoutPullRequestRequest) {
       handleOpenChange(false);
       onComposerFocusRequest?.();
@@ -652,6 +685,19 @@ export function BranchToolbarBranchSelector({
   }
 
   function renderPickerItem(itemValue: string, index: number) {
+    if (itemValue === JJ_WORKING_COPY_REVISION && canSelectWorkingCopy) {
+      return (
+        <ComboboxItem
+          key={itemValue}
+          index={index}
+          value={itemValue}
+          disabled={!canUpdateThreadBranch}
+          onClick={() => selectPickerItem(itemValue)}
+        >
+          {JJ_WORKING_COPY_LABEL}
+        </ComboboxItem>
+      );
+    }
     if (checkoutPullRequestItemValue && itemValue === checkoutPullRequestItemValue) {
       return (
         <ComboboxItem
@@ -741,7 +787,7 @@ export function BranchToolbarBranchSelector({
             : "branch"
       }
       originControl={
-        isSelectingWorktreeBase
+        isSelectingWorktreeBase && resolvedActiveBranch !== JJ_WORKING_COPY_REVISION
           ? { checked: startFromOrigin, onCheckedChange: onStartFromOriginChange }
           : undefined
       }

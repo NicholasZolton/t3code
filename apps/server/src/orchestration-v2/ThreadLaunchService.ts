@@ -22,6 +22,7 @@ import {
 import * as Cause from "effect/Cause";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
+import { JJ_WORKING_COPY_REVISION } from "@t3tools/shared/vcs";
 import * as Exit from "effect/Exit";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
@@ -409,6 +410,7 @@ const make = Effect.gen(function* () {
         // remote branch fall back to the local base branch.
         const startFromOrigin =
           input.workspaceStrategy.startFromOrigin === true &&
+          input.workspaceStrategy.baseRef !== JJ_WORKING_COPY_REVISION &&
           (yield* git
             .remoteExists({ cwd: project.workspaceRoot, remoteName: "origin" })
             .pipe(Effect.mapError(mapError(input, "provision-worktree", threadId))));

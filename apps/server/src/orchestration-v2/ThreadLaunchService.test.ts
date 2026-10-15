@@ -8,6 +8,7 @@ import * as ServerConfig from "../config.ts";
 import { createPendingAttachmentId, resolveAttachmentPath } from "../attachmentStore.ts";
 import * as ThreadMessageIntake from "./ThreadMessageIntake.ts";
 import { assert, it, vi } from "@effect/vitest";
+import { JJ_WORKING_COPY_REVISION } from "@t3tools/shared/vcs";
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import {
   ORCHESTRATION_V2_WORKSPACE_PREPARATION_FAILURE_CODE,
@@ -1326,6 +1327,38 @@ it.effect("renames a temporary branch on an existing worktree to a generated nam
     }).pipe(Effect.provide(harness.layer));
   }),
 );
+
+it.effect("keeps a working-copy base local despite the start-from-origin default", () => {
+  const fetchRemote = vi.fn(() => Effect.die("Working-copy bases must not fetch a remote."));
+  const harness = makeHarness({ fetchRemote });
+  return Effect.gen(function* () {
+    const launches = yield* ThreadLaunch.ThreadLaunchService;
+    const threads = yield* ThreadManagement.ThreadManagementService;
+    const launched = yield* launches.launch(
+      launchInput({
+        command: "command:launch:working-copy",
+        thread: "thread:launch:working-copy",
+        message: "Start a bookmarkless project",
+        workspace: {
+          type: "worktree",
+          baseRef: JJ_WORKING_COPY_REVISION,
+          startFromOrigin: true,
+        },
+      }),
+    );
+    yield* threads.streamStoredEventsFrom({ threadId: launched.threadId }).pipe(
+      Stream.filter(
+        (stored) =>
+          stored.event.type === "run.updated" && stored.event.payload.status === "starting",
+      ),
+      Stream.runHead,
+    );
+    const projection = yield* threads.getThreadProjection(launched.threadId);
+    assert.equal(projection.thread.worktreePath, "/repo-worktrees/feature");
+    assert.equal(harness.createWorktree.mock.calls[0]?.[0].refName, JJ_WORKING_COPY_REVISION);
+    assert.equal(fetchRemote.mock.calls.length, 0);
+  }).pipe(Effect.provide(harness.layer));
+});
 
 it.effect("shows the fetch diagnosis when preparing a worktree from origin fails", () => {
   const detail =
