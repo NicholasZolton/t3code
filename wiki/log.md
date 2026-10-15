@@ -2,7 +2,9 @@
 
 ## 2026-10-15
 
-- **Branch integration**: [Upstream integration](upstream-integration.md#october-15-branch-sync) records local merge `30b7fbff81` through upstream `e536bfd33b`, with all 106 incoming commits incorporated and zero branch gap. Fork `main` remains at `e9e7b07c0d`. Upstream now owns managed SSH recovery; the smaller external/discovered readiness guards and unreplaced fork features remain. No push, main integration, or remote deployment has occurred.
+- **Integration**: [PR #48](https://github.com/NicholasZolton/t3code/pull/48) reached fork `main` at `9ce8f0a504`. Refreshed [upstream integration](upstream-integration.md): all 106 incoming commits through `e536bfd33b` are incorporated with ancestry preserved and zero gap against the pinned tip. The main local checkout is fast-forwarded; remote deployment remains separate.
+
+- **Branch integration**: [Upstream integration](upstream-integration.md#completed-october-15-sync) initially recorded local merge `30b7fbff81` through upstream `e536bfd33b`, with all 106 incoming commits incorporated and zero branch gap. At that observation, fork `main` remained at `e9e7b07c0d`. Upstream now owns managed SSH recovery; the smaller external/discovered readiness guards and unreplaced fork features remain. No push, main integration, or remote deployment had occurred.
 
 ## 2026-10-14
 

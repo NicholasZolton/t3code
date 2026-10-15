@@ -6,26 +6,32 @@ tags: [upstream, fork, integration]
 status: stable
 generated:
   by: opencode/gpt-6.1-sol
-  at: 2026-10-15T04:11:12+00:00
+  at: 2026-10-15T14:33:08+00:00
 verified:
   - by: opencode/gpt-6.1-sol
-    at: 2026-10-15T04:11:12+00:00
+    at: 2026-10-15T14:33:08+00:00
 snapshot:
-  at: 2026-10-15T04:11:12+00:00
-  fork_main: e9e7b07c0dfdc421d4216b2164cd4efe4ec4588d
+  at: 2026-10-15T14:33:08+00:00
+  fork_main: 9ce8f0a504b8abe1af9feead20ae1714c0d9ded8
   upstream_main: e536bfd33bc3c351997141d93790df75eeded7b9
-  shared_baseline: 6002c5c68c637de2cd2557bd6c40e46c153e39b1
-  last_main_integration: 2f17f4f635e021d775c0f6c1ebe030bcba0f5d55
-  last_main_upstream: 6002c5c68c637de2cd2557bd6c40e46c153e39b1
-  missing_upstream_on_main: 106
+  shared_baseline: e536bfd33bc3c351997141d93790df75eeded7b9
+  last_main_integration: 30b7fbff813e913ac3b88ae58ebe1dd47b50fc4f
+  last_main_upstream: e536bfd33bc3c351997141d93790df75eeded7b9
+  missing_upstream_on_main: 0
   missing_upstream_at_integrated_tip: 0
   branch_integration: 30b7fbff813e913ac3b88ae58ebe1dd47b50fc4f
   branch_parent: e9e7b07c0dfdc421d4216b2164cd4efe4ec4588d
   missing_upstream_on_branch: 0
 sources:
+  - id: october-15-main-integration
+    resource: https://github.com/NicholasZolton/t3code/pull/48
+    title: Completed October 15 upstream integration into fork main
+  - id: october-15-main-review-git
+    resource: "Local Git verification at 2026-10-15T14:33:08+00:00: fetched origin/main and local main both equal 9ce8f0a504b8abe1af9feead20ae1714c0d9ded8, with parents e9e7b07c0dfdc421d4216b2164cd4efe4ec4588d and d3b9e1b76e9815a6dfae066d85a272f24c81536d. Integration 30b7fbff813e913ac3b88ae58ebe1dd47b50fc4f and upstream e536bfd33bc3c351997141d93790df75eeded7b9 are ancestors of main. The shared baseline equals that pinned upstream tip, all 106 incoming commits are incorporated, and zero upstream commits are missing on main. PR 48 merged at 2026-10-15T14:32:29Z. Remote deployment remains separate."
+    title: Completed main ancestry checks against the pinned upstream tip
   - id: october-15-branch-integration
-    resource: "Local Git object 30b7fbff813e913ac3b88ae58ebe1dd47b50fc4f on NicholasZolton/merge-upstream-changes-1; not pushed or incorporated into main at this observation"
-    title: Ancestry-preserving branch merge through e536bfd33b
+    resource: https://github.com/NicholasZolton/t3code/commit/30b7fbff813e913ac3b88ae58ebe1dd47b50fc4f
+    title: Ancestry-preserving merge through e536bfd33b, now incorporated into main
   - id: october-15-review-git
     resource: "Local Git verification at 2026-10-15T04:11:12+00:00: origin/main and local main equal e9e7b07c0dfdc421d4216b2164cd4efe4ec4588d. The shared baseline with upstream e536bfd33bc3c351997141d93790df75eeded7b9 is 6002c5c68c637de2cd2557bd6c40e46c153e39b1, leaving 106 upstream commits missing on main. Merge 30b7fbff813e913ac3b88ae58ebe1dd47b50fc4f has fork e9e7b07c0dfdc421d4216b2164cd4efe4ec4588d and upstream e536bfd33bc3c351997141d93790df75eeded7b9 as parents, with zero missing upstream commits on the branch. Of 425 incoming paths without prior fork changes, 423 match upstream byte-for-byte; two composer tests supply the fork's required keybindings. Upstream managed SSH recovery and ownership cleanup are adopted; external/discovered readiness guards and unreplaced fork features remain. No push, main integration, or remote deployment has occurred."
     title: Branch ancestry, main gap, and upstream-first source audit
@@ -213,24 +219,31 @@ sources:
 
 # Upstream integration
 
-The newest sync is committed on `NicholasZolton/merge-upstream-changes-1`, not
-fork `main`. Merge `30b7fbff81` incorporates all 106 incoming commits through
-upstream `e536bfd33b`, preserving ancestry with zero branch gap. Fork `main`
-remains at `e9e7b07c0d`, still missing those 106 commits. The previous main sync
-was [PR #47](https://github.com/NicholasZolton/t3code/pull/47), through `6002c5c68c`.
-[^october-15-review-git]
+The newest sync is merged into fork `main`.
+[PR #48](https://github.com/NicholasZolton/t3code/pull/48) landed at
+`9ce8f0a504`, incorporating all 106 incoming commits through upstream
+`e536bfd33b` with ancestry preserved and zero remaining main gap. The main
+local checkout is fast-forwarded to the same revision.
+[^october-15-main-review-git]
 
 This is a revision-pinned snapshot, not a claim about newer upstream work.
 Refresh it after the next review or integration using the
 [maintenance guidance](maintenance.md).
 
-## October 15 branch sync
+## Completed October 15 sync
+
+[PR #48](https://github.com/NicholasZolton/t3code/pull/48) merged on October 15,
+2026, at 14:32:29 UTC. Its landing commit
+`9ce8f0a504b8abe1af9feead20ae1714c0d9ded8` preserves previous fork `main`
+`e9e7b07c0dfdc421d4216b2164cd4efe4ec4588d` and integrated branch tip
+`d3b9e1b76e9815a6dfae066d85a272f24c81536d` as parents.
+[^october-15-main-integration][^october-15-main-review-git]
 
 Merge `30b7fbff813e913ac3b88ae58ebe1dd47b50fc4f` has fork parent
 `e9e7b07c0dfdc421d4216b2164cd4efe4ec4588d` and upstream parent
-`e536bfd33bc3c351997141d93790df75eeded7b9`. It has not been pushed, merged into
-fork `main`, or deployed.
-[^october-15-branch-integration][^october-15-upstream][^october-15-review-git]
+`e536bfd33bc3c351997141d93790df75eeded7b9`. Both parents are incorporated into
+fork `main`; the sync was not squashed. Main integration is not a remote deployment.
+[^october-15-branch-integration][^october-15-upstream][^october-15-main-review-git]
 
 Adopt upstream's managed SSH recovery and ownership cleanup. Keep the smaller
 external/discovered readiness guards described below, plus Jujutsu recovery,
@@ -398,20 +411,20 @@ migrates to upstream branch naming while preserving temporary branch names. The 
 
 ## Last completed main integration
 
-| Item                                               | Recorded value                                     |
-| -------------------------------------------------- | -------------------------------------------------- |
-| Fork                                               | `NicholasZolton/t3code`, remote `origin`           |
-| Upstream                                           | `pingdotgg/t3code`, remote `upstream`              |
-| Main landing commit                                | `65729a4646`: merge of PR #47                      |
-| Upstream integration commit                        | `2f17f4f635`: follow-up merge through `6002c5c68c` |
-| Fork-side parent                                   | `0a5dafd0eb`                                       |
-| Upstream-side parent / shared baseline             | `6002c5c68c`                                       |
-| Missing commits at that integration's upstream tip | **0**                                              |
+| Item                                               | Recorded value                           |
+| -------------------------------------------------- | ---------------------------------------- |
+| Fork                                               | `NicholasZolton/t3code`, remote `origin` |
+| Upstream                                           | `pingdotgg/t3code`, remote `upstream`    |
+| Main landing commit                                | `9ce8f0a504`: merge of PR #48            |
+| Upstream integration commit                        | `30b7fbff81`: merge through `e536bfd33b` |
+| Fork-side parent                                   | `e9e7b07c0d`                             |
+| Upstream-side parent / shared baseline             | `e536bfd33b`                             |
+| Missing commits at that integration's upstream tip | **0**                                    |
 
 Default to upstream implementations. Retain fork code for explicit features
 or fixes upstream does not provide. Native OpenCode 2 and thread management now
 use upstream services; fork configuration and UI improvements remain layered on
-those paths.[^october-14-branch-integration]
+those paths.[^october-15-branch-integration]
 
 ## Earlier integration boundaries
 
@@ -511,7 +524,7 @@ deployment or rollback.[^remote-deployment-checks][^tailscale-persistence]
 ## SSH recovery exception
 
 Upstream `e536bfd33b` now separates stale-tunnel cleanup from remote shutdown
-and preserves an unresponsive managed server. The branch adopts that recovery
+and preserves an unresponsive managed server. The main integration adopts that recovery
 and upstream's ownership cleanup, including replacement when an adopted server
 demonstrably exits during handover.[^upstream-ssh-recovery][^october-15-review-git]
 
@@ -687,8 +700,12 @@ git log --reverse --oneline origin/main..upstream/main
 
 [^october-14-upstream]: Exact upstream revision incorporated into the completed October 14 sync.
 
-[^october-15-branch-integration]: Local-only merge and its exact parents; not incorporated into main.
+[^october-15-branch-integration]: Upstream merge and its exact parents, now incorporated into main.
 
 [^october-15-review-git]: Pinned main gap, zero branch gap, source audit, and retained compatibility exceptions.
 
-[^october-15-upstream]: Exact upstream revision incorporated into the October 15 branch sync.
+[^october-15-upstream]: Exact upstream revision incorporated into the completed October 15 sync.
+
+[^october-15-main-integration]: PR #48 and its recorded merge time.
+
+[^october-15-main-review-git]: Completed main ancestry checks, exact revisions and parents, and zero gap against the pinned upstream tip.
