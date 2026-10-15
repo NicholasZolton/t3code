@@ -1,5 +1,9 @@
 # Wiki update log
 
+## 2026-10-15
+
+- **Branch integration**: [Upstream integration](upstream-integration.md#october-15-branch-sync) records local merge `30b7fbff81` through upstream `e536bfd33b`, with all 106 incoming commits incorporated and zero branch gap. Fork `main` remains at `e9e7b07c0d`. Upstream now owns managed SSH recovery; the smaller external/discovered readiness guards and unreplaced fork features remain. No push, main integration, or remote deployment has occurred.
+
 ## 2026-10-14
 
 - **Integration**: [PR #47](https://github.com/NicholasZolton/t3code/pull/47) reached fork `main` at `65729a4646`. Refreshed [upstream integration](upstream-integration.md): all 42 incoming commits through `6002c5c68c` are incorporated with upstream ancestry preserved and zero gap against the pinned tip. The main local checkout is fast-forwarded; remote deployment remains separate.

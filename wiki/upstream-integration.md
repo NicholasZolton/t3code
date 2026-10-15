@@ -1,27 +1,37 @@
 ---
 type: Integration Record
 title: Upstream integration
-description: Completed main integrations and fork compatibility exceptions.
+description: Main and branch integration boundaries and fork compatibility exceptions.
 tags: [upstream, fork, integration]
 status: stable
 generated:
   by: opencode/gpt-6.1-sol
-  at: 2026-10-14T15:40:24+00:00
+  at: 2026-10-15T04:11:12+00:00
 verified:
   - by: opencode/gpt-6.1-sol
-    at: 2026-10-14T15:40:24+00:00
+    at: 2026-10-15T04:11:12+00:00
 snapshot:
-  at: 2026-10-14T15:40:24+00:00
-  fork_main: 65729a46467ede150ca3b42ad34f58e9f23d027f
-  upstream_main: 6002c5c68c637de2cd2557bd6c40e46c153e39b1
+  at: 2026-10-15T04:11:12+00:00
+  fork_main: e9e7b07c0dfdc421d4216b2164cd4efe4ec4588d
+  upstream_main: e536bfd33bc3c351997141d93790df75eeded7b9
   shared_baseline: 6002c5c68c637de2cd2557bd6c40e46c153e39b1
   last_main_integration: 2f17f4f635e021d775c0f6c1ebe030bcba0f5d55
-  missing_upstream_on_main: 0
+  last_main_upstream: 6002c5c68c637de2cd2557bd6c40e46c153e39b1
+  missing_upstream_on_main: 106
   missing_upstream_at_integrated_tip: 0
-  branch_integration: 2f17f4f635e021d775c0f6c1ebe030bcba0f5d55
-  branch_parent: 0a5dafd0eb94641d642324c727ed1c9683556c43
+  branch_integration: 30b7fbff813e913ac3b88ae58ebe1dd47b50fc4f
+  branch_parent: e9e7b07c0dfdc421d4216b2164cd4efe4ec4588d
   missing_upstream_on_branch: 0
 sources:
+  - id: october-15-branch-integration
+    resource: "Local Git object 30b7fbff813e913ac3b88ae58ebe1dd47b50fc4f on NicholasZolton/merge-upstream-changes-1; not pushed or incorporated into main at this observation"
+    title: Ancestry-preserving branch merge through e536bfd33b
+  - id: october-15-review-git
+    resource: "Local Git verification at 2026-10-15T04:11:12+00:00: origin/main and local main equal e9e7b07c0dfdc421d4216b2164cd4efe4ec4588d. The shared baseline with upstream e536bfd33bc3c351997141d93790df75eeded7b9 is 6002c5c68c637de2cd2557bd6c40e46c153e39b1, leaving 106 upstream commits missing on main. Merge 30b7fbff813e913ac3b88ae58ebe1dd47b50fc4f has fork e9e7b07c0dfdc421d4216b2164cd4efe4ec4588d and upstream e536bfd33bc3c351997141d93790df75eeded7b9 as parents, with zero missing upstream commits on the branch. Of 425 incoming paths without prior fork changes, 423 match upstream byte-for-byte; two composer tests supply the fork's required keybindings. Upstream managed SSH recovery and ownership cleanup are adopted; external/discovered readiness guards and unreplaced fork features remain. No push, main integration, or remote deployment has occurred."
+    title: Branch ancestry, main gap, and upstream-first source audit
+  - id: october-15-upstream
+    resource: https://github.com/pingdotgg/t3code/commit/e536bfd33bc3c351997141d93790df75eeded7b9
+    title: Pinned upstream tip for the October 15 branch integration
   - id: october-14-main-integration
     resource: https://github.com/NicholasZolton/t3code/pull/47
     title: Completed October 14 upstream integration into fork main
@@ -183,10 +193,10 @@ sources:
     title: Pairing with the running server and remembering Tailscale Serve settings
   - id: ssh-recovery
     resource: ../packages/ssh/src/tunnel.ts
-    title: Fork-side SSH recovery implementation, unchanged by the latest upstream range
+    title: Upstream managed recovery with fork external/discovered readiness guards
   - id: upstream-ssh-recovery
-    resource: https://github.com/pingdotgg/t3code/blob/6002c5c68c637de2cd2557bd6c40e46c153e39b1/packages/ssh/src/tunnel.ts
-    title: Upstream SSH recovery remains unchanged at the latest reviewed tip
+    resource: https://github.com/pingdotgg/t3code/blob/e536bfd33bc3c351997141d93790df75eeded7b9/packages/ssh/src/tunnel.ts
+    title: Upstream managed-server recovery and ownership cleanup at the reviewed tip
   - id: ssh-recovery-issue
     resource: https://github.com/pingdotgg/t3code/issues/15608
     title: Upstream report of remote work stopping on disconnect and stale-tunnel recovery
@@ -203,15 +213,31 @@ sources:
 
 # Upstream integration
 
-**The newest sync is merged into fork `main`.** [PR #47](https://github.com/NicholasZolton/t3code/pull/47)
-landed at `65729a4646`, incorporating all 42 incoming commits through upstream
-`6002c5c68c` with upstream ancestry preserved and zero remaining main gap.
-The main local checkout is fast-forwarded to the same revision.
-[^october-14-main-review-git]
+The newest sync is committed on `NicholasZolton/merge-upstream-changes-1`, not
+fork `main`. Merge `30b7fbff81` incorporates all 106 incoming commits through
+upstream `e536bfd33b`, preserving ancestry with zero branch gap. Fork `main`
+remains at `e9e7b07c0d`, still missing those 106 commits. The previous main sync
+was [PR #47](https://github.com/NicholasZolton/t3code/pull/47), through `6002c5c68c`.
+[^october-15-review-git]
 
 This is a revision-pinned snapshot, not a claim about newer upstream work.
 Refresh it after the next review or integration using the
 [maintenance guidance](maintenance.md).
+
+## October 15 branch sync
+
+Merge `30b7fbff813e913ac3b88ae58ebe1dd47b50fc4f` has fork parent
+`e9e7b07c0dfdc421d4216b2164cd4efe4ec4588d` and upstream parent
+`e536bfd33bc3c351997141d93790df75eeded7b9`. It has not been pushed, merged into
+fork `main`, or deployed.
+[^october-15-branch-integration][^october-15-upstream][^october-15-review-git]
+
+Adopt upstream's managed SSH recovery and ownership cleanup. Keep the smaller
+external/discovered readiness guards described below, plus Jujutsu recovery,
+OpenCode execution tracking and account controls, saved prompts/Vim,
+Crit/Portless, and paired notifications. Upstream-only incoming paths match
+upstream except for required keybindings in two composer tests.
+[^october-15-review-git]
 
 ## Completed October 14 sync
 
@@ -268,7 +294,7 @@ Git-action test fixtures needed for fork VCS discovery.[^october-13-integration]
 This upstream range changes neither OpenCode's adapter nor SSH recovery. Claude's
 child-outcome fixes do not replace the reused OpenCode execution safeguard below.
 Preserve those exceptions and the other unreplaced fork behavior.
-[^october-13-upstream][^upstream-ssh-recovery]
+[^october-13-upstream]
 
 The active-tool collection optimization (`540a3e89ed`) and pace-icon alignment
 fix (`e9221e44da`) were excluded from PR #46. They are now included in the completed
@@ -370,22 +396,22 @@ native OpenCode 2 and thread management; removed V1 adapters and the old plural
 thread toolkit are replaced by those upstream services. The legacy worktree prefix
 migrates to upstream branch naming while preserving temporary branch names. The integration was verified against isolated state.
 
-## Last completed integration
+## Last completed main integration
 
-| Item                                               | Recorded value                                                  |
-| -------------------------------------------------- | --------------------------------------------------------------- |
-| Fork                                               | `NicholasZolton/t3code`, remote `origin`                        |
-| Upstream                                           | `pingdotgg/t3code`, remote `upstream`                           |
-| Main landing commit                                | `eb4dc2fd6e` — merge of PR #46                                  |
-| Upstream integration commit                        | `801585a0bd` — `chore(sync): merge upstream through 5070a83a32` |
-| Fork-side parent                                   | `373e85e766`                                                    |
-| Upstream-side parent / shared baseline             | `5070a83a32`                                                    |
-| Missing commits at that integration's upstream tip | **0**                                                           |
+| Item                                               | Recorded value                                     |
+| -------------------------------------------------- | -------------------------------------------------- |
+| Fork                                               | `NicholasZolton/t3code`, remote `origin`           |
+| Upstream                                           | `pingdotgg/t3code`, remote `upstream`              |
+| Main landing commit                                | `65729a4646`: merge of PR #47                      |
+| Upstream integration commit                        | `2f17f4f635`: follow-up merge through `6002c5c68c` |
+| Fork-side parent                                   | `0a5dafd0eb`                                       |
+| Upstream-side parent / shared baseline             | `6002c5c68c`                                       |
+| Missing commits at that integration's upstream tip | **0**                                              |
 
 Default to upstream implementations. Retain fork code for explicit features
 or fixes upstream does not provide. Native OpenCode 2 and thread management now
 use upstream services; fork configuration and UI improvements remain layered on
-those paths.[^october-13-integration]
+those paths.[^october-14-branch-integration]
 
 ## Earlier integration boundaries
 
@@ -440,11 +466,11 @@ the bundled OpenCode policy. Older 2.x versions are outside the supported baseli
 [^upstream-current-manifest][^reviewed-upstream-main]
 
 Reused OpenCode child sessions still need fork admission and execution tracking.
-At `6002c5c68c`, parent reports identify the child session but not the individual
+At `e536bfd33b`, parent reports identify the child session but not the individual
 execution. Once a child is reused, ambiguous reports must not attach stale results
 or settle the new call; observed execution can settle it without a result. Preserve
 this safeguard until upstream can attribute reports to individual runs.
-[^october-12-branch-integration][^october-14-review-git]
+[^october-12-branch-integration][^october-15-review-git]
 
 ## Jujutsu migration boundary
 
@@ -484,15 +510,20 @@ deployment or rollback.[^remote-deployment-checks][^tailscale-persistence]
 
 ## SSH recovery exception
 
-Fork-side SSH recovery separates stale-tunnel cleanup from remote shutdown and
-preserves an existing server's ownership when readiness times out, rather than
-killing it or launching a competing server against the same T3 home. Explicit
-Disconnect, desktop shutdown, and requested runner changes retain their existing
-behavior.[^ssh-recovery]
+Upstream `e536bfd33b` now separates stale-tunnel cleanup from remote shutdown
+and preserves an unresponsive managed server. The branch adopts that recovery
+and upstream's ownership cleanup, including replacement when an adopted server
+demonstrably exits during handover.[^upstream-ssh-recovery][^october-15-review-git]
 
-At the latest review, upstream `6002c5c68c` still has both destructive
-recovery paths reported in issue #15608. Preserve this boundary during later syncs
-unless upstream supplies equivalent recovery behavior.[^upstream-ssh-recovery][^ssh-recovery-issue]
+Keep the fork's remaining readiness guards: a discovered server with a live PID,
+or a remembered external endpoint without proof of exit, must not be replaced
+merely because readiness times out. This avoids starting competing servers
+against the same T3 home. Explicit Disconnect, desktop shutdown, and requested
+managed-runner changes retain their existing behavior.[^ssh-recovery]
+
+The guards retain the remaining protection associated with issue #15608; do not
+restore the older parallel managed-server recovery implementation.
+[^ssh-recovery-issue][^october-15-review-git]
 
 ## Crit remote review boundary
 
@@ -562,13 +593,13 @@ git log --reverse --oneline origin/main..upstream/main
 
 [^tailscale-persistence]: `pair --tailscale` discovers the live server and remembers its HTTPS port for startup restoration.
 
-[^ssh-recovery]: Fork-side SSH implementation and its focused readiness-recovery regressions.
+[^ssh-recovery]: Integrated SSH implementation and its focused readiness-recovery regressions.
 
 [^crit-tailnet-forwarding]: The review manager keeps Crit on loopback and owns each temporary forward's lifetime.
 
 [^tailscale-foreground-serve]: Foreground Serve uses a nested configuration tied to its IPN watcher; closing that session removes its publication.
 
-[^upstream-ssh-recovery]: Exact upstream SSH source, unchanged in the latest incoming range.
+[^upstream-ssh-recovery]: Exact upstream SSH source supplying managed-server and stale-tunnel recovery.
 
 [^ssh-recovery-issue]: Open upstream issue and its stale-tunnel reconnect reproduction.
 
@@ -655,3 +686,9 @@ git log --reverse --oneline origin/main..upstream/main
 [^october-14-review-git]: Initial pre-integration main gap, zero branch gap, preserved compatibility exceptions, and upstream-first conflict resolutions.
 
 [^october-14-upstream]: Exact upstream revision incorporated into the completed October 14 sync.
+
+[^october-15-branch-integration]: Local-only merge and its exact parents; not incorporated into main.
+
+[^october-15-review-git]: Pinned main gap, zero branch gap, source audit, and retained compatibility exceptions.
+
+[^october-15-upstream]: Exact upstream revision incorporated into the October 15 branch sync.
