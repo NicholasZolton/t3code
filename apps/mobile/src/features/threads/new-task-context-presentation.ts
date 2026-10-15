@@ -1,6 +1,11 @@
 import { sanitizeNewRefName } from "@t3tools/shared/git";
 import { searchItems } from "@t3tools/shared/searchRanking";
-import { DEFAULT_VCS_TERMINOLOGY, type VcsTerminology } from "@t3tools/shared/vcs";
+import {
+  DEFAULT_VCS_TERMINOLOGY,
+  JJ_WORKING_COPY_LABEL,
+  JJ_WORKING_COPY_REVISION,
+  type VcsTerminology,
+} from "@t3tools/shared/vcs";
 import { parseChangeRequestUrl } from "@t3tools/shared/changeRequestUrl";
 
 type WorkspaceMode = "local" | "worktree";
@@ -85,6 +90,9 @@ export function resolveNewTaskBranchLabel(input: {
     return input.branchName;
   }
 
+  if (input.branchName === JJ_WORKING_COPY_REVISION) {
+    return `From ${JJ_WORKING_COPY_LABEL.toLowerCase()}`;
+  }
   const baseRef = input.startFromOrigin ? `origin/${input.branchName}` : input.branchName;
   return `From ${baseRef}`;
 }

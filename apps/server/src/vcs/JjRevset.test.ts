@@ -1,4 +1,5 @@
 import { assert, describe, it } from "@effect/vitest";
+import { JJ_WORKING_COPY_REVISION } from "@t3tools/shared/vcs";
 
 import {
   localBookmarkRevset,
@@ -34,6 +35,7 @@ describe("JjRevset", () => {
   });
 
   it("passes revisions through unchanged", () => {
+    assert.equal(refNameToRevset(JJ_WORKING_COPY_REVISION, []), JJ_WORKING_COPY_REVISION);
     const commitId = "b17b3034179d638b3a97c41e17e7ffe25b8c4f74";
     assert.equal(refNameToRevset(commitId, ["origin"]), commitId);
     const changeId = "yzsrwslzmszllqvknmplyrnqmplsmpym";

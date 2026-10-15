@@ -253,6 +253,10 @@ Terms follow the repository: bookmarks instead of branches, workspaces instead o
 instead of commits. Checkpoints and revert work the same way. A revert restores your
 working copy with `jj restore`, so `jj undo` takes it back.
 
+New workspaces can start from **Current working copy**, including its snapshotted files, without an
+existing bookmark. This is the default when no default or current bookmark is available. It always
+uses the local working copy, regardless of **Start from origin**.
+
 ### Choosing the version control system
 
 T3 Code uses the nearest marker directory, so a checkout holding `.jj` is Jujutsu and a Git checkout

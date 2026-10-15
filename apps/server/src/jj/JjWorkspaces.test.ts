@@ -2,9 +2,10 @@ import { assert, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
+import { JJ_WORKING_COPY_REVISION } from "@t3tools/shared/vcs";
 
 import * as JjVcsDriver from "../vcs/JjVcsDriver.ts";
-import { describeJj, runJj, withJjRepo } from "../vcs/testing/JjTestSupport.ts";
+import { changeId, describeJj, runJj, withJjRepo } from "../vcs/testing/JjTestSupport.ts";
 import { makeJjRefs, type JjRefsOps } from "./JjRefs.ts";
 import { makeJjRemotes } from "./JjRemotes.ts";
 import {
@@ -27,7 +28,7 @@ interface WorkspacesFixture {
 
 const withRepo = <A, E>(
   use: (fixture: WorkspacesFixture) => Effect.Effect<A, E, FileSystem.FileSystem | Path.Path>,
-  options?: { readonly withRemote?: boolean },
+  options?: { readonly withRemote?: boolean; readonly seed?: boolean },
 ) =>
   withJjRepo({ prefix: "t3-jj-workspaces-", seed: true, ...options }, (repo) =>
     Effect.gen(function* () {
@@ -74,6 +75,58 @@ describeJj("workspace naming", () => {
 });
 
 describeJj("JjWorkspaces.createWorktree", () => {
+  it.effect.each([
+    { name: "a fresh empty repository", seed: false, files: false },
+    { name: "a fresh project with files", seed: false, files: true },
+    { name: "existing history without bookmarks", seed: true, files: true },
+  ])("starts from the working copy in $name", (scenario) =>
+    withRepo(
+      ({ driver, fileSystem, path, ops, root }) =>
+        Effect.gen(function* () {
+          if (scenario.seed) yield* runJj(root, ["bookmark", "delete", "main"]);
+          const before = yield* changeId(root, "@");
+          assert.deepStrictEqual(yield* driver.listBookmarks(root), []);
+          if (scenario.files) {
+            yield* fileSystem.writeFileString(path.join(root, "initial.txt"), "initial files\n");
+          }
+
+          const result = yield* ops.createWorktree({
+            cwd: root,
+            refName: JJ_WORKING_COPY_REVISION,
+            newRefName: "topic/from-working-copy",
+            baseRefName: JJ_WORKING_COPY_REVISION,
+            path: null,
+          });
+
+          const source = yield* driver.currentChange(root);
+          const workspace = yield* driver.currentChange(result.worktree.path);
+          assert.equal(yield* changeId(root, "@"), before);
+          assert.deepStrictEqual(workspace.parentCommitIds, [source.commitId]);
+          assert.deepStrictEqual(
+            (yield* driver.listBookmarks(root)).map((bookmark) => bookmark.name),
+            [result.worktree.refName],
+          );
+          assert.notInclude(
+            yield* fileSystem.readFileString(path.join(root, ".git", "config")),
+            "gh-merge-base",
+          );
+          if (scenario.files) {
+            assert.equal(
+              yield* fileSystem.readFileString(path.join(result.worktree.path, "initial.txt")),
+              "initial files\n",
+            );
+          }
+          if (scenario.seed) {
+            assert.equal(
+              yield* fileSystem.readFileString(path.join(result.worktree.path, "seed.txt")),
+              "seed\n",
+            );
+          }
+        }),
+      { seed: scenario.seed },
+    ),
+  );
+
   it.effect("keeps linked workspaces in the original checkout's configured grouping folder", () =>
     withRepo(({ fileSystem, path, ops, root, worktreesDir }) =>
       Effect.gen(function* () {

@@ -5,6 +5,7 @@
  */
 
 import { parseRemoteRefWithRemoteNames } from "../git/remoteRefs.ts";
+import { JJ_WORKING_COPY_REVISION } from "@t3tools/shared/vcs";
 
 const COMMIT_ID_PATTERN = /^[0-9a-f]{40}$/;
 const CHANGE_ID_PATTERN = /^[k-z]{32}$/;
@@ -50,6 +51,7 @@ export function remoteBookmarkRevset(remote: string, name: string): string {
  * over the wire as a revision still resolves.
  */
 export function refNameToRevset(refName: string, remoteNames: ReadonlyArray<string>): string {
+  if (refName === JJ_WORKING_COPY_REVISION) return refName;
   const remoteRef = splitRemoteRefName(refName, remoteNames);
   if (remoteRef) {
     return remoteBookmarkRevset(remoteRef.remote, remoteRef.name);

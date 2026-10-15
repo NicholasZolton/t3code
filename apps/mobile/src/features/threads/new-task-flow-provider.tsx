@@ -82,7 +82,9 @@ import { useDebouncedValue, usePaginatedBranches } from "../../state/queries";
 import { vcsEnvironment } from "../../state/vcs";
 import {
   DEFAULT_VCS_TERMINOLOGY,
+  JJ_WORKING_COPY_REVISION,
   resolveVcsTerminology,
+  resolveWorktreeBaseRef,
   type VcsTerminology,
 } from "@t3tools/shared/vcs";
 import {
@@ -193,6 +195,7 @@ type NewTaskFlowContextValue = {
   readonly availableBranches: ReadonlyArray<VcsRef>;
   readonly currentCheckoutBranchName: string | null;
   readonly vcsTerminology: VcsTerminology;
+  readonly canSelectWorkingCopy: boolean;
   readonly runtimeMode: RuntimeMode;
   readonly interactionMode: ProviderInteractionMode;
   readonly planModeEnabled: boolean;
@@ -232,6 +235,7 @@ type NewTaskFlowContextValue = {
   ) => void;
   readonly setWorkspaceMode: (mode: WorkspaceMode) => void;
   readonly selectBranch: (branch: VcsRef) => void;
+  readonly selectWorkingCopy: () => void;
   readonly setStartFromOrigin: (value: boolean) => void;
   readonly beginEditingPendingTask: (messageId: string) => boolean;
   readonly finishEditingPendingTask: () => void;
@@ -577,7 +581,8 @@ export function NewTaskFlowProvider(props: React.PropsWithChildren) {
   // value keeps tracking the server setting when the config loads late.
   const draftStartFromOrigin = selectedProjectDraft.workspaceSelection?.startFromOrigin;
   const startFromOrigin =
-    draftStartFromOrigin ?? projectSettings.settings.newWorktreesStartFromOrigin;
+    selectedBranchName !== JJ_WORKING_COPY_REVISION &&
+    (draftStartFromOrigin ?? projectSettings.settings.newWorktreesStartFromOrigin);
   const defaultRuntimeMode = editingPendingTask
     ? (editingPendingTask.runtimeMode ?? DEFAULT_RUNTIME_MODE)
     : projectSettings.settings.defaultRuntimeMode;
@@ -792,6 +797,10 @@ export function NewTaskFlowProvider(props: React.PropsWithChildren) {
   );
   const currentCheckoutBranchName = projectGitStatus.data?.refName ?? null;
   const vcsTerminology = resolveVcsTerminology(projectGitStatus.data);
+  const canSelectWorkingCopy =
+    workspaceMode === "worktree" &&
+    projectGitStatus.data?.vcs?.kind === "jj" &&
+    !projectGitStatus.data.vcs.unsupportedReason;
 
   const filteredBranches = useMemo(
     () => filterNewTaskBranches(allBranchRefs, branchQuery),
@@ -979,9 +988,32 @@ export function NewTaskFlowProvider(props: React.PropsWithChildren) {
     workspaceMode,
   ]);
 
+  const selectWorktreeBase = useCallback(
+    (baseRef: string) => {
+      if (!selectedProjectDraftKey) return;
+      pendingLocalBranchSyncDraftKeysRef.current.delete(selectedProjectDraftKey);
+      updateComposerDraftSettings(selectedProjectDraftKey, {
+        workspaceSelection: {
+          mode: "worktree",
+          branch: baseRef,
+          worktreePath: null,
+          ...(draftStartFromOrigin !== undefined ? { startFromOrigin: draftStartFromOrigin } : {}),
+        },
+      });
+    },
+    [draftStartFromOrigin, selectedProjectDraftKey],
+  );
+  const selectWorkingCopy = useCallback(() => {
+    if (canSelectWorkingCopy) selectWorktreeBase(JJ_WORKING_COPY_REVISION);
+  }, [canSelectWorkingCopy, selectWorktreeBase]);
+
   const selectBranch = useCallback(
     (branch: VcsRef) => {
       if (!selectedProject || !selectedProjectDraftKey) {
+        return;
+      }
+      if (workspaceMode === "worktree") {
+        selectWorktreeBase(branch.name);
         return;
       }
       pendingLocalBranchSyncDraftKeysRef.current.delete(selectedProjectDraftKey);
@@ -998,7 +1030,13 @@ export function NewTaskFlowProvider(props: React.PropsWithChildren) {
         },
       });
     },
-    [draftStartFromOrigin, selectedProject, selectedProjectDraftKey, workspaceMode],
+    [
+      draftStartFromOrigin,
+      selectedProject,
+      selectedProjectDraftKey,
+      selectWorktreeBase,
+      workspaceMode,
+    ],
   );
 
   const setStartFromOrigin = useCallback(
@@ -1046,18 +1084,25 @@ export function NewTaskFlowProvider(props: React.PropsWithChildren) {
     }
     // The default may only exist as origin/<default> (isRemote), which
     // availableBranches filters out — search the unfiltered refs for it.
-    const preferredBranch =
-      allBranchRefs.find((branch) => branch.isDefault) ??
-      availableBranches.find((branch) => branch.current) ??
-      null;
-    if (preferredBranch) {
-      selectBranch(preferredBranch);
+    const preferredBase = resolveWorktreeBaseRef({
+      defaultRef: allBranchRefs.find((branch) => branch.isDefault)?.name ?? null,
+      currentRef:
+        currentCheckoutBranchName ??
+        availableBranches.find((branch) => branch.current)?.name ??
+        null,
+      vcsKind: canSelectWorkingCopy ? "jj" : undefined,
+    });
+    if (!branchesLoading && preferredBase) {
+      selectWorktreeBase(preferredBase);
     }
   }, [
     allBranchRefs,
     availableBranches,
+    branchesLoading,
+    canSelectWorkingCopy,
+    currentCheckoutBranchName,
     defaultWorkspaceModeSettled,
-    selectBranch,
+    selectWorktreeBase,
     selectedBranchName,
     selectedProjectDraftKey,
     workspaceMode,
@@ -1359,6 +1404,7 @@ export function NewTaskFlowProvider(props: React.PropsWithChildren) {
       providerGroups,
       filteredBranches,
       vcsTerminology,
+      canSelectWorkingCopy,
       reset,
       setProject,
       openDraft,
@@ -1368,6 +1414,7 @@ export function NewTaskFlowProvider(props: React.PropsWithChildren) {
       setSelectedModelKey,
       setWorkspaceMode,
       selectBranch,
+      selectWorkingCopy,
       setStartFromOrigin,
       beginEditingPendingTask,
       finishEditingPendingTask,
@@ -1397,6 +1444,7 @@ export function NewTaskFlowProvider(props: React.PropsWithChildren) {
       branchesFetchingNextPage,
       buildPendingTaskMessage,
       cancelEditingPendingTask,
+      canSelectWorkingCopy,
       currentCheckoutBranchName,
       vcsTerminology,
       editingPendingTask,
@@ -1432,6 +1480,7 @@ export function NewTaskFlowProvider(props: React.PropsWithChildren) {
       setProject,
       openDraft,
       selectBranch,
+      selectWorkingCopy,
       selectEnvironment,
       switchEnvironment,
       switchingToEnvironmentId,
