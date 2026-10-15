@@ -321,7 +321,7 @@ const make = Effect.gen(function* () {
         thread?.latestRunCompletedAt
           ? { ...projected, updatedAt: DateTime.formatIso(thread.latestRunCompletedAt) }
           : projected;
-      const id = yield* crypto.randomUUIDv4;
+      const id = yield* crypto.randomUUIDv4();
       yield* store.update((current) => ({
         ...current,
         observations: [
@@ -373,7 +373,7 @@ const make = Effect.gen(function* () {
       if (!configured || !input.encryptionPublicKey || !(yield* authorized(sessionId)))
         return { configured, encryptedActivitySupported: true, registrationId: null };
       yield* encryption.validatePublicKey(input.encryptionPublicKey);
-      const id = yield* crypto.randomUUIDv4;
+      const id = yield* crypto.randomUUIDv4();
       const now = yield* Clock.currentTimeMillis;
       let changed = false;
       yield* store.update((state) => {

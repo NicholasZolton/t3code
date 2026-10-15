@@ -215,7 +215,10 @@ server.listen(0, "127.0.0.1", () => {
             fs.writeFileString(path.join(stateDir, name), contents),
           );
           const runner = { nodeScriptPath: cliPath };
-          const launchScript = buildRemoteLaunchScript(runner);
+          const launchScript = buildRemoteLaunchScript(runner).replaceAll(
+            'wait_ready "60000"',
+            'wait_ready "1500"',
+          );
           const embeddedRunner = launchScript.match(
             /cat >"\$RUNNER_NEXT" <<'SH'\n([\s\S]*?)\nSH\n/u,
           )?.[1];
@@ -257,7 +260,9 @@ server.listen(0, "127.0.0.1", () => {
           assert.equal(unavailable.exitCode, 1);
           assert.include(
             unavailable.stderr,
-            "It was not stopped or replaced; retry the connection.",
+            ownership === "managed"
+              ? "Retry the connection; the server was left running."
+              : "It was not stopped or replaced; retry the connection.",
           );
           assert.equal(unavailable.stdout, "");
           assert.isTrue(yield* server.isRunning);
