@@ -206,3 +206,19 @@ passed as `--wsl-runtime`; see the
 Add `--signed` after configuring the platform credentials in the
 [release runbook](./release.md). macOS passkeys need a signed, provisioned app; follow the
 [Connect setup](./connect-setup.md#desktop-passkeys) for local signing and renderer HMR.
+
+### Local macOS signing
+
+Nicholas's private macOS builds use `pnpm run dist:desktop:local --arch arm64`. The
+command resolves `T3CODE_MACOS_CERTIFICATE_BASE64`, `T3CODE_MACOS_CERTIFICATE_PASSWORD`,
+and `T3CODE_MACOS_SIGNING_IDENTITY` from fnox's `local` profile, then signs and verifies
+the packaged app using a temporary keychain. Preserve this certificate across builds
+and upstream syncs: its identity lets macOS privacy grants survive rebuilds. Missing
+or unusable credentials fail the build rather than exporting an unsigned app.
+
+This self-signed certificate is for private use, not Developer ID distribution,
+notarization, or passkey provisioning. After switching from an old unsigned build,
+close its terminal/agent sessions and quit the old app before granting Full Disk
+Access to the new build once. Running differently signed copies with the same app
+ID can overwrite each other's privacy grants. Signing does not alter those grants
+or restart the running app.

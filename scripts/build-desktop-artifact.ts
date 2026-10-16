@@ -38,6 +38,7 @@ import {
 import { loadRepoEnv } from "./lib/public-config.ts";
 import { selectDesktopRuntimeExternalDependencies } from "./lib/desktop-external-packages.ts";
 import { resolveCatalogDependencies } from "./lib/resolve-catalog.ts";
+import { LocalMacSigningCredentialsConfig, signLocalMacApplication } from "./sign-local-macos.ts";
 
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import * as NodeServices from "@effect/platform-node/NodeServices";
@@ -180,6 +181,7 @@ interface BuildCliInput {
   readonly skipBuild: Option.Option<boolean>;
   readonly keepStage: Option.Option<boolean>;
   readonly signed: Option.Option<boolean>;
+  readonly localSigned: Option.Option<boolean>;
   readonly verbose: Option.Option<boolean>;
   readonly mockUpdates: Option.Option<boolean>;
   readonly mockUpdateServerPort: Option.Option<number>;
@@ -949,6 +951,7 @@ interface ResolvedBuildOptions {
   readonly skipBuild: boolean;
   readonly keepStage: boolean;
   readonly signed: boolean;
+  readonly localSigned: boolean;
   readonly verbose: boolean;
   readonly mockUpdates: boolean;
   readonly mockUpdateServerPort: number | undefined;
@@ -1721,6 +1724,24 @@ const resolveBooleanFlag = (flag: Option.Option<boolean>, envValue: boolean) =>
 const mergeOptions = <A>(a: Option.Option<A>, b: Option.Option<A>, defaultValue: A) =>
   Option.getOrElse(a, () => Option.getOrElse(b, () => defaultValue));
 
+export class InvalidLocalMacSigningOptionsError extends Schema.TaggedError<InvalidLocalMacSigningOptionsError>()(
+  "InvalidLocalMacSigningOptionsError",
+  {},
+) {
+  override get message(): string {
+    return "--local-signed requires a macOS dir build on macOS, without --signed.";
+  }
+}
+
+class DesktopLocalMacSigningError extends Schema.TaggedError<DesktopLocalMacSigningError>()(
+  "DesktopLocalMacSigningError",
+  { appPath: Schema.String, cause: Schema.Defect() },
+) {
+  override get message(): string {
+    return `Local macOS signing failed for ${this.appPath}.`;
+  }
+}
+
 export const resolveMockUpdateServerPort = Effect.fn("resolveMockUpdateServerPort")(function* (
   mockUpdateServerPort: string | undefined,
 ) {
@@ -1773,6 +1794,13 @@ export const resolveBuildOptions = Effect.fn("resolveBuildOptions")(function* (
   const skipBuild = resolveBooleanFlag(input.skipBuild, env.skipBuild);
   const keepStage = resolveBooleanFlag(input.keepStage, env.keepStage);
   const signed = resolveBooleanFlag(input.signed, env.signed);
+  const localSigned = resolveBooleanFlag(input.localSigned, false);
+  if (
+    localSigned &&
+    (hostPlatform !== "darwin" || platform !== "mac" || target !== "dir" || signed)
+  ) {
+    return yield* new InvalidLocalMacSigningOptionsError({});
+  }
   const verbose = resolveBooleanFlag(input.verbose, env.verbose);
 
   const mockUpdates = resolveBooleanFlag(input.mockUpdates, env.mockUpdates);
@@ -1799,6 +1827,7 @@ export const resolveBuildOptions = Effect.fn("resolveBuildOptions")(function* (
     skipBuild,
     keepStage,
     signed,
+    localSigned,
     verbose,
     mockUpdates,
     mockUpdateServerPort,
@@ -3553,6 +3582,7 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
   const path = yield* Path.Path;
   const fs = yield* FileSystem.FileSystem;
   const hostPlatform = yield* HostProcess.Platform;
+  const localMacSigning = options.localSigned ? yield* LocalMacSigningCredentialsConfig : undefined;
   if (hostPlatform === "linux" && options.platform === "linux") {
     yield* preflightLinuxDesktopBuild(options.arch);
   }
@@ -4098,6 +4128,12 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
       for (const appName of yield* fs.readDirectory(from)) {
         if (!appName.endsWith(".app")) continue;
         const appPath = path.join(from, appName);
+        if (localMacSigning) {
+          yield* Effect.tryPromise({
+            try: () => signLocalMacApplication(appPath, localMacSigning),
+            catch: (cause) => new DesktopLocalMacSigningError({ appPath, cause }),
+          });
+        }
         const to = path.join(options.outputDir, appName);
         yield* fs.remove(to, { recursive: true, force: true });
         // Framework bundles use relative symlinks; FileSystem.copy rewrites them
@@ -4173,6 +4209,12 @@ const buildDesktopArtifactCli = Command.make("build-desktop-artifact", {
   signed: Flag.Boolean("signed").pipe(
     Flag.withDescription(
       "Enable signing/notarization discovery; Windows uses Azure Trusted Signing (env: T3CODE_DESKTOP_SIGNED).",
+    ),
+    Flag.optional,
+  ),
+  localSigned: Flag.Boolean("local-signed").pipe(
+    Flag.withDescription(
+      "Sign a macOS dir build with the persistent fnox local certificate; no notarization.",
     ),
     Flag.optional,
   ),
