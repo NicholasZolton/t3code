@@ -13,6 +13,7 @@ Repository-local knowledge about maintaining this fork with a small upstream dif
 ## Maintaining this bundle
 
 - [Paired Android notifications](paired-notifications.md) - Direct-delivery authorization and payload privacy boundaries to preserve during upstream integration.
+- [Local macOS signing](local-macos-signing.md) - Persistent private signing identity and its separation from release signing.
 
 - [Wiki maintenance](maintenance.md) - How to keep this repository's OKF v0.2 knowledge current, source-backed, and easy to navigate.
 - [Update log](log.md) - Chronological history of meaningful wiki updates.
