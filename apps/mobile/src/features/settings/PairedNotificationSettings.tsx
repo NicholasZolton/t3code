@@ -1,9 +1,10 @@
 import { useAtomSet, useAtomValue } from "@effect/atom-react";
 import { AsyncResult } from "effect/reactivity";
 import { useState, type JSX } from "react";
-import { Alert, Platform } from "react-native";
+import { Platform } from "react-native";
 
-import { AppText as Text } from "../../components/AppText";
+import { AppText as Text } from "../../components/ui/AppText";
+import * as Dialog from "../../components/ui/Dialog";
 import { runtime } from "../../lib/runtime";
 import { uuidv4 } from "../../lib/uuid";
 import { mobilePreferencesAtom, updateMobilePreferencesAtom } from "../../state/preferences";
@@ -76,13 +77,13 @@ export function PairedNotificationSettings(): JSX.Element | null {
           .catch(() => undefined);
       }
       if (!enabled && preferenceSaved) {
-        Alert.alert(
+        Dialog.alert(
           "Notifications are off on this phone",
           "Couldn't remove the server subscription yet. It will retry when this environment is reachable.",
         );
         return;
       }
-      Alert.alert(
+      Dialog.alert(
         "Couldn't update notifications",
         error instanceof Error
           ? error.message
@@ -146,7 +147,7 @@ export function PairedNotificationSettings(): JSX.Element | null {
           }
           onValueChange={(enabled) => {
             void save({ liveActivitiesEnabled: enabled }).catch(() => {
-              Alert.alert(
+              Dialog.alert(
                 "Couldn't update activity",
                 "Try changing the activity preference again.",
               );
@@ -160,7 +161,7 @@ export function PairedNotificationSettings(): JSX.Element | null {
           label="Live Update Settings"
           onPress={() => {
             void openAndroidLiveUpdateSettings().catch(() => {
-              Alert.alert(
+              Dialog.alert(
                 "Couldn't open Settings",
                 "Open T3 Code's notification settings in Android Settings.",
               );

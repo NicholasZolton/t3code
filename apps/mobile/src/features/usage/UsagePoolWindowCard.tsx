@@ -10,8 +10,8 @@ import { useId } from "react";
 import { Pressable, View } from "react-native";
 import { Defs, Path, Pattern, Rect, Svg } from "react-native-svg";
 
-import { SymbolView } from "../../components/AppSymbol";
-import { AppText as Text } from "../../components/AppText";
+import { SymbolView } from "../../components/ui/AppSymbol";
+import { AppText as Text } from "../../components/ui/AppText";
 
 export const DRIVER_LABEL: Partial<Record<string, string>> = {
   codex: "Codex",

@@ -54,6 +54,18 @@ describe("weighted menu search", () => {
     expect(searchItems(labels, "opus   4.7", (label) => [label])[0]).toBe("Opus 4.7");
   });
 
+  it("can ignore match position and length without changing default ranking", () => {
+    const shorter = ["Claude Opus 5"];
+    const newer = ["Claude Opus 5.5"];
+    expect(scoreSearchFields(shorter, "opus")).not.toBe(scoreSearchFields(newer, "opus"));
+    expect(scoreSearchFields(shorter, "opus", { ignorePosition: true })).toBe(
+      scoreSearchFields(newer, "opus", { ignorePosition: true }),
+    );
+    expect(scoreSearchFields(["Opus"], "opus", { ignorePosition: true })).toBeLessThan(
+      scoreSearchFields(newer, "opus", { ignorePosition: true })!,
+    );
+  });
+
   it("preserves browsing and equal-score order, applies limits after ranking, and never mutates input", () => {
     const entries = [{ label: "Beta" }, { label: "Alpha" }, { label: "Alpha" }];
     const original = [...entries];

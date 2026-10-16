@@ -20,6 +20,9 @@ type ModelPickerSearchableModel = {
   isFavorite?: boolean;
 };
 
+// Far below any token-scored match, favorites included.
+const MODEL_PICKER_EXACT_NAME_SCORE = -1000;
+
 function getModelPickerSearchFields(model: ModelPickerSearchableModel): SearchField[] {
   return [
     model.name,
@@ -28,6 +31,10 @@ function getModelPickerSearchFields(model: ModelPickerSearchableModel): SearchFi
     { value: model.driverKind, weight: 30 },
     { value: model.providerDisplayName, weight: 30 },
   ];
+}
+
+function normalizeModelName(name: string): string {
+  return normalizeSearchQuery(name).replace(/\s+/gu, " ");
 }
 
 export function buildModelPickerSearchText(model: ModelPickerSearchableModel): string {
@@ -42,8 +49,56 @@ export function scoreModelPickerSearch(
   model: ModelPickerSearchableModel,
   query: string,
 ): number | null {
-  if (!query.trim()) return 0;
-  const score = scoreSearchFields(getModelPickerSearchFields(model), query);
+  const normalizedQuery = normalizeModelName(query);
+  if (!normalizedQuery) {
+    return 0;
+  }
+
+  if (
+    normalizedQuery === normalizeModelName(model.name) ||
+    normalizedQuery === normalizeModelName(model.shortName ?? "")
+  ) {
+    return MODEL_PICKER_EXACT_NAME_SCORE;
+  }
+
+  const score = scoreSearchFields(getModelPickerSearchFields(model), query, {
+    ignorePosition: true,
+  });
   if (score === null) return null;
   return model.isFavorite ? score - SEARCH_FAVORITE_SCORE_BOOST : score;
+}
+
+/**
+ * Filters `items` to those matching `query`, best match first. Equal matches
+ * keep their order in `items`, which is the provider's own newest-first order.
+ */
+export function rankModelPickerSearch<T>(
+  items: ReadonlyArray<T>,
+  query: string,
+  toSearchable: (item: T) => ModelPickerSearchableModel,
+): T[] {
+  const ranked: Array<{
+    item: T;
+    score: number;
+    isFavorite: boolean;
+    order: number;
+  }> = [];
+  items.forEach((item, order) => {
+    const searchable = toSearchable(item);
+    const score = scoreModelPickerSearch(searchable, query);
+    if (score !== null) {
+      ranked.push({
+        item,
+        score,
+        isFavorite: searchable.isFavorite === true,
+        order,
+      });
+    }
+  });
+  return ranked
+    .toSorted(
+      (a, b) =>
+        a.score - b.score || Number(b.isFavorite) - Number(a.isFavorite) || a.order - b.order,
+    )
+    .map((entry) => entry.item);
 }

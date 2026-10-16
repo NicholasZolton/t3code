@@ -1,3 +1,4 @@
+import * as Dialog from "../../../components/ui/Dialog";
 import { useOpenPullRequest } from "../../../native/useOpenPullRequest";
 import {
   type GitActionRequestInput,
@@ -21,9 +22,9 @@ import {
   useNavigation,
   type StaticScreenProps,
 } from "@react-navigation/native";
-import { SymbolView } from "../../../components/AppSymbol";
+import { SymbolView } from "../../../components/ui/AppSymbol";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Alert, Platform, Pressable, RefreshControl, ScrollView, View } from "react-native";
+import { Platform, Pressable, RefreshControl, ScrollView, View } from "react-native";
 
 import { Screen, ScreenStack, ScreenStackHeaderConfig } from "react-native-screens";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -32,11 +33,11 @@ import { useUniwindTheme } from "../../../lib/useUniwindTheme";
 import {
   AndroidHeaderIconButton,
   AndroidSheetHeader,
-} from "../../../components/AndroidScreenHeader";
-import { AndroidAnchoredMenu } from "../../../components/AndroidAnchoredMenu";
-import { MaterialScreenContent } from "../../../components/MaterialScreenContent";
+} from "../../../components/ui/AndroidScreenHeader";
+import { AndroidAnchoredMenu } from "../../../components/ui/AndroidAnchoredMenu";
+import { ScreenContent } from "../../../components/ui/ScreenContent";
 import { useAdaptiveWorkspaceLayout } from "../../layout/AdaptiveWorkspaceLayout";
-import { AppText as Text } from "../../../components/AppText";
+import { AppText as Text } from "../../../components/ui/AppText";
 import {
   NativeStackScreenOptions,
   nativeHeaderScrollEdgeEffects,
@@ -242,7 +243,7 @@ function GitOverviewSheetContent(props: GitOverviewSheetProps) {
     selectedThreadWorktreePath === null;
   const convertToJj = useCallback(() => {
     if (!selectedThreadCwd || !selectedThread || isConverting) return;
-    Alert.alert(
+    Dialog.alert(
       "Enable Jujutsu?",
       "Jujutsu will use this repository's Git store. Commits, branches, remotes, and uncommitted files stay in place. Existing Git worktrees continue to use Git.",
       [
@@ -260,7 +261,7 @@ function GitOverviewSheetContent(props: GitOverviewSheetProps) {
                 await gitActions.refreshSelectedThreadGitStatus();
               } else if (!isAtomCommandInterrupted(result)) {
                 const error = squashAtomCommandFailure(result);
-                Alert.alert(
+                Dialog.alert(
                   "Jujutsu initialization failed",
                   error instanceof Error ? error.message : "An error occurred.",
                 );
@@ -420,7 +421,10 @@ function GitOverviewSheetContent(props: GitOverviewSheetProps) {
                     onPress={() => {
                       void openPullRequest(link.url).then((opened) => {
                         if (!opened)
-                          Alert.alert("Unable to open PR", "The pull request could not be opened.");
+                          Dialog.alert(
+                            "Unable to open PR",
+                            "The pull request could not be opened.",
+                          );
                       });
                     }}
                   />
@@ -606,9 +610,7 @@ function GitOverviewSheetContent(props: GitOverviewSheetProps) {
         />
       )}
 
-      <MaterialScreenContent insetHorizontal={layout.usesSplitView}>
-        {content}
-      </MaterialScreenContent>
+      <ScreenContent insetHorizontal={layout.usesSplitView}>{content}</ScreenContent>
     </View>
   );
 }

@@ -2,8 +2,9 @@ import { useNavigation } from "@react-navigation/native";
 import { SettingsRow } from "./components/SettingsRow";
 import { AuthSettingsWriteScope } from "@t3tools/contracts";
 import { readEnvironmentScope, useEnvironmentsWithScope } from "../../state/session";
-import { ScreenScrollView as ScrollView } from "../../components/ScreenScrollView";
-import { AppText as Text, AppTextInput } from "../../components/AppText";
+import { ScreenScrollView as ScrollView } from "../../components/ui/ScreenScrollView";
+import { AppText as Text, AppTextInput } from "../../components/ui/AppText";
+import * as Dialog from "../../components/ui/Dialog";
 import {
   type ResponseStreamingMode,
   type ServerSettings,
@@ -19,7 +20,7 @@ import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import { worktreeSettingsPatchApplied } from "@t3tools/shared/serverSettings";
 import { useRef, useState } from "react";
-import { Alert, View } from "react-native";
+import { View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { RUNTIME_MODE_CHOICES } from "../threads/thread-settings-options";
@@ -31,6 +32,7 @@ import {
   SettingsEnvironmentFilterHeader,
 } from "./components/SettingsEnvironmentFilterHeader";
 import { BranchNamingSettings } from "./components/BranchNamingSettings";
+import { DatabaseStorageNotice } from "./components/DatabaseStorageNotice";
 import { SettingsChoiceRow } from "./components/SettingsChoiceRow";
 import { SettingsSection } from "./components/SettingsSection";
 import { SettingsSwitchRow } from "./components/SettingsSwitchRow";
@@ -203,7 +205,7 @@ function ServerSettingsDetail(props: { readonly page: SettingsPage }) {
               : false,
           )
         ) {
-          Alert.alert(
+          Dialog.alert(
             "Setting not saved everywhere",
             "An environment did not apply the setting. Update T3 Code on that environment and try again.",
           );
@@ -487,6 +489,15 @@ function ServerSettingsDetail(props: { readonly page: SettingsPage }) {
 
               {props.page === "maintenance" ? (
                 <>
+                  {!projectSelected &&
+                    selectedTargets
+                      .filter(
+                        (target) =>
+                          target.serverConfig.environment.capabilities.databaseStorage === true,
+                      )
+                      .map((target) => (
+                        <DatabaseStorageNotice key={target.environmentId} target={target} />
+                      ))}
                   {!projectSelected ? (
                     <SettingsSection title="Manage environments">
                       {selectedTargets.map((target) => (
@@ -566,7 +577,7 @@ function WorktreeSettingField(props: {
     setDraft(null);
     const schema = props.setting === "directory" ? Schema.Trim : WorktreeBranchPrefix;
     if (Option.isNone(Schema.decodeUnknownOption(schema)(value))) {
-      Alert.alert(
+      Dialog.alert(
         `Invalid ${props.label.toLowerCase()}`,
         props.setting === "directory"
           ? 'Use an absolute path or a path beginning with "~/".'
