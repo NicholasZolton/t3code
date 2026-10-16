@@ -2,7 +2,9 @@
 
 ## 2026-10-16
 
-- **Branch integration**: [Upstream integration](upstream-integration.md#october-16-branch-sync) records local merge `837d227b91` through upstream `3962ae8586`, incorporating all 96 incoming commits with zero branch gap. Fork `main` remains at `f2d43354c9`. Adopted upstream Beta branding, mobile UI boundaries, provider fixes, live command output, and database maintenance while retaining unreplaced fork features. No push, main integration, or remote deployment has occurred.
+- **Integration**: [PR #50](https://github.com/NicholasZolton/t3code/pull/50) reached fork `main` at `d3b3491750`. Refreshed [upstream integration](upstream-integration.md): all 96 incoming commits through `3962ae8586` are incorporated with ancestry preserved and zero gap against the pinned tip. The main local checkout is fast-forwarded; remote deployment remains separate.
+
+- **Branch integration**: [Upstream integration](upstream-integration.md#completed-october-16-sync) initially recorded local merge `837d227b91` through upstream `3962ae8586`, incorporating all 96 incoming commits with zero branch gap. At that observation, fork `main` remained at `f2d43354c9`. Adopted upstream Beta branding, mobile UI boundaries, provider fixes, live command output, and database maintenance while retaining unreplaced fork features. No push, main integration, or remote deployment had occurred.
 
 ## 2026-10-15
 
