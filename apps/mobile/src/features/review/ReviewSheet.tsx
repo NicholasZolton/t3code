@@ -4,10 +4,10 @@ import { vcsEnvironment } from "../../state/vcs";
 import type { EnvironmentId, ThreadId } from "@t3tools/contracts";
 import { formatDiffCount } from "@t3tools/client-runtime/diff-count";
 import { useNavigation, type StaticScreenProps } from "@react-navigation/native";
-import { AppActivityIndicator } from "../../components/AppActivityIndicator";
+import { AppActivityIndicator } from "../../components/ui/AppActivityIndicator";
 import { nativeHeaderScrollEdgeEffects } from "../../native/StackHeader";
-import { ScreenHeader } from "../../components/ScreenHeader";
-import type { ScreenHeaderMenuItem } from "../../components/ScreenHeader.types";
+import { AppBar } from "../../components/ui/AppBar";
+import type { AppBarMenuItem } from "../../components/ui/AppBar.types";
 import type { ReviewSectionItem } from "./reviewModel";
 import { useReviewHeaderPresentation } from "./useReviewHeaderPresentation";
 import { Screen, ScreenStack, ScreenStackHeaderConfig } from "react-native-screens";
@@ -35,10 +35,10 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNativeColumnLayoutMetrics } from "../../native/native-layout-metrics";
 
-import { AppText as Text } from "../../components/AppText";
-import { SymbolView } from "../../components/AppSymbol";
-import { AndroidScreenHeader } from "../../components/AndroidScreenHeader";
-import { MaterialScreenContent } from "../../components/MaterialScreenContent";
+import { AppText as Text } from "../../components/ui/AppText";
+import { SymbolView } from "../../components/ui/AppSymbol";
+import { AndroidScreenHeader } from "../../components/ui/AndroidScreenHeader";
+import { ScreenContent } from "../../components/ui/ScreenContent";
 import { cn } from "../../lib/cn";
 import { environmentCatalog } from "../../connection/catalog";
 import { useEnvironmentPresentation } from "../../state/presentation";
@@ -86,10 +86,7 @@ function ReviewHeader(
 ) {
   const { panes, toggleAuxiliaryPane } = useAdaptiveWorkspaceLayout();
   const presentation = useReviewHeaderPresentation(props);
-  const sectionAction = (
-    section: ReviewSectionItem | null,
-    title: string,
-  ): ScreenHeaderMenuItem => ({
+  const sectionAction = (section: ReviewSectionItem | null, title: string): AppBarMenuItem => ({
     id: section ? `section:${section.id}` : `unavailable:${title}`,
     title,
     disabled: section === null,
@@ -99,7 +96,7 @@ function ReviewHeader(
     },
   });
   return (
-    <ScreenHeader
+    <AppBar
       title={presentation.title}
       subtitle={presentation.subtitle}
       onBack={props.onReturnToThread}
@@ -443,7 +440,7 @@ function ReviewFileNavigator({
           </View>
         </View>
       )}
-      <MaterialScreenContent insetHorizontal>{fileList}</MaterialScreenContent>
+      <ScreenContent insetHorizontal>{fileList}</ScreenContent>
     </View>
   );
 }
@@ -751,7 +748,7 @@ export function ReviewSheet(props: ReviewSheetProps) {
         onReturnToThread={handleReturnToThread}
       />
 
-      <MaterialScreenContent>
+      <ScreenContent>
         <View className="flex-1 bg-sheet android:bg-sheet-solid">
           {showConnectionNotice ? (
             <View className="flex-1" style={{ paddingTop: topContentInset }}>
@@ -933,7 +930,7 @@ export function ReviewSheet(props: ReviewSheetProps) {
             onClear={commentSelection.clearSelection}
           />
         </View>
-      </MaterialScreenContent>
+      </ScreenContent>
     </>
   );
 }

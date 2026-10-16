@@ -1,4 +1,4 @@
-import { listLoginShellCandidates } from "@t3tools/shared/shell";
+import { listLoginShellCandidates, setWindowsPath } from "@t3tools/shared/shell";
 import * as Context from "effect/Context";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
@@ -64,7 +64,8 @@ export class DesktopShellEnvironmentCommandTimeoutError extends Schema.TaggedErr
 export class DesktopShellEnvironment extends Context.Service<
   DesktopShellEnvironment,
   {
-    readonly installIntoProcess: Effect.Effect<void>;
+    // Reuses the installation result; false leaves server hydration enabled.
+    readonly installIntoProcess: Effect.Effect<boolean>;
   }
 >()("@t3tools/desktop/shell/DesktopShellEnvironment") {}
 
@@ -367,7 +368,7 @@ const readWindowsEnvironment = Effect.fn("desktop.shellEnvironment.readWindowsEn
 const installWindowsEnvironment = Effect.fn("desktop.shellEnvironment.installWindowsEnvironment")(
   function* (
     config: ShellEnvironmentConfig,
-  ): Effect.fn.Return<void, never, ChildProcessSpawner.ChildProcessSpawner> {
+  ): Effect.fn.Return<boolean, never, ChildProcessSpawner.ChildProcessSpawner> {
     // Concurrent, not sequential: these two probes are independent (only their
     // results are combined below) and each spawns its own PowerShell. Run in
     // series they sit at offset 0 of desktop.startup, before anything else, and
@@ -388,7 +389,7 @@ const installWindowsEnvironment = Effect.fn("desktop.shellEnvironment.installWin
     ]);
 
     if (Option.isSome(mergedPath)) {
-      config.env.PATH = mergedPath.value;
+      setWindowsPath(config.env, mergedPath.value);
     }
     if (!config.env.FNM_DIR && profile.FNM_DIR) {
       config.env.FNM_DIR = profile.FNM_DIR;
@@ -396,6 +397,7 @@ const installWindowsEnvironment = Effect.fn("desktop.shellEnvironment.installWin
     if (!config.env.FNM_MULTISHELL_PATH && profile.FNM_MULTISHELL_PATH) {
       config.env.FNM_MULTISHELL_PATH = profile.FNM_MULTISHELL_PATH;
     }
+    return Boolean(noProfile.PATH && profile.PATH);
   },
 );
 
@@ -511,6 +513,14 @@ const installPosixEnvironment = Effect.fn("desktop.shellEnvironment.installPosix
         }
       }
     }
+
+    if (
+      config.platform === "darwin" &&
+      Option.isNone(trimNonEmpty(config.env[FCM_SERVICE_ACCOUNT_ENV_NAME]))
+    ) {
+      const credential = yield* readMacNotificationCredential;
+      if (Option.isSome(credential)) config.env[FCM_SERVICE_ACCOUNT_ENV_NAME] = credential.value;
+    }
   },
 );
 
@@ -529,21 +539,21 @@ const readMacNotificationCredential: Effect.Effect<Option.Option<string>> = Effe
   ),
 );
 
-const installShellEnvironment = Effect.fn("desktop.shellEnvironment.install")(function* (
+const installShellEnvironment = (
   config: ShellEnvironmentConfig,
-): Effect.fn.Return<void, never, ChildProcessSpawner.ChildProcessSpawner | FileSystem.FileSystem> {
-  if (config.platform === "win32") return yield* installWindowsEnvironment(config);
-  if (config.platform === "darwin" || config.platform === "linux") {
-    yield* installPosixEnvironment(config);
+): Effect.Effect<
+  boolean,
+  never,
+  ChildProcessSpawner.ChildProcessSpawner | FileSystem.FileSystem
+> => {
+  if (config.platform === "win32") {
+    return installWindowsEnvironment(config);
   }
-  if (
-    config.platform !== "darwin" ||
-    Option.isSome(trimNonEmpty(config.env[FCM_SERVICE_ACCOUNT_ENV_NAME]))
-  )
-    return;
-  const credential = yield* readMacNotificationCredential;
-  if (Option.isSome(credential)) config.env[FCM_SERVICE_ACCOUNT_ENV_NAME] = credential.value;
-});
+  if (config.platform === "darwin" || config.platform === "linux") {
+    return installPosixEnvironment(config).pipe(Effect.as(true));
+  }
+  return Effect.succeed(false);
+};
 
 /** @public Service construction is part of the canonical Effect module API. */
 export const make = Effect.gen(function* () {
@@ -551,13 +561,15 @@ export const make = Effect.gen(function* () {
   const fileSystem = yield* FileSystem.FileSystem;
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
   const installIntoProcess: DesktopShellEnvironment["Service"]["installIntoProcess"] =
-    installShellEnvironment({
-      env: process.env,
-      platform: environment.platform,
-    }).pipe(
-      Effect.provideService(FileSystem.FileSystem, fileSystem),
-      Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner),
-      Effect.withSpan("desktop.shellEnvironment.installIntoProcess"),
+    yield* Effect.cached(
+      installShellEnvironment({
+        env: process.env,
+        platform: environment.platform,
+      }).pipe(
+        Effect.provideService(FileSystem.FileSystem, fileSystem),
+        Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner),
+        Effect.withSpan("desktop.shellEnvironment.installIntoProcess"),
+      ),
     );
 
   return DesktopShellEnvironment.of({ installIntoProcess });

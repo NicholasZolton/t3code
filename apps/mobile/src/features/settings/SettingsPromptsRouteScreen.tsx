@@ -4,10 +4,11 @@ import {
   SAVED_PROMPT_NAME_MAX_LENGTH,
   SAVED_PROMPT_NAME_PATTERN,
 } from "@t3tools/contracts/settings";
-import { Alert, Pressable, TextInput, View } from "react-native";
+import { Pressable, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { AppText as Text } from "../../components/AppText";
-import { ScreenScrollView } from "../../components/ScreenScrollView";
+import { AppText as Text } from "../../components/ui/AppText";
+import { ScreenScrollView } from "../../components/ui/ScreenScrollView";
+import * as Dialog from "../../components/ui/Dialog";
 import { serverEnvironment } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { SettingsSection } from "./components/SettingsSection";
@@ -58,7 +59,7 @@ export function SettingsPromptsRouteScreen() {
         throw new Error("One or more machines could not save the prompt.");
       setEditing(null);
     } catch (error) {
-      Alert.alert("Prompt not saved", error instanceof Error ? error.message : "Try again.");
+      Dialog.alert("Prompt not saved", error instanceof Error ? error.message : "Try again.");
     } finally {
       setPending(false);
     }
@@ -107,7 +108,7 @@ export function SettingsPromptsRouteScreen() {
                       <Pressable
                         disabled={pending}
                         onPress={() =>
-                          Alert.alert("Delete prompt?", `Remove >${promptName}?`, [
+                          Dialog.alert("Delete prompt?", `Remove >${promptName}?`, [
                             { text: "Cancel" },
                             {
                               text: "Delete",

@@ -1,3 +1,4 @@
+import * as Dialog from "../../components/ui/Dialog";
 import type {
   EnvironmentId,
   ProjectId,
@@ -14,7 +15,6 @@ import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/model
 
 const EMPTY_THREAD_SHELLS: ReadonlyArray<EnvironmentThreadShell> = [];
 import { PROVIDER_WORKSPACE_SNAPSHOT_TTL_MS } from "@t3tools/contracts";
-import { Alert } from "react-native";
 import {
   expandSavedPrompt,
   savedPromptEnvironmentNames,
@@ -568,7 +568,7 @@ export function useComposerCommandMenu({
             setSelection({ start: result.cursor, end: result.cursor });
             onChangeDraftMessage(result.text);
           } catch (error) {
-            Alert.alert(
+            Dialog.alert(
               "Could not insert prompt",
               error instanceof Error ? error.message : "Try again.",
             );
@@ -588,7 +588,7 @@ export function useComposerCommandMenu({
         const existing = getComposerDraftSnapshot(ownerKey).context?.records ?? [];
         const alreadyAttached = existing.some((entry) => entry.contextId === record.contextId);
         if (!alreadyAttached && existing.length >= COMPOSER_CONTEXT_MAX_RECORDS) {
-          Alert.alert(
+          Dialog.alert(
             "Too many context items",
             "Remove some context from the draft and try again.",
           );
@@ -623,7 +623,7 @@ export function useComposerCommandMenu({
           (getComposerDraftSnapshot(ownerKey).context?.records.length ?? 0) >=
           COMPOSER_CONTEXT_MAX_RECORDS
         ) {
-          Alert.alert(
+          Dialog.alert(
             "Too many context items",
             "Remove some context from the draft and try again.",
           );

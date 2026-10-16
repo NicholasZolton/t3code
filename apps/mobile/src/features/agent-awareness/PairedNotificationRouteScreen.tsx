@@ -7,7 +7,7 @@ import * as Schema from "effect/Schema";
 import { AsyncResult } from "effect/reactivity";
 import { useEffect, useMemo, useState, type JSX } from "react";
 
-import { AppText as Text } from "../../components/AppText";
+import { AppText as Text } from "../../components/ui/AppText";
 import { runtime } from "../../lib/runtime";
 import { mobilePreferencesAtom } from "../../state/preferences";
 import { useSavedRemoteConnections } from "../../state/use-remote-environment-registry";

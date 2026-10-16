@@ -1,9 +1,9 @@
-import { SymbolView } from "../../../components/AppSymbol";
 import { DEFAULT_VCS_TERMINOLOGY, type VcsTerminology } from "@t3tools/shared/vcs";
+import { SymbolView } from "../../../components/ui/AppSymbol";
 import type { ComponentProps } from "react";
 import { Platform, Pressable, View } from "react-native";
-import { AppText as Text } from "../../../components/AppText";
-import { MaterialButton } from "../../../components/MaterialButton";
+import { AppText as Text } from "../../../components/ui/AppText";
+import { Button } from "../../../components/ui/Button";
 import { cn } from "../../../lib/cn";
 
 /* ─── Shared sheet components ──────────────────────────────────────── */
@@ -18,8 +18,9 @@ export function SheetActionButton(props: {
   if (Platform.OS === "android")
     return (
       <View className="flex-1">
-        <MaterialButton
+        <Button
           label={props.label}
+          icon={props.icon}
           tone={props.tone}
           disabled={props.disabled}
           onPress={props.onPress}

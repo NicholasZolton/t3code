@@ -6,23 +6,32 @@ tags: [upstream, fork, integration]
 status: stable
 generated:
   by: opencode/gpt-6.1-sol
-  at: 2026-10-15T14:33:08+00:00
+  at: 2026-10-16T04:12:58+00:00
 verified:
   - by: opencode/gpt-6.1-sol
-    at: 2026-10-15T14:33:08+00:00
+    at: 2026-10-16T04:12:58+00:00
 snapshot:
-  at: 2026-10-15T14:33:08+00:00
-  fork_main: 9ce8f0a504b8abe1af9feead20ae1714c0d9ded8
-  upstream_main: e536bfd33bc3c351997141d93790df75eeded7b9
+  at: 2026-10-16T04:12:58+00:00
+  fork_main: f2d43354c9acdd8b2ecd777afa8fb9103ff336fb
+  upstream_main: 3962ae8586333310eeef655c917389b35f7b679d
   shared_baseline: e536bfd33bc3c351997141d93790df75eeded7b9
   last_main_integration: 30b7fbff813e913ac3b88ae58ebe1dd47b50fc4f
   last_main_upstream: e536bfd33bc3c351997141d93790df75eeded7b9
-  missing_upstream_on_main: 0
+  missing_upstream_on_main: 96
   missing_upstream_at_integrated_tip: 0
-  branch_integration: 30b7fbff813e913ac3b88ae58ebe1dd47b50fc4f
-  branch_parent: e9e7b07c0dfdc421d4216b2164cd4efe4ec4588d
+  branch_integration: 837d227b910791a9f9c28c6fea2609af3f40085c
+  branch_parent: f2d43354c9acdd8b2ecd777afa8fb9103ff336fb
   missing_upstream_on_branch: 0
 sources:
+  - id: october-16-branch-integration
+    resource: "Local Git object 837d227b910791a9f9c28c6fea2609af3f40085c on NicholasZolton/merge-upstream-changes-2; not pushed or incorporated into main at the snapshot time"
+    title: Ancestry-preserving branch merge through 3962ae8586
+  - id: october-16-review-git
+    resource: "Local Git verification at 2026-10-16T04:12:58+00:00: origin/main and local main equal f2d43354c9acdd8b2ecd777afa8fb9103ff336fb. The shared baseline with upstream 3962ae8586333310eeef655c917389b35f7b679d is e536bfd33bc3c351997141d93790df75eeded7b9, leaving 96 upstream commits missing on main. Merge 837d227b910791a9f9c28c6fea2609af3f40085c has that fork main and pinned upstream tip as parents, with zero missing upstream commits on the branch. All 669 incoming paths without prior fork changes match upstream byte-for-byte. Fork prompts, Vim, shortcuts, weighted search, OpenCode safeguards and accounts, SSH guards, paired notifications, Crit/Portless, and Jujutsu remain. No push, main integration, or remote deployment has occurred."
+    title: Branch ancestry, main gap, and upstream-first source audit
+  - id: october-16-upstream
+    resource: https://github.com/pingdotgg/t3code/commit/3962ae8586333310eeef655c917389b35f7b679d
+    title: Pinned upstream tip for the October 16 branch integration
   - id: october-15-main-integration
     resource: https://github.com/NicholasZolton/t3code/pull/48
     title: Completed October 15 upstream integration into fork main
@@ -219,16 +228,35 @@ sources:
 
 # Upstream integration
 
-The newest sync is merged into fork `main`.
-[PR #48](https://github.com/NicholasZolton/t3code/pull/48) landed at
-`9ce8f0a504`, incorporating all 106 incoming commits through upstream
-`e536bfd33b` with ancestry preserved and zero remaining main gap. The main
-local checkout is fast-forwarded to the same revision.
-[^october-15-main-review-git]
+The newest sync is a local branch merge, not yet incorporated into fork `main`.
+Merge `837d227b91` contains all 96 incoming commits through upstream
+`3962ae8586`, with ancestry preserved and zero branch gap. Fork `main` remains
+at `f2d43354c9`, sharing baseline `e536bfd33b` with that upstream tip and still
+missing those 96 commits. The last completed main sync is
+[PR #48](https://github.com/NicholasZolton/t3code/pull/48).
+[^october-16-review-git][^october-15-main-review-git]
 
 This is a revision-pinned snapshot, not a claim about newer upstream work.
 Refresh it after the next review or integration using the
 [maintenance guidance](maintenance.md).
+
+## October 16 branch sync
+
+Local merge `837d227b910791a9f9c28c6fea2609af3f40085c` on
+`NicholasZolton/merge-upstream-changes-2` has fork parent
+`f2d43354c9acdd8b2ecd777afa8fb9103ff336fb` and upstream parent
+`3962ae8586333310eeef655c917389b35f7b679d`. It is not a selective port or
+squash. No push, main integration, or remote deployment has occurred.
+[^october-16-branch-integration][^october-16-review-git]
+
+Adopt upstream v0.1.0/Beta branding, mobile shared controls, stable callback
+handling, provider fixes, live command output, and database maintenance. Fork
+mobile screens use upstream's reorganized UI components and dialog presenter;
+prompts, Vim, shortcuts, account controls, paired notifications, Crit/Portless,
+SSH guards, and mixed Git/Jujutsu behavior remain. Model search uses the fork's
+shared scorer with position-independent matching to retain upstream's newest-first
+ties, rather than duplicating scoring logic. All 669 incoming paths without prior
+fork changes match upstream exactly.[^october-16-review-git][^october-16-upstream]
 
 ## Completed October 15 sync
 
@@ -479,11 +507,11 @@ the bundled OpenCode policy. Older 2.x versions are outside the supported baseli
 [^upstream-current-manifest][^reviewed-upstream-main]
 
 Reused OpenCode child sessions still need fork admission and execution tracking.
-At `e536bfd33b`, parent reports identify the child session but not the individual
+At `3962ae8586`, parent reports identify the child session but not the individual
 execution. Once a child is reused, ambiguous reports must not attach stale results
 or settle the new call; observed execution can settle it without a result. Preserve
 this safeguard until upstream can attribute reports to individual runs.
-[^october-12-branch-integration][^october-15-review-git]
+[^october-12-branch-integration][^october-16-review-git]
 
 ## Jujutsu migration boundary
 
@@ -709,3 +737,9 @@ git log --reverse --oneline origin/main..upstream/main
 [^october-15-main-integration]: PR #48 and its recorded merge time.
 
 [^october-15-main-review-git]: Completed main ancestry checks, exact revisions and parents, and zero gap against the pinned upstream tip.
+
+[^october-16-branch-integration]: Local-only upstream merge and its exact fork and upstream parents; main integration remains pending.
+
+[^october-16-review-git]: Pinned main gap, zero branch gap, source audit, and retained fork compatibility boundaries.
+
+[^october-16-upstream]: Exact upstream revision incorporated into the October 16 branch sync.
