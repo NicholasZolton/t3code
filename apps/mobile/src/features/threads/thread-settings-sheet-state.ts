@@ -6,7 +6,6 @@ export function modelFavoriteKey(provider: ProviderInstanceId, model: string): s
   return `${provider}:${model}`;
 }
 
-/** Keep catalog order within each group when favorites move to the front. */
 export function favoritesFirst(
   models: ReadonlyArray<ModelOption>,
   favoriteKeys: ReadonlySet<string>,
@@ -36,7 +35,6 @@ export function scoreModelCatalogQuery(input: {
   );
 }
 
-/** Preserve staged provider options when the highlighted model is tapped again. */
 export function pendingModelAfterPress(input: {
   readonly current: ModelOption | null;
   readonly pressed: ModelOption;
@@ -48,7 +46,6 @@ export function pendingModelAfterPress(input: {
   return input.current?.key === input.pressed.key ? input.current : input.pressed;
 }
 
-/** A model can disappear while the picker is open. */
 export function canCommitPendingModel(
   pending: ModelOption,
   groups: ReadonlyArray<ProviderGroup>,
@@ -60,10 +57,6 @@ export function canCommitPendingModel(
   );
 }
 
-/**
- * Primary and selected providers start open; all other catalogs start closed.
- * A user's disclosure tap inverts that default until the picker is dismissed.
- */
 export function providerSectionIsCollapsed(input: {
   readonly defaultExpanded: boolean;
   readonly hasExpansionOverride: boolean;

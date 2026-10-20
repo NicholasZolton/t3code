@@ -5,7 +5,7 @@ import { PairedNotificationReference } from "@t3tools/contracts";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import { AsyncResult } from "effect/reactivity";
-import { useEffect, useMemo, useState, type JSX } from "react";
+import { useEffect, useState, type JSX } from "react";
 
 import { AppText as Text } from "../../components/ui/AppText";
 import { runtime } from "../../lib/runtime";
@@ -28,7 +28,7 @@ export function PairedNotificationRouteScreen({
     readonly message: string;
   } | null>(null);
   const [attempt, setAttempt] = useState(0);
-  const target = useMemo(() => {
+  const target = (() => {
     if (isLoadingSavedConnection || !AsyncResult.isSuccess(preferences))
       return { message: "Loading your paired environments…", request: null };
     const reference = decodeReference(route.params);
@@ -53,7 +53,7 @@ export function PairedNotificationRouteScreen({
       message: null,
       request: { connection, reference: reference.value, environmentId: saved.environmentId },
     };
-  }, [preferences, savedConnectionsById, isLoadingSavedConnection, route.params]);
+  })();
   useEffect(() => {
     const request = target.request;
     if (!request) return;

@@ -1,4 +1,7 @@
 import {
+  CheckpointId,
+  CheckpointRef,
+  CheckpointScopeId,
   EnvironmentId,
   NodeId,
   ProviderDriverKind,
@@ -323,6 +326,82 @@ it("keeps worktree and pending requests stable during output updates, then refle
   );
   expect(registry.get(details.pendingRequestsAtom(ref))?.approvals).toEqual([]);
   expect(registry.get(details.worktreePathAtom(ref))).toBe("/workspace/moved");
+  dispose();
+  registry.dispose();
+});
+
+it("rebuilds checkpoint summaries only when checkpoints or messages change", () => {
+  const checkpoint: OrchestrationV2ThreadProjection["checkpoints"][number] = {
+    id: CheckpointId.make("checkpoint-1"),
+    threadId: v2Projection.thread.id,
+    scopeId: CheckpointScopeId.make("scope-1"),
+    runId: RunId.make("run-1"),
+    nodeId: NodeId.make("node-1"),
+    parentCheckpointId: null,
+    ordinalWithinScope: 1,
+    appRunOrdinal: 1,
+    ref: CheckpointRef.make("ref-1"),
+    status: "ready",
+    files: [],
+    capturedAt: v2Now,
+  };
+  const projection: OrchestrationV2ThreadProjection = {
+    ...v2Projection,
+    checkpoints: [
+      {
+        ...checkpoint,
+        id: CheckpointId.make("baseline"),
+        runId: null,
+        appRunOrdinal: null,
+        ordinalWithinScope: 0,
+        ref: CheckpointRef.make("baseline-ref"),
+      },
+      {
+        ...checkpoint,
+        id: CheckpointId.make("other-scope"),
+        runId: null,
+        appRunOrdinal: null,
+        scopeId: CheckpointScopeId.make("other-scope"),
+        ordinalWithinScope: 0,
+        ref: CheckpointRef.make("other-ref"),
+      },
+      checkpoint,
+    ],
+  };
+  const live = (data: OrchestrationV2ThreadProjection | null) =>
+    AsyncResult.success(
+      threadState({ data: Option.fromNullishOr(data), status: "live", error: Option.none() }),
+    );
+  const sourceAtom = Atom.make(live(projection));
+  const details = createEnvironmentThreadDetailAtoms(() => sourceAtom);
+  const registry = AtomRegistry.make();
+  const dispose = registry.mount(details.checkpointSummariesAtom(ref));
+
+  const summaries = registry.get(details.checkpointSummariesAtom(ref));
+  expect(summaries.map((summary) => summary.runId)).toEqual(["run-1"]);
+  expect(summaries[0]?.previousCheckpointRef).toBe("baseline-ref");
+
+  registry.set(sourceAtom, live({ ...projection, runs: [] }));
+  expect(registry.get(details.checkpointSummariesAtom(ref))).toBe(summaries);
+
+  registry.set(
+    sourceAtom,
+    live({
+      ...projection,
+      checkpoints: projection.checkpoints.map((checkpoint) =>
+        checkpoint.id === "baseline" ? { ...checkpoint, status: "missing" } : checkpoint,
+      ),
+    }),
+  );
+  expect(
+    registry.get(details.checkpointSummariesAtom(ref))[0]?.previousCheckpointRef,
+  ).toBeUndefined();
+
+  registry.set(sourceAtom, live({ ...projection, checkpoints: [] }));
+  expect(registry.get(details.checkpointSummariesAtom(ref))).toEqual([]);
+
+  registry.set(sourceAtom, live(null));
+  expect(registry.get(details.checkpointSummariesAtom(ref))).toEqual([]);
   dispose();
   registry.dispose();
 });

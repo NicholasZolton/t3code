@@ -1,6 +1,6 @@
 import { useNavigation } from "@react-navigation/native";
 import * as Haptics from "expo-haptics";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { searchItems } from "@t3tools/shared/searchRanking";
 
 import { AppText as Text } from "../../components/ui/AppText";
@@ -27,24 +27,17 @@ export function ScheduledTaskModelPickerRouteScreen() {
   const config = useEnvironmentServerConfig(editor?.environmentId ?? null);
   const selectedModel = editor?.draft.modelSelection ?? null;
   const projectId = editor?.draft.projectId ?? null;
-  const models = useMemo(
-    () => buildModelOptions(config, selectedModel, undefined, projectId),
-    [config, selectedModel, projectId],
-  );
-  const providerGroups = useMemo(() => groupByProvider(models), [models]);
+  const models = buildModelOptions(config, selectedModel, undefined, projectId);
+  const providerGroups = groupByProvider(models);
   const selectedOption = models.find(
     (option) =>
       option.selection.instanceId === selectedModel?.instanceId &&
       option.selection.model === selectedModel.model,
   );
-  const optionDescriptors = useMemo(
-    () =>
-      resolveProviderOptionDescriptors({
-        capabilities: selectedOption?.capabilities,
-        selections: selectedModel?.options,
-      }),
-    [selectedOption?.capabilities, selectedModel?.options],
-  );
+  const optionDescriptors = resolveProviderOptionDescriptors({
+    capabilities: selectedOption?.capabilities,
+    selections: selectedModel?.options,
+  });
 
   if (!editor) return <MissingTaskDraft />;
 

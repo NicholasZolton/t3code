@@ -14,6 +14,7 @@ export interface ThreadCheckpointSummary {
   readonly runId: RunId;
   readonly checkpointTurnCount: number;
   readonly checkpointRef: CheckpointRef;
+  readonly previousCheckpointRef?: CheckpointRef | undefined;
   readonly status: "ready" | "missing" | "error" | "stale";
   readonly files: ReadonlyArray<{
     readonly path: string;
@@ -25,10 +26,17 @@ export interface ThreadCheckpointSummary {
   readonly completedAt: string;
 }
 
-/** Derives the checkpoint/diff rows needed by review UIs from native V2 entities. */
 export function deriveThreadCheckpointSummaries(
-  projection: OrchestrationV2ThreadProjection,
+  projection: Pick<OrchestrationV2ThreadProjection, "checkpoints" | "messages">,
 ): ReadonlyArray<ThreadCheckpointSummary> {
+  const readyRefs = new Map(
+    projection.checkpoints
+      .filter((checkpoint) => checkpoint.status === "ready")
+      .map((checkpoint) => [
+        `${checkpoint.scopeId}:${checkpoint.ordinalWithinScope}`,
+        checkpoint.ref,
+      ]),
+  );
   return projection.checkpoints.flatMap((checkpoint) => {
     if (checkpoint.appRunOrdinal === null || checkpoint.runId === null) return [];
     const assistantMessageId =
@@ -42,6 +50,9 @@ export function deriveThreadCheckpointSummaries(
         runId: checkpoint.runId,
         checkpointTurnCount: checkpoint.appRunOrdinal,
         checkpointRef: checkpoint.ref,
+        previousCheckpointRef: readyRefs.get(
+          `${checkpoint.scopeId}:${checkpoint.ordinalWithinScope - 1}`,
+        ),
         status: checkpoint.status,
         files: checkpoint.files,
         assistantMessageId,

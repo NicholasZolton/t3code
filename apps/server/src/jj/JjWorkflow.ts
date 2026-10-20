@@ -68,6 +68,7 @@ export const make = Effect.gen(function* () {
   const crypto = yield* Crypto.Crypto;
   const driver = yield* JjVcsDriver.JjVcsDriver;
   const fileSystem = yield* FileSystem.FileSystem;
+  const environment = yield* HostProcess.Environment;
   const gitManager = yield* GitManager.GitManager;
   const path = yield* Path.Path;
   const process = yield* VcsProcess.VcsProcess;
@@ -313,10 +314,16 @@ export const make = Effect.gen(function* () {
         );
       }),
       headContext: (configCwd, name, upstreamRef) =>
-        GitManager.resolveBranchHeadContext(readConfigValue, configCwd, {
-          branch: name,
-          upstreamRef,
-        }),
+        GitManager.resolveBranchHeadContext(
+          readConfigValue,
+          configCwd,
+          {
+            branch: name,
+            upstreamRef,
+          },
+          executeGit,
+          environment,
+        ),
       resolvePrimaryRemoteName: (remoteCwd) =>
         remotes.requirePrimaryRemoteName("JjWorkflow.resolvePrimaryRemoteName", remoteCwd),
       resolveDefaultRefName: (defaultCwd) =>

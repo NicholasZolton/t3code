@@ -69,8 +69,6 @@ export function attentionTransitionRows(
   );
 }
 
-// Reconciliation uses only observed transitions. Event-driven delivery can
-// include fresh completions whose running update never reached the device.
 export function newlyTerminalRows(
   previousAggregate: RelayAgentActivityAggregateState | null,
   nextAggregate: RelayAgentActivityAggregateState,

@@ -1,6 +1,6 @@
 import { resolveFilesystemReadAccess } from "@t3tools/client-runtime/state/filesystem";
 import { environmentSession } from "../../state/session";
-import { useCallback, useEffect, useMemo } from "react";
+import { useEffect } from "react";
 import * as DateTime from "effect/DateTime";
 
 import {
@@ -70,24 +70,13 @@ export function useReviewSections(input: {
     }
   }, [diffPreview.data, reviewCache.threadKey]);
 
-  const readyCheckpoints = useMemo(
-    () =>
-      getReadyReviewCheckpoints(
-        selectedThread === null ? [] : deriveThreadCheckpointSummaries(selectedThread.projection),
-      ),
-    [selectedThread],
+  const readyCheckpoints = getReadyReviewCheckpoints(
+    selectedThread === null ? [] : deriveThreadCheckpointSummaries(selectedThread.projection),
   );
-  const checkpointBySectionId = useMemo(
-    () =>
-      Object.fromEntries(
-        readyCheckpoints.map((checkpoint) => [
-          getReviewSectionIdForCheckpoint(checkpoint),
-          checkpoint,
-        ]),
-      ) as Record<string, ThreadCheckpointSummary>,
-    [readyCheckpoints],
-  );
-  const reviewSections = useMemo(() => {
+  const checkpointBySectionId = Object.fromEntries(
+    readyCheckpoints.map((checkpoint) => [getReviewSectionIdForCheckpoint(checkpoint), checkpoint]),
+  ) as Record<string, ThreadCheckpointSummary>;
+  const reviewSections = (() => {
     const sections = buildReviewSectionItems({
       checkpoints: readyCheckpoints,
       gitSections:
@@ -105,35 +94,15 @@ export function useReviewSections(input: {
           section.kind === "turn" ? section : { ...section, diff: null, isLoading: true },
         )
       : sections;
-  }, [
-    canReadFiles,
-    diffPreview.data?.sources,
-    diffPreview.isPending,
-    fileAccess.isPending,
-    loadingTurnIds,
-    readyCheckpoints,
-    reviewCache.gitSections,
-    reviewCache.turnDiffById,
-    vcsKind,
-  ]);
-  const selectedSection = useMemo(
-    () =>
-      reviewSections.find((section) => section.id === reviewCache.selectedSectionId) ??
-      reviewSections[0] ??
-      null,
-    [reviewCache.selectedSectionId, reviewSections],
-  );
-  const fallbackSectionId = useMemo(
-    () => getDefaultReviewSectionId(reviewSections),
-    [reviewSections],
-  );
-  const selectedSectionIdExists = useMemo(
-    () =>
-      reviewCache.selectedSectionId
-        ? reviewSections.some((section) => section.id === reviewCache.selectedSectionId)
-        : false,
-    [reviewCache.selectedSectionId, reviewSections],
-  );
+  })();
+  const selectedSection =
+    reviewSections.find((section) => section.id === reviewCache.selectedSectionId) ??
+    reviewSections[0] ??
+    null;
+  const fallbackSectionId = getDefaultReviewSectionId(reviewSections);
+  const selectedSectionIdExists = reviewCache.selectedSectionId
+    ? reviewSections.some((section) => section.id === reviewCache.selectedSectionId)
+    : false;
 
   useEffect(() => {
     if (
@@ -188,7 +157,7 @@ export function useReviewSections(input: {
     }
   }, [activeTurnDiff.error, reviewCache.threadKey]);
 
-  const refreshSelectedSection = useCallback(async () => {
+  const refreshSelectedSection = async () => {
     if (!enabled) {
       return;
     }
@@ -197,16 +166,13 @@ export function useReviewSections(input: {
       return;
     }
     diffPreview.refresh();
-  }, [activeTurnDiff, diffPreview, enabled, selectedSection?.kind]);
+  };
 
-  const selectSection = useCallback(
-    (sectionId: string) => {
-      if (reviewCache.threadKey) {
-        setReviewSelectedSectionId(reviewCache.threadKey, sectionId);
-      }
-    },
-    [reviewCache.threadKey],
-  );
+  const selectSection = (sectionId: string) => {
+    if (reviewCache.threadKey) {
+      setReviewSelectedSectionId(reviewCache.threadKey, sectionId);
+    }
+  };
 
   return {
     error:

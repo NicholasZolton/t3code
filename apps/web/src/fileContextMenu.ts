@@ -1,17 +1,9 @@
-/**
- * Right-click actions for a workspace file: copy its path, reveal it in the
- * environment's file manager, and open it in an editor. Reuse the chat file-chip menu's
- * machinery: reveal rides `shell.openInEditor` with `reveal: true`, which the
- * server only honors when its `shellRevealInFileManager` config flag is set,
- * so both actions work for every client and connection mode.
- */
 import {
   EDITORS,
   type ContextMenuItem,
   type EditorId,
   type EnvironmentId,
 } from "@t3tools/contracts";
-import { useCallback, useMemo } from "react";
 
 import { resolveDiffPathForWorkspace } from "./diffFileActions";
 import { writeTextToClipboard } from "./hooks/useCopyToClipboard";
@@ -44,12 +36,6 @@ export interface FileContextMenuTarget {
   readonly repositoryRoot?: string | undefined;
 }
 
-/**
- * Absolute path on the environment host for a diff-style target, resolving
- * repo-relative paths through the workspace root like every other diff
- * surface. Returns null when the path cannot be resolved, which callers must
- * treat as "no host file actions available".
- */
 export function resolveFileContextMenuAbsolutePath(target: FileContextMenuTarget): string | null {
   const workspaceFilePath = resolveDiffPathForWorkspace({
     filePath: target.filePath,
@@ -87,10 +73,6 @@ export interface FileContextMenuCapabilities {
   readonly editorIds: ReadonlyArray<EditorId>;
 }
 
-/**
- * Copying a relative path needs no host capabilities. Absolute-path copying and
- * host file actions are offered only when the path can be resolved.
- */
 export function buildFileContextMenuItems(input: {
   readonly target: FileContextMenuTarget;
   readonly capabilities: FileContextMenuCapabilities;
@@ -130,117 +112,106 @@ export function buildFileContextMenuItems(input: {
   return items;
 }
 
-/**
- * Context-menu actions for files. The environment id is fixed per component
- * (a thread's environment, a file browser's environment), so capabilities
- * resolve once per hook call.
- */
 export function useFileContextMenu(environmentId: EnvironmentId | null) {
   const openInEditor = useAtomCommand(shellEnvironment.openInEditor, { reportFailure: false });
   const serverConfig = useAtomValue(serverEnvironment.configValueAtom(environmentId));
 
-  return useMemo(() => {
-    const availableEditors = serverConfig?.availableEditors ?? [];
-    const capabilities: FileContextMenuCapabilities = {
-      // The reveal wording comes from the server because on WSL the reveal can
-      // run through Windows File Explorer even though the host reports Linux.
-      revealLabel:
-        environmentId !== null &&
-        serverConfig?.shellRevealInFileManager === true &&
-        serverConfig.availableEditors.includes("file-manager")
-          ? serverConfig.shellRevealInFileManagerKind === undefined
-            ? revealInFileExplorerLabelForOs(serverConfig.environment.platform.os)
-            : revealInFileExplorerLabelForKind(serverConfig.shellRevealInFileManagerKind)
-          : undefined,
-      canOpenDefault: availableEditors.includes("file-manager"),
-      editorIds: availableEditors,
-    };
+  const availableEditors = serverConfig?.availableEditors ?? [];
+  const capabilities: FileContextMenuCapabilities = {
+    // The reveal wording comes from the server because on WSL the reveal can
+    // run through Windows File Explorer even though the host reports Linux.
+    revealLabel:
+      environmentId !== null &&
+      serverConfig?.shellRevealInFileManager === true &&
+      serverConfig.availableEditors.includes("file-manager")
+        ? serverConfig.shellRevealInFileManagerKind === undefined
+          ? revealInFileExplorerLabelForOs(serverConfig.environment.platform.os)
+          : revealInFileExplorerLabelForKind(serverConfig.shellRevealInFileManagerKind)
+        : undefined,
+    canOpenDefault: availableEditors.includes("file-manager"),
+    editorIds: availableEditors,
+  };
 
-    const activate = async (
-      action: FileContextMenuAction,
-      target: FileContextMenuTarget,
-    ): Promise<void> => {
-      if (action === "copy-relative-path" || action === "copy-absolute-path") {
-        const path =
-          action === "copy-relative-path"
-            ? target.filePath
-            : resolveFileContextMenuAbsoluteCopyPath(target);
-        if (path === null) return;
-        const label = action === "copy-relative-path" ? "Relative path" : "Absolute path";
-        try {
-          const copied = await writeTextToClipboard(path, "file path");
-          if (copied) {
-            toastManager.add({ type: "success", title: `${label} copied`, description: path });
-          }
-        } catch (error) {
-          toastManager.add({
-            type: "error",
-            title: "Failed to copy file path",
-            description: error instanceof Error ? error.message : "An error occurred.",
-          });
+  const activate = async (
+    action: FileContextMenuAction,
+    target: FileContextMenuTarget,
+  ): Promise<void> => {
+    if (action === "copy-relative-path" || action === "copy-absolute-path") {
+      const path =
+        action === "copy-relative-path"
+          ? target.filePath
+          : resolveFileContextMenuAbsoluteCopyPath(target);
+      if (path === null) return;
+      const label = action === "copy-relative-path" ? "Relative path" : "Absolute path";
+      try {
+        const copied = await writeTextToClipboard(path, "file path");
+        if (copied) {
+          toastManager.add({ type: "success", title: `${label} copied`, description: path });
         }
-        return;
+      } catch (error) {
+        toastManager.add({
+          type: "error",
+          title: "Failed to copy file path",
+          description: error instanceof Error ? error.message : "An error occurred.",
+        });
       }
-      const absolutePath = resolveFileContextMenuAbsolutePath(target);
-      if (absolutePath === null || environmentId === null) return;
+      return;
+    }
+    const absolutePath = resolveFileContextMenuAbsolutePath(target);
+    if (absolutePath === null || environmentId === null) return;
 
-      const reveal = action === "reveal-in-folder";
-      const editor =
-        action === "open" || reveal
-          ? ("file-manager" as const)
-          : (action.slice("editor:".length) as EditorId);
-      if (action !== "open" && !reveal && !capabilities.editorIds.includes(editor)) return;
+    const reveal = action === "reveal-in-folder";
+    const editor =
+      action === "open" || reveal
+        ? ("file-manager" as const)
+        : (action.slice("editor:".length) as EditorId);
+    if (action !== "open" && !reveal && !capabilities.editorIds.includes(editor)) return;
 
-      const result = await openInEditor({
-        environmentId,
-        input: { cwd: absolutePath, editor, ...(reveal ? { reveal: true } : {}) },
-      });
-      if (result._tag !== "Failure") return;
-      toastManager.add({
-        type: "error",
-        title:
-          action === "open"
-            ? "Could not open file"
-            : reveal
-              ? "Unable to reveal file"
-              : `Could not open in ${EDITOR_LABEL_BY_ID.get(editor) ?? editor}`,
-        description: absolutePath,
-      });
-    };
+    const result = await openInEditor({
+      environmentId,
+      input: { cwd: absolutePath, editor, ...(reveal ? { reveal: true } : {}) },
+    });
+    if (result._tag !== "Failure") return;
+    toastManager.add({
+      type: "error",
+      title:
+        action === "open"
+          ? "Could not open file"
+          : reveal
+            ? "Unable to reveal file"
+            : `Could not open in ${EDITOR_LABEL_BY_ID.get(editor) ?? editor}`,
+      description: absolutePath,
+    });
+  };
 
-    const buildItems = (
-      target: FileContextMenuTarget,
-    ): readonly ContextMenuItem<FileContextMenuAction>[] =>
-      buildFileContextMenuItems({ target, capabilities });
+  const buildItems = (
+    target: FileContextMenuTarget,
+  ): readonly ContextMenuItem<FileContextMenuAction>[] =>
+    buildFileContextMenuItems({ target, capabilities });
 
-    const show = async (
-      target: FileContextMenuTarget,
-      position?: { x: number; y: number },
-    ): Promise<void> => {
-      const api = readLocalApi();
-      const items = buildItems(target);
-      if (items.length === 0 || api === undefined) return;
-      const clicked = await api.contextMenu.show(items, position);
-      if (clicked === null) return;
-      await activate(clicked, target);
-    };
+  const show = async (
+    target: FileContextMenuTarget,
+    position?: { x: number; y: number },
+  ): Promise<void> => {
+    const api = readLocalApi();
+    const items = buildItems(target);
+    if (items.length === 0 || api === undefined) return;
+    const clicked = await api.contextMenu.show(items, position);
+    if (clicked === null) return;
+    await activate(clicked, target);
+  };
 
-    return {
-      buildItems,
-      capabilities,
-      activate,
-      show,
-    };
-  }, [environmentId, openInEditor, serverConfig]);
+  return {
+    buildItems,
+    capabilities,
+    activate,
+    show,
+  };
 }
 
-/** Returns an onContextMenu callback that shows the menu at the pointer. */
 export function useFileContextMenuHandler(environmentId: EnvironmentId | null) {
   const contextMenu = useFileContextMenu(environmentId);
-  return useCallback(
-    (target: FileContextMenuTarget, event?: { clientX: number; clientY: number }) => {
-      void contextMenu.show(target, event ? { x: event.clientX, y: event.clientY } : undefined);
-    },
-    [contextMenu],
-  );
+  return (target: FileContextMenuTarget, event?: { clientX: number; clientY: number }) => {
+    void contextMenu.show(target, event ? { x: event.clientX, y: event.clientY } : undefined);
+  };
 }

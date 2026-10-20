@@ -243,7 +243,7 @@ describeJj("JjStackedAction commit phase", () => {
   );
 
   it.effect("commits and pushes the feature bookmark without moving main", () =>
-    withRepo(({ actions, driver, events, fileSystem, path, root }) =>
+    withRepo(({ actions, driver, events, fileSystem, path, root, runs }) =>
       Effect.gen(function* () {
         const mainBefore = yield* driver.changeAt(root, 'bookmarks(exact:"main")');
         yield* runJj(root, ["bookmark", "create", "feature/commit-push", "-r", "@"]);
@@ -257,6 +257,7 @@ describeJj("JjStackedAction commit phase", () => {
         assert.equal(result.commit.status, "created");
         assert.equal(result.push.status, "pushed");
         assert.equal(result.push.branch, "feature/commit-push");
+        assert.isFalse(runs.some((run) => run.args[0] === "diff" && run.args.includes("--git")));
         const bookmarks = yield* driver.listBookmarks(root);
         const local = bookmarks.find(
           (bookmark) => bookmark.name === "feature/commit-push" && bookmark.remote === null,

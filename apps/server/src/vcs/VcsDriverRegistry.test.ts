@@ -82,9 +82,6 @@ describe("VcsDriverRegistry", () => {
       assert.strictEqual(processCalls, 0);
     }).pipe(Effect.provide(layer));
   });
-
-  // Answers detection like git: the nearest folder at or above the cwd, up to
-  // `rootDir`, that holds `.git` is the repository.
   const makeDiskBackedLayer = (rootDir: string, calls: string[]) =>
     Layer.effect(VcsDriverRegistry.VcsDriverRegistry, VcsDriverRegistry.make).pipe(
       Layer.provide(NodeServices.layer),

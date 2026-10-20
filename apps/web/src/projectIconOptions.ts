@@ -1,8 +1,8 @@
-import { iconNames, type IconName } from "lucide-react/dynamic";
+import { lucideIconNames } from "./lib/lucideIconByName";
 import { searchItems } from "@t3tools/shared/searchRanking";
 export { PROJECT_ICON_COLORS, projectIconColorClassName } from "./projectIconColors";
 
-const POPULAR_PROJECT_ICONS = [
+const POPULAR_PROJECT_ICONS: ReadonlyArray<string> = [
   "folder-code",
   "code-2",
   "terminal",
@@ -27,7 +27,7 @@ const POPULAR_PROJECT_ICONS = [
   "workflow",
   "wrench",
   "layers-3",
-] as const satisfies ReadonlyArray<IconName>;
+];
 
 export const PROJECT_EMOJIS: ReadonlyArray<{ readonly emoji: string; readonly label: string }> = [
   { emoji: "💻", label: "Computer" },
@@ -62,10 +62,10 @@ export const PROJECT_EMOJIS: ReadonlyArray<{ readonly emoji: string; readonly la
   { emoji: "🌱", label: "Seedling" },
 ];
 
-export function filterProjectIconNames(query: string): ReadonlyArray<IconName> {
+export function filterProjectIconNames(query: string): ReadonlyArray<string> {
   const normalized = query.trim();
   if (!normalized) return POPULAR_PROJECT_ICONS;
-  return searchItems(iconNames, normalized, (name) => [name], 60);
+  return searchItems(lucideIconNames, normalized, (name) => [name], 60);
 }
 
 export function firstEmoji(value: string): string | null {

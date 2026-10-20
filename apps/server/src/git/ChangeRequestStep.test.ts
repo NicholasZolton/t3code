@@ -78,7 +78,13 @@ function readsFor(providerCwd: string): ChangeRequestVcsReads {
     providerCwd,
     configuredBaseRef: () => Effect.succeed("release/v2"),
     headContext: (cwd, refName, upstreamRef) =>
-      resolveBranchHeadContext(() => Effect.succeed(null), cwd, { branch: refName, upstreamRef }),
+      resolveBranchHeadContext(
+        () => Effect.succeed(null),
+        cwd,
+        { branch: refName, upstreamRef },
+        () => Effect.die("Unexpected remote read"),
+        {},
+      ),
     resolvePrimaryRemoteName: () => Effect.succeed("origin"),
     resolveDefaultRefName: () => Effect.succeed("main"),
     resolveRemoteTrackingCommit: () => Effect.succeed({ commitSha: "deadbeef" }),

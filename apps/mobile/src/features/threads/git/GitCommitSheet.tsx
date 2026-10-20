@@ -1,6 +1,6 @@
 import { useNavigation, type StaticScreenProps } from "@react-navigation/native";
 import { resolveVcsTerminology } from "@t3tools/shared/vcs";
-import { useCallback, useState } from "react";
+import { useState } from "react";
 import { Platform, Pressable, ScrollView, useWindowDimensions, View } from "react-native";
 import { formatDiffCount } from "@t3tools/client-runtime/diff-count";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -59,28 +59,17 @@ export function GitCommitSheet(_props: GitCommitSheetProps) {
   const selectedDeletions = selectedFiles.reduce((sum, file) => sum + file.deletions, 0);
   const selectedFilePreview = selectedFiles.slice(0, 3);
 
-  const runCommitAction = useCallback(
-    async (featureBranch: boolean) => {
-      if (!canWriteSourceControl || (featureBranch && !canChangeThreadBranch)) return;
-      const commitMessage = dialogCommitMessage.trim();
-      navigation.goBack();
-      await gitActions.onRunSelectedThreadGitAction({
-        action: "commit",
-        featureBranch,
-        ...(commitMessage ? { commitMessage } : {}),
-        ...(!allSelected ? { filePaths: selectedFiles.map((file) => file.path) } : {}),
-      });
-    },
-    [
-      allSelected,
-      canWriteSourceControl,
-      canChangeThreadBranch,
-      dialogCommitMessage,
-      gitActions,
-      navigation,
-      selectedFiles,
-    ],
-  );
+  const runCommitAction = async (featureBranch: boolean) => {
+    if (!canWriteSourceControl || (featureBranch && !canChangeThreadBranch)) return;
+    const commitMessage = dialogCommitMessage.trim();
+    navigation.goBack();
+    await gitActions.onRunSelectedThreadGitAction({
+      action: "commit",
+      featureBranch,
+      ...(commitMessage ? { commitMessage } : {}),
+      ...(!allSelected ? { filePaths: selectedFiles.map((file) => file.path) } : {}),
+    });
+  };
 
   return (
     <View
