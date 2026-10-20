@@ -1,5 +1,9 @@
 # Wiki update log
 
+## 2026-10-20
+
+- **Branch integration**: [Upstream integration](upstream-integration.md#october-20-branch-integration) records local merge `f6fba05fb5` through upstream `18f26cf179`, preserving all 772 incoming commits with zero branch gap. Fetched fork `main` remains at `c98f21e930`, still missing those commits. Adopted upstream React Compiler and browser-test boundaries while retaining unreplaced fork features. No push, main integration, or deployment has occurred.
+
 ## 2026-10-16
 
 - **Signing identity**: Recorded the persistent [local macOS signing certificate](local-macos-signing.md), its fnox-backed build command, and the requirement to preserve it across rebuilds and upstream syncs. Apple release signing and the Android keystore remain separate.
