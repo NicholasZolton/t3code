@@ -1,5 +1,9 @@
 # Wiki update log
 
+## 2026-10-21
+
+- **Integration candidate**: Recorded local merge `9e19fddc15` in [upstream integration](upstream-integration.md#local-october-20-integration-candidate), preserving all 1,466 incoming commits through upstream v0.1.1 (`e64766c56a`). Fork `main` remains at `c98f21e930`; no push or deployment has occurred. Upstream refactors replace overlapping fork code while mixed VCS recovery, reused-child safeguards, and other unreplaced fork features remain.
+
 ## 2026-10-16
 
 - **Signing identity**: Recorded the persistent [local macOS signing certificate](local-macos-signing.md), its fnox-backed build command, and the requirement to preserve it across rebuilds and upstream syncs. Apple release signing and the Android keystore remain separate.
