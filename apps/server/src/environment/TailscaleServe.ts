@@ -69,7 +69,7 @@ export function resolveLocalTarget(target: ServerTarget): LocalTarget | DevServe
       ? { localPort }
       : { localPort, localHost: devUrl.hostname };
   }
-  if (target.host !== undefined && !isWildcardHost(target.host) && !isLoopbackHost(target.host)) {
+  if (target.host !== undefined && !isWildcardHost(target.host)) {
     return { localPort: target.port, localHost: formatHostForUrl(target.host) };
   }
   return { localPort: target.port };

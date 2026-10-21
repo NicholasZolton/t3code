@@ -142,7 +142,12 @@ export interface JjPushResult {
 
 export type JjRemoteOps = Pick<
   VcsWorkflowOps,
-  "fetchRemote" | "remoteExists" | "remoteBranchExists" | "resolveRemoteTrackingCommit"
+  | "fetchRemote"
+  | "remoteExists"
+  | "remoteBranchExists"
+  | "resolveRemoteTrackingCommit"
+  | "resolveWorktreeBaseRemote"
+  | "fetchWorktreeBaseCommit"
 > & {
   readonly requirePrimaryRemoteName: (
     operation: string,
@@ -317,6 +322,60 @@ export const makeJjRemotes = (deps: JjRemoteOpsDeps): JjRemoteOps => {
       );
     },
   );
+
+  const resolveWorktreeBaseRemote: JjRemoteOps["resolveWorktreeBaseRemote"] = Effect.fn(
+    "JjRemotes.resolveWorktreeBaseRemote",
+  )(function* (input) {
+    const operation = "JjRemotes.resolveWorktreeBaseRemote";
+    const remoteNames = yield* driver
+      .listRemoteNames(input.cwd)
+      .pipe(mapJjFailure(operation, input.cwd, "Could not read this repository's remotes."));
+    const bookmarks = yield* driver
+      .listBookmarks(input.cwd)
+      .pipe(mapJjFailure(operation, input.cwd, "Could not list Jujutsu bookmarks."));
+    const local = bookmarks.find(
+      (bookmark) => bookmark.name === input.refName && bookmark.remote === null,
+    );
+    const tracked =
+      local === undefined
+        ? undefined
+        : bookmarks.find(
+            (bookmark) =>
+              bookmark.name === local.name && bookmark.remote !== null && bookmark.tracked,
+          );
+    if (tracked?.remote !== undefined && tracked.remote !== null)
+      return { remoteName: tracked.remote, branchName: tracked.name };
+    const remoteRef = local === undefined ? splitRemoteRefName(input.refName, remoteNames) : null;
+    if (remoteRef !== null) return { remoteName: remoteRef.remote, branchName: remoteRef.name };
+    return remoteNames.includes("origin")
+      ? { remoteName: "origin", branchName: input.refName }
+      : null;
+  });
+
+  const fetchWorktreeBaseCommit: JjRemoteOps["fetchWorktreeBaseCommit"] = Effect.fn(
+    "JjRemotes.fetchWorktreeBaseCommit",
+  )(function* (input) {
+    const target = yield* resolveWorktreeBaseRemote(input);
+    if (target === null) return null;
+    yield* fetchRemote({
+      cwd: input.cwd,
+      remoteName: target.remoteName,
+      refName: target.branchName,
+    });
+    if (
+      !(yield* remoteBranchExists({
+        cwd: input.cwd,
+        remoteName: target.remoteName,
+        refName: target.branchName,
+      }))
+    )
+      return null;
+    return yield* resolveRemoteTrackingCommit({
+      cwd: input.cwd,
+      refName: `${target.remoteName}/${target.branchName}`,
+      fallbackRemoteName: target.remoteName,
+    });
+  });
 
   const pushBookmark: JjRemoteOps["pushBookmark"] = Effect.fn("JjRemotes.pushBookmark")(
     function* (input) {
@@ -517,6 +576,8 @@ export const makeJjRemotes = (deps: JjRemoteOpsDeps): JjRemoteOps => {
     remoteExists,
     remoteBranchExists,
     resolveRemoteTrackingCommit,
+    resolveWorktreeBaseRemote,
+    fetchWorktreeBaseCommit,
     requirePrimaryRemoteName,
     bookmarkTo,
     pushBookmark,

@@ -76,9 +76,14 @@ function readsFor(providerCwd: string): ChangeRequestVcsReads {
       Effect.succeed({ commitSummary: "abc feat", diffSummary: "1 file", diffPatch: "diff" }),
     recentSubjects: () => Effect.succeed([]),
     providerCwd,
-    configuredBaseRef: () => Effect.succeed("release/v2"),
+    configuredBaseRef: () => Effect.succeed({ baseBranch: "release/v2", baseRef: "release/v2" }),
     headContext: (cwd, refName, upstreamRef) =>
-      resolveBranchHeadContext(() => Effect.succeed(null), cwd, { branch: refName, upstreamRef }),
+      resolveBranchHeadContext(
+        () => Effect.succeed(null),
+        () => Effect.die("unexpected Git read"),
+        cwd,
+        { branch: refName, upstreamRef },
+      ),
     resolvePrimaryRemoteName: () => Effect.succeed("origin"),
     resolveDefaultRefName: () => Effect.succeed("main"),
     resolveRemoteTrackingCommit: () => Effect.succeed({ commitSha: "deadbeef" }),

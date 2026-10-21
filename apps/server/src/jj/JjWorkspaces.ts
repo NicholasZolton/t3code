@@ -82,15 +82,16 @@ export const makeJjWorkspaces = (deps: JjWorkspaceOpsDeps): JjWorkspaceOps => {
       timeoutMs: 30_000,
     });
 
-  const removeIfOnlyJjMetadata = (directory: string) =>
-    Effect.gen(function* () {
-      const entries = yield* fileSystem
-        .readDirectory(directory)
-        .pipe(Effect.orElseSucceed(() => [] as ReadonlyArray<string>));
-      if (entries.length === 0 || (entries.length === 1 && entries[0] === ".jj")) {
-        yield* fileSystem.remove(directory, { recursive: true }).pipe(Effect.ignore);
-      }
-    });
+  const removeIfOnlyJjMetadata = Effect.fn("JjWorkspaces.removeIfOnlyJjMetadata")(function* (
+    directory: string,
+  ) {
+    const entries = yield* fileSystem
+      .readDirectory(directory)
+      .pipe(Effect.orElseSucceed(() => [] as ReadonlyArray<string>));
+    if (entries.length === 0 || (entries.length === 1 && entries[0] === ".jj")) {
+      yield* fileSystem.remove(directory, { recursive: true }).pipe(Effect.ignore);
+    }
+  });
 
   const preserveRegisteredWorkspace = Effect.fn("JjWorkspaces.preserveRegisteredWorkspace")(
     function* (operation: string, cwd: string, name: string, bookmark: string) {

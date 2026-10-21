@@ -93,27 +93,29 @@ export const makeJjStackedAction = (deps: JjStackedActionDeps): JjStackedActionO
   const run = JjProcess.jjRunner(process);
 
   /** `@` against `@-`, in the shape the shared message generator reads. */
-  const prepareCommitContext = (cwd: string, filePaths?: readonly string[]) =>
-    Effect.gen(function* () {
-      const operation = "JjStackedAction.prepareCommitContext";
-      const paths = filesetArguments(filePaths);
-      const [summary, patch] = yield* Effect.all([
-        run(operation, cwd, ["diff", "-r", "@", "--stat", ...paths], {
-          timeoutMs: 60_000,
-          maxOutputBytes: DIFF_SUMMARY_MAX_BYTES,
-          outputMode: "truncate",
-        }),
-        run(operation, cwd, ["diff", "-r", "@", "--git", ...paths], {
-          timeoutMs: 60_000,
-          maxOutputBytes: DIFF_PATCH_MAX_BYTES,
-          outputMode: "truncate",
-        }),
-      ]).pipe(mapJjFailure(operation, cwd, "Could not read the working-copy diff."));
+  const prepareCommitContext = Effect.fn("JjStackedAction.prepareCommitContext")(function* (
+    cwd: string,
+    filePaths?: readonly string[],
+  ) {
+    const operation = "JjStackedAction.prepareCommitContext";
+    const paths = filesetArguments(filePaths);
+    const [summary, patch] = yield* Effect.all([
+      run(operation, cwd, ["diff", "-r", "@", "--stat", ...paths], {
+        timeoutMs: 60_000,
+        maxOutputBytes: DIFF_SUMMARY_MAX_BYTES,
+        outputMode: "truncate",
+      }),
+      run(operation, cwd, ["diff", "-r", "@", "--git", ...paths], {
+        timeoutMs: 60_000,
+        maxOutputBytes: DIFF_PATCH_MAX_BYTES,
+        outputMode: "truncate",
+      }),
+    ]).pipe(mapJjFailure(operation, cwd, "Could not read the working-copy diff."));
 
-      return summary.stdout.trim().length === 0 && patch.stdout.trim().length === 0
-        ? null
-        : { stagedSummary: summary.stdout, stagedPatch: patch.stdout };
-    });
+    return summary.stdout.trim().length === 0 && patch.stdout.trim().length === 0
+      ? null
+      : { stagedSummary: summary.stdout, stagedPatch: patch.stdout };
+  });
 
   const runStackedAction: JjStackedActionOps["runStackedAction"] = Effect.fn(
     "JjStackedAction.runStackedAction",
@@ -323,6 +325,7 @@ export const makeJjStackedAction = (deps: JjStackedActionDeps): JjStackedActionO
               fallbackRefName: refName,
               emit,
               reads,
+              threadId: input.threadId,
             }).pipe(
               Effect.mapError((cause) =>
                 jjFailure("JjStackedAction.prPhase", cwd, cause.message, cause),

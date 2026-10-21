@@ -28,7 +28,12 @@ import { makeJjRemotes } from "./JjRemotes.ts";
 import { makeJjStackedAction } from "./JjStackedAction.ts";
 import { makeJjStatus, resolveUpstreamContext, resolveWorkspaceRefName } from "./JjStatus.ts";
 import { makeJjWorkspaces } from "./JjWorkspaces.ts";
-import { refNameToRevset, splitRemoteRefName } from "../vcs/JjRevset.ts";
+import {
+  localBookmarkRevset,
+  remoteBookmarkRevset,
+  refNameToRevset,
+  splitRemoteRefName,
+} from "../vcs/JjRevset.ts";
 import type { JjWorkspace } from "../vcs/JjVcsDriver.ts";
 import { workspaceSettings, makeWorkspaceQueries } from "../project/WorkspaceSettings.ts";
 
@@ -201,7 +206,15 @@ export const make = Effect.gen(function* () {
       )).commitId;
     const resolveRevision = Effect.fn("JjWorkflow.resolveRevision")(function* (revision: string) {
       const names = yield* driver.listRemoteNames(cwd);
-      const change = yield* driver.changeAt(cwd, refNameToRevset(revision, names));
+      const remote = revision.startsWith("refs/remotes/")
+        ? splitRemoteRefName(revision.slice(13), names)
+        : null;
+      const revset = revision.startsWith("refs/heads/")
+        ? localBookmarkRevset(revision.slice(11))
+        : remote !== null
+          ? remoteBookmarkRevset(remote.remote, remote.name)
+          : refNameToRevset(revision, names);
+      const change = yield* driver.changeAt(cwd, revset);
       if (change === null)
         return yield* jjFailure(
           "JjWorkflow.resolveRevision",
@@ -231,48 +244,47 @@ export const make = Effect.gen(function* () {
         upstream.hasUpstream && upstream.primaryRemote !== null
           ? `${upstream.primaryRemote}/${refName}`
           : null,
-      readRangeContext: (rangeCwd, baseRef) =>
-        Effect.gen(function* () {
-          const base = yield* resolveRevision(baseRef).pipe(
-            Effect.mapError((cause) =>
-              jjFailure(
-                "JjWorkflow.readRangeContext",
-                cwd,
-                "Could not resolve the base revision.",
-                cause,
-              ),
+      readRangeContext: Effect.fn("JjWorkflow.readRangeContext")(function* (rangeCwd, baseRef) {
+        const base = yield* resolveRevision(baseRef).pipe(
+          Effect.mapError((cause) =>
+            jjFailure(
+              "JjWorkflow.readRangeContext",
+              cwd,
+              "Could not resolve the base revision.",
+              cause,
             ),
-          );
-          return yield* Effect.all(
-            [
-              readRange(
-                "JjWorkflow.readRangeContext.log",
-                rangeCwd,
-                ["log", "--oneline", `${base}..${rangeHead}`],
-                RANGE_COMMIT_SUMMARY_MAX_OUTPUT_BYTES,
-              ),
-              readRange(
-                "JjWorkflow.readRangeContext.diffStat",
-                rangeCwd,
-                ["diff", "--stat", `${base}..${rangeHead}`],
-                RANGE_DIFF_SUMMARY_MAX_OUTPUT_BYTES,
-              ),
-              readRange(
-                "JjWorkflow.readRangeContext.diffPatch",
-                rangeCwd,
-                ["diff", "--no-ext-diff", "--patch", "--minimal", `${base}..${rangeHead}`],
-                RANGE_DIFF_PATCH_MAX_OUTPUT_BYTES,
-              ),
-            ],
-            { concurrency: "unbounded" },
-          ).pipe(
-            Effect.map(([commitSummary, diffSummary, diffPatch]) => ({
-              commitSummary,
-              diffSummary,
-              diffPatch,
-            })),
-          );
-        }),
+          ),
+        );
+        return yield* Effect.all(
+          [
+            readRange(
+              "JjWorkflow.readRangeContext.log",
+              rangeCwd,
+              ["log", "--oneline", `${base}..${rangeHead}`],
+              RANGE_COMMIT_SUMMARY_MAX_OUTPUT_BYTES,
+            ),
+            readRange(
+              "JjWorkflow.readRangeContext.diffStat",
+              rangeCwd,
+              ["diff", "--stat", `${base}..${rangeHead}`],
+              RANGE_DIFF_SUMMARY_MAX_OUTPUT_BYTES,
+            ),
+            readRange(
+              "JjWorkflow.readRangeContext.diffPatch",
+              rangeCwd,
+              ["diff", "--no-ext-diff", "--patch", "--minimal", `${base}..${rangeHead}`],
+              RANGE_DIFF_PATCH_MAX_OUTPUT_BYTES,
+            ),
+          ],
+          { concurrency: "unbounded" },
+        ).pipe(
+          Effect.map(([commitSummary, diffSummary, diffPatch]) => ({
+            commitSummary,
+            diffSummary,
+            diffPatch,
+          })),
+        );
+      }),
       recentSubjects: (historyCwd) =>
         GitManager.readRecentCommitSubjects(executeGit, historyCwd, rangeHead),
       providerCwd: paths.mainWorkspaceRoot,
@@ -280,7 +292,9 @@ export const make = Effect.gen(function* () {
         configCwd: string,
         name: string,
       ) {
-        const configured = yield* readConfigValue(configCwd, `branch.${name}.gh-merge-base`);
+        const configured =
+          (yield* readConfigValue(configCwd, `branch.${name}.t3-merge-base-ref`)) ??
+          (yield* readConfigValue(configCwd, `branch.${name}.gh-merge-base`));
         if (!configured) return null;
         const configuredRef = configured.replace(/^refs\/(?:heads|remotes)\//u, "");
         const bookmarks = yield* driver
@@ -299,21 +313,39 @@ export const make = Effect.gen(function* () {
           configuredRef,
           bookmarks.flatMap((bookmark) => (bookmark.remote === null ? [] : [bookmark.remote])),
         );
-        return (
+        const bookmark =
           bookmarks.find(
             (bookmark) =>
               !bookmark.conflict &&
               bookmark.target !== null &&
               ((bookmark.name === configuredRef &&
-                (bookmark.remote === null || bookmark.remote === upstream.primaryRemote)) ||
+                bookmark.remote === null &&
+                !configured.startsWith("refs/remotes/")) ||
                 (remoteRef !== null &&
+                  !configured.startsWith("refs/heads/") &&
                   bookmark.remote === remoteRef.remote &&
                   bookmark.name === remoteRef.name)),
-          )?.name ?? null
-        );
+          ) ??
+          (!configured.startsWith("refs/") && remoteRef === null
+            ? bookmarks.find(
+                (bookmark) =>
+                  !bookmark.conflict &&
+                  bookmark.target !== null &&
+                  bookmark.name === configuredRef &&
+                  bookmark.remote === upstream.primaryRemote,
+              )
+            : undefined);
+        if (bookmark === undefined) return null;
+        return {
+          baseBranch: bookmark.name,
+          baseRef:
+            bookmark.remote === null
+              ? `refs/heads/${bookmark.name}`
+              : `refs/remotes/${bookmark.remote}/${bookmark.name}`,
+        };
       }),
       headContext: (configCwd, name, upstreamRef) =>
-        GitManager.resolveBranchHeadContext(readConfigValue, configCwd, {
+        GitManager.resolveBranchHeadContext(readConfigValue, executeGit, configCwd, {
           branch: name,
           upstreamRef,
         }),
@@ -328,15 +360,18 @@ export const make = Effect.gen(function* () {
   });
 
   /** Resolve user-facing names through jj, whose bookmarks can lead the colocated Git refs. */
-  const hasCommit: VcsWorkflowOps["hasCommit"] = (input) =>
-    Effect.gen(function* () {
+  const hasCommit: VcsWorkflowOps["hasCommit"] = Effect.fn("JjWorkflow.hasCommit")(
+    function* (input) {
       const names = yield* driver.listRemoteNames(input.cwd);
       return (yield* driver.changeAt(input.cwd, refNameToRevset(input.refName, names))) !== null;
-    }).pipe(
-      Effect.mapError((cause) =>
-        jjFailure("JjWorkflow.hasCommit", input.cwd, "Could not resolve revision.", cause),
+    },
+    (effect, input) =>
+      effect.pipe(
+        Effect.mapError((cause) =>
+          jjFailure("JjWorkflow.hasCommit", input.cwd, "Could not resolve revision.", cause),
+        ),
       ),
-    );
+  );
 
   const stackedAction = makeJjStackedAction({
     driver,
@@ -361,35 +396,34 @@ export const make = Effect.gen(function* () {
 
   return JjWorkflow.of({
     deleteLocalBranch: (input) => refs.deleteLocalBranch(input),
-    branchPullRequest: (input, options) =>
-      Effect.gen(function* () {
-        const paths = yield* driver
-          .ensureUsable("JjWorkflow.branchPullRequest", input.cwd)
-          .pipe(
-            Effect.mapError((cause) =>
-              jjFailure(
-                "JjWorkflow.branchPullRequest",
-                input.cwd,
-                "This Jujutsu repository cannot be used.",
-                cause,
-              ),
-            ),
-          );
-        yield* JjProcess.exportGitRefs(process, "JjWorkflow.branchPullRequest", input.cwd).pipe(
+    branchPullRequest: Effect.fn("JjWorkflow.branchPullRequest")(function* (input, options) {
+      const paths = yield* driver
+        .ensureUsable("JjWorkflow.branchPullRequest", input.cwd)
+        .pipe(
           Effect.mapError((cause) =>
             jjFailure(
               "JjWorkflow.branchPullRequest",
               input.cwd,
-              "Could not synchronize hosting refs.",
+              "This Jujutsu repository cannot be used.",
               cause,
             ),
           ),
         );
-        return yield* gitManager.branchPullRequest(
-          { ...input, cwd: paths.mainWorkspaceRoot },
-          options,
-        );
-      }),
+      yield* JjProcess.exportGitRefs(process, "JjWorkflow.branchPullRequest", input.cwd).pipe(
+        Effect.mapError((cause) =>
+          jjFailure(
+            "JjWorkflow.branchPullRequest",
+            input.cwd,
+            "Could not synchronize hosting refs.",
+            cause,
+          ),
+        ),
+      );
+      return yield* gitManager.branchPullRequest(
+        { ...input, cwd: paths.mainWorkspaceRoot },
+        options,
+      );
+    }),
     registeredWorkspaces: (cwd) =>
       driver
         .listWorkspaces(cwd)
@@ -447,6 +481,8 @@ export const make = Effect.gen(function* () {
     remoteBranchExists: remotes.remoteBranchExists,
     resolveRemoteTrackingCommit: remotes.resolveRemoteTrackingCommit,
     publishRepository: remotes.publishRepository,
+    resolveWorktreeBaseRemote: remotes.resolveWorktreeBaseRemote,
+    fetchWorktreeBaseCommit: remotes.fetchWorktreeBaseCommit,
   });
 });
 
