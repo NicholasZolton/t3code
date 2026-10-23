@@ -109,7 +109,6 @@ export function androidActivityData(
   );
   return {
     active: String(activeCount > 0),
-    // Keep the status bar chip short enough to display alongside the app icon.
     activity_chip: activeCount > 0 ? (attentionCount > 0 ? "Review" : "Active") : "",
     activity_title: title,
     activity_phase: hero?.phase ?? "",
@@ -118,7 +117,6 @@ export function androidActivityData(
     activity_body: hero
       ? `${hero.status}: ${clean(hero.threadTitle)} · ${clean(hero.projectTitle)}`
       : "",
-    // Separate keys avoid double JSON encoding and preserve each expanded row when bounding the payload.
     ...Object.fromEntries(lines.map((line, index) => [`activity_line_${index}`, line])),
     activity_path: rows[0]?.deepLink ?? "/",
     activity_expires_at: String(expiresAt),

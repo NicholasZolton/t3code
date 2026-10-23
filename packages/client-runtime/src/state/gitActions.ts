@@ -373,9 +373,6 @@ export function getGitActionDisabledReason(input: {
   if (isBehind) {
     return `${vcs.refNounTitle} is behind upstream. Pull/rebase before creating a ${terminology.singular}.`;
   }
-  if (!hasDefaultBranchDelta) {
-    return `No local commits to include in a ${terminology.singular}.`;
-  }
   return `Create ${terminology.shortLabel} is currently unavailable.`;
 }
 

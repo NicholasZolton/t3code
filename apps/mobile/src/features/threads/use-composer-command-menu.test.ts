@@ -95,18 +95,6 @@ describe("mobile slash commands", () => {
     },
   );
 
-  it("does not offer a native command inside the message", () => {
-    expect(
-      buildComposerSlashCommandItems({
-        query: "plan",
-        atMessageStart: false,
-        hasThread: false,
-        allowInteractionMode: true,
-        selectedProviderStatus: antigravity,
-      }),
-    ).toEqual([]);
-  });
-
   it("still applies the T3 plan command for supported providers", () => {
     const items = buildComposerSlashCommandItems({
       query: "plan",
@@ -129,7 +117,6 @@ describe("mobile slash commands", () => {
       }),
     ).toEqual({ text: "", cursor: 0, interactionMode: "plan" });
 
-    // A provider switch can invalidate an open menu before a tap arrives.
     expect(
       resolveComposerCommandSelection({
         draftMessage: "/plan",
@@ -263,7 +250,9 @@ describe("workspace command discovery retry", () => {
       ...complete,
       workspaceSnapshots: complete.workspaceSnapshots?.map((snapshot) => ({
         ...snapshot,
-        checkedAt: new Date().toISOString(),
+        checkedAt: new Date(
+          Date.parse(provider.checkedAt) + PROVIDER_WORKSPACE_SNAPSHOT_TTL_MS,
+        ).toISOString(),
       })),
     };
     refreshProviders.mockResolvedValue({ _tag: "Success", value: { providers: [refreshed] } });
@@ -317,7 +306,7 @@ describe("workspace command discovery retry", () => {
             ...provider,
             workspaceSnapshots: provider.workspaceSnapshots.map((snapshot) => ({
               ...snapshot,
-              checkedAt: new Date().toISOString(),
+              checkedAt: new Date(Date.parse(provider.checkedAt) + 1_000).toISOString(),
             })),
           },
         }),

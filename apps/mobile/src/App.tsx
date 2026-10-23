@@ -6,7 +6,7 @@ import { StatusBar } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
-import { createStaticNavigation } from "@react-navigation/native";
+import { createStaticNavigation, getStateFromPath } from "@react-navigation/native";
 
 import { RegistryContext } from "@effect/atom-react";
 import { ThreadArrangementHost } from "./features/threads/ThreadArrangementSheet";
@@ -20,8 +20,11 @@ import {
 } from "./features/settings/appearance/AppearancePreferencesProvider";
 import { RootStack } from "./Stack";
 import { appAtomRegistry } from "./state/atom-registry";
+import { subscribeComposerDraftModelReconciliation } from "./state/use-composer-drafts";
+import { environmentThreadShells } from "./state/threads";
+import { environmentShell } from "./state/shell";
 import { OverlayPortalHost } from "./components/ui/OverlayPortal";
-import { shouldHandleAppLink } from "./lib/appLinking";
+import { shouldHandleAppLink, restoreDraftLinkState } from "./lib/appLinking";
 import { useMobileNavigationTheme } from "./lib/useMobileNavigationTheme";
 import { useUiRuntimeMemoryWarningGc } from "./lib/useUiRuntimeMemoryWarningGc";
 import { SubscriptionUsageCoordinator } from "./widgets/SubscriptionUsageCoordinator";
@@ -35,15 +38,14 @@ if (process.env.EXPO_PUBLIC_SHOWCASE === "1") {
   prepareNativeShowcaseCapture();
 }
 
-void SplashScreen.preventAutoHideAsync().catch(() => {
-  // The native module can be unavailable in non-native test environments.
-});
+void SplashScreen.preventAutoHideAsync().catch(() => {});
 
 const appLinking = {
   prefixes: [Linking.createURL("/"), "t3code://", "t3code-dev://", "t3code-preview://"],
-  // Keep the compact thread list available beneath a directly opened thread.
   config: { initialRouteName: "Home" },
   filter: shouldHandleAppLink,
+  getStateFromPath: (path: string, options: Parameters<typeof getStateFromPath>[1]) =>
+    restoreDraftLinkState(getStateFromPath(path, options), path),
 };
 
 const Navigation = createStaticNavigation(RootStack);
@@ -60,6 +62,16 @@ function SplashScreenCoordinator() {
 
 export default function App() {
   useUiRuntimeMemoryWarningGc();
+  useEffect(
+    () =>
+      subscribeComposerDraftModelReconciliation({
+        registry: appAtomRegistry,
+        threadShellAtom: environmentThreadShells.threadShellAtom,
+        threadRefsAtom: environmentThreadShells.threadRefsAtom,
+        shellStateAtom: environmentShell.stateAtom,
+      }),
+    [],
+  );
 
   return (
     <RegistryContext.Provider value={appAtomRegistry}>

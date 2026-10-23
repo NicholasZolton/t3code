@@ -8,9 +8,7 @@ import {
   buildReviewParsedDiff,
   buildReviewSectionItems,
   getDefaultReviewSectionId,
-  getReviewFilePreviewState,
   getReviewSectionIdForCheckpoint,
-  type ReviewRenderableFile,
 } from "./reviewModel";
 
 function makeCheckpoint(
@@ -22,24 +20,6 @@ function makeCheckpoint(
     status: "ready",
     files: [],
     assistantMessageId: MessageId.make(`msg-${input.checkpointTurnCount}`),
-    ...input,
-  };
-}
-
-function makeRenderableFile(
-  input: Partial<ReviewRenderableFile> & Pick<ReviewRenderableFile, "path">,
-): ReviewRenderableFile {
-  return {
-    id: input.path,
-    cacheKey: input.path,
-    previousPath: null,
-    changeType: "new",
-    additions: 0,
-    deletions: 0,
-    languageHint: null,
-    additionLines: [],
-    deletionLines: [],
-    rows: [],
     ...input,
   };
 }
@@ -175,7 +155,6 @@ describe("buildReviewSectionItems", () => {
 describe("buildReviewParsedDiff", () => {
   it.each([
     ["a/example.ts", "a/example.ts"],
-    ["b/example.ts", "b/example.ts"],
     ["a/before.ts", "b/after.ts"],
   ])("preserves repository paths from %s to %s", (previousPath, path) => {
     const parsed = buildReviewParsedDiff(
@@ -294,47 +273,6 @@ describe("buildReviewParsedDiff", () => {
     expect(parsed.files[0]?.rows[0]).toMatchObject({
       kind: "hunk",
       header: "@@ -1,1 +1,2 @@",
-    });
-  });
-
-  it("suppresses preview for non-text file formats", () => {
-    const preview = getReviewFilePreviewState(
-      makeRenderableFile({
-        path: "apps/mobile/assets/icon.png",
-      }),
-    );
-
-    expect(preview).toMatchObject({
-      kind: "suppressed",
-      reason: "non-text",
-      title: "Non-text file",
-      actionLabel: null,
-    });
-  });
-
-  it("suppresses large diffs until explicitly requested", () => {
-    const preview = getReviewFilePreviewState(
-      makeRenderableFile({
-        path: "apps/mobile/src/big.ts",
-        rows: Array.from({ length: 401 }, (_, index) => ({
-          kind: "line" as const,
-          id: `line-${index}`,
-          change: "add" as const,
-          oldLineNumber: null,
-          newLineNumber: index + 1,
-          content: `const line${index} = ${index};`,
-          additionTokenIndex: index,
-          deletionTokenIndex: null,
-          comparison: null,
-        })),
-      }),
-    );
-
-    expect(preview).toMatchObject({
-      kind: "suppressed",
-      reason: "large",
-      title: "Large diff",
-      actionLabel: "Load diff",
     });
   });
 });

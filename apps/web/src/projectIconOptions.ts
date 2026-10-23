@@ -2,7 +2,7 @@ import { iconNames, type IconName } from "lucide-react/dynamic";
 import { searchItems } from "@t3tools/shared/searchRanking";
 export { PROJECT_ICON_COLORS, projectIconColorClassName } from "./projectIconColors";
 
-const POPULAR_PROJECT_ICONS = [
+const POPULAR_PROJECT_ICONS: ReadonlyArray<IconName> = [
   "folder-code",
   "code-2",
   "terminal",
@@ -27,7 +27,7 @@ const POPULAR_PROJECT_ICONS = [
   "workflow",
   "wrench",
   "layers-3",
-] as const satisfies ReadonlyArray<IconName>;
+];
 
 export const PROJECT_EMOJIS: ReadonlyArray<{ readonly emoji: string; readonly label: string }> = [
   { emoji: "💻", label: "Computer" },

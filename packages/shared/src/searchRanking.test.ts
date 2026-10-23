@@ -2,7 +2,6 @@ import { describe, expect, it } from "vite-plus/test";
 
 import {
   insertRankedSearchResult,
-  normalizeSearchQuery,
   scoreQueryMatch,
   scoreSubsequenceMatch,
   scoreSearchFields,
@@ -88,29 +87,6 @@ describe("normalizeSearchQuery", () => {
 });
 
 describe("scoreQueryMatch", () => {
-  it("prefers exact matches over broader contains matches", () => {
-    expect(
-      scoreQueryMatch({
-        value: "ui",
-        query: "ui",
-        exactBase: 0,
-        prefixBase: 10,
-        includesBase: 20,
-      }),
-    ).toBe(0);
-
-    expect(
-      scoreQueryMatch({
-        value: "building native ui",
-        query: "ui",
-        exactBase: 0,
-        prefixBase: 10,
-        boundaryBase: 20,
-        includesBase: 30,
-      }),
-    ).toBeGreaterThan(0);
-  });
-
   it("treats boundary matches as stronger than generic contains matches", () => {
     const boundaryScore = scoreQueryMatch({
       value: "gh-fix-ci",

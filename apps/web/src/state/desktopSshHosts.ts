@@ -6,7 +6,6 @@ import { Atom } from "effect/reactivity";
 
 type DesktopSshDiscoveryBridge = Pick<DesktopBridge, "discoverSshHosts">;
 
-/** Filters and ranks SSH host suggestions as the user types in the host field. */
 export function filterDiscoveredSshHosts(
   hosts: ReadonlyArray<DesktopDiscoveredSshHost>,
   query: string,
@@ -36,9 +35,7 @@ function getDesktopSshDiscoveryBridge(): DesktopSshDiscoveryBridge | undefined {
   return typeof window === "undefined" ? undefined : window.desktopBridge;
 }
 
-export function createDesktopSshHostsStateAtom(
-  getBridge: () => DesktopSshDiscoveryBridge | undefined,
-) {
+function createDesktopSshHostsStateAtom(getBridge: () => DesktopSshDiscoveryBridge | undefined) {
   const discoverDesktopSshHosts = Effect.fn("discoverDesktopSshHosts")(function* () {
     const bridge = getBridge();
     if (!bridge) {

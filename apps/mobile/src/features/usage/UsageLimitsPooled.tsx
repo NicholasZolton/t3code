@@ -10,6 +10,7 @@ import {
   cursorUsageWindowDetails,
   displayLimitWindows,
   remainingPercent,
+  paceRemainingPercent,
   type LimitPoolWindow,
 } from "@t3tools/shared/usageLimits";
 import { Fragment, type ReactNode, useState } from "react";
@@ -24,7 +25,7 @@ import { environmentPresentations } from "../../state/presentation";
 import { ResetCredits } from "./UsageLimitsSection";
 import { OpenCodeAccounts } from "./OpenCodeAccounts";
 import { DRIVER_LABEL, PoolWindowCard } from "./UsagePoolWindowCard";
-import { useProviderColors } from "./usageProviders";
+import { usageProviderKind, useProviderColors } from "./usageProviders";
 
 export function UsageLimitsSection({
   now,
@@ -37,7 +38,7 @@ export function UsageLimitsSection({
   readonly selectedEnvironmentIds: ReadonlySet<EnvironmentId> | null;
   readonly cursorPrompt?: ReactNode;
 }) {
-  const presentations = useAtomValue(environmentPresentations.presentationsAtom);
+  const presentations = useAtomValue(environmentPresentations.presentationsWithProvidersAtom);
   const selected =
     selectedEnvironmentIds === null
       ? presentations
@@ -84,13 +85,7 @@ export function UsageLimitsSection({
                   <PoolWindowCard
                     key={`${window.kind}:${window.id}`}
                     pool={window}
-                    color={
-                      pool.driver === "claudeAgent"
-                        ? colors.claude
-                        : pool.driver === "antigravity"
-                          ? colors.antigravity
-                          : colors.codex
-                    }
+                    color={colors[usageProviderKind(pool.driver) ?? "codex"]}
                     now={now}
                     environmentIds={
                       selectedEnvironmentIds === null ? null : [...selectedEnvironmentIds]
@@ -160,10 +155,9 @@ type AccountScreenProps = StaticScreenProps<{
   now: number;
 }>;
 
-/** Resolve the account again so live quota and credit updates reach the open detail screen. */
 export function UsageLimitAccountScreen({ route }: AccountScreenProps) {
   const insets = useSafeAreaInsets();
-  const presentations = useAtomValue(environmentPresentations.presentationsAtom);
+  const presentations = useAtomValue(environmentPresentations.presentationsWithProvidersAtom);
   const { accountKey, windowId, windowKind, environmentIds, now } = route.params;
   const selectedIds =
     environmentIds === null ? null : new Set(environmentIds.map((id) => EnvironmentId.make(id)));
@@ -177,6 +171,7 @@ export function UsageLimitAccountScreen({ route }: AccountScreenProps) {
     .find((candidate) => candidate.driver === account?.driver)
     ?.windows.find((candidate) => candidate.id === windowId && candidate.kind === windowKind);
   const window = pool?.members.find((member) => member.account.key === accountKey)?.window;
+  const evenPace = window ? paceRemainingPercent(window, now) : null;
   const reset = pool?.resets.find((candidate) => candidate.member.account.key === accountKey);
   const [revealed, setRevealed] = useState(false);
   return (
@@ -229,6 +224,11 @@ export function UsageLimitAccountScreen({ route }: AccountScreenProps) {
                     dateStyle: "medium",
                     timeStyle: "short",
                   })}
+                </Text>
+              ) : null}
+              {evenPace !== null ? (
+                <Text className="text-sm text-foreground-muted">
+                  Even pace: {evenPace}% left by now
                 </Text>
               ) : null}
               {reset && reset.restoresPercent > 0 ? (

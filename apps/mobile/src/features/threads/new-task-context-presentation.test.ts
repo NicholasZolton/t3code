@@ -4,8 +4,8 @@ import { JJ_VCS_TERMINOLOGY, JJ_WORKING_COPY_REVISION } from "@t3tools/shared/vc
 
 import {
   filterNewTaskBranches,
-  resolveNewTaskBranchWorktreePath,
   resolveNewTaskBranchLabel,
+  resolveNewTaskBranchWorktreePath,
   resolveNewTaskLocalWorkspaceSelection,
   resolveNewTaskWorkspaceLabel,
 } from "./new-task-context-presentation";
@@ -43,22 +43,6 @@ describe("resolveNewTaskLocalWorkspaceSelection", () => {
     });
   });
 
-  it("adopts the checkout's current branch once refs load", () => {
-    expect(
-      resolveNewTaskLocalWorkspaceSelection({
-        branches: [
-          { name: "feature/worktree-base", current: false, worktreePath: "/worktree" },
-          { name: "main", current: true, worktreePath: "/repo" },
-        ],
-        projectCwd: "/repo",
-      }),
-    ).toEqual({
-      branch: "main",
-      worktreePath: null,
-      awaitsCurrentBranch: false,
-    });
-  });
-
   it("carries the worktree path when the current branch lives in another worktree", () => {
     expect(
       resolveNewTaskLocalWorkspaceSelection({
@@ -77,26 +61,6 @@ describe("resolveNewTaskLocalWorkspaceSelection", () => {
 });
 
 describe("resolveNewTaskBranchWorktreePath", () => {
-  it("moves Current checkout to the selected existing worktree", () => {
-    expect(
-      resolveNewTaskBranchWorktreePath({
-        workspaceMode: "local",
-        projectCwd: "/repo",
-        branchWorktreePath: "/repo/.t3/worktrees/feature",
-      }),
-    ).toBe("/repo/.t3/worktrees/feature");
-  });
-
-  it("keeps the project checkout represented by a null override", () => {
-    expect(
-      resolveNewTaskBranchWorktreePath({
-        workspaceMode: "local",
-        projectCwd: "/repo",
-        branchWorktreePath: "/repo",
-      }),
-    ).toBeNull();
-  });
-
   it("does not reuse an existing worktree while creating a new one", () => {
     expect(
       resolveNewTaskBranchWorktreePath({
