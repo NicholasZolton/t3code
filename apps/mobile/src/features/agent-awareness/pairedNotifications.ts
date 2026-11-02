@@ -178,6 +178,7 @@ export function usePairedNotificationSync(): void {
   const preferences = useAtomValue(mobilePreferencesAtom);
   const { savedConnectionsById, isLoadingSavedConnection } = useSavedRemoteConnections();
   const previousConnections = useRef<Readonly<Record<string, SavedRemoteConnection>>>({});
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- holds native push-token and foreground listeners to keep paired registrations current
   useEffect(() => {
     if (
       Platform.OS !== "android" ||

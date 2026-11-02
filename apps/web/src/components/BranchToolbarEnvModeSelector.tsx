@@ -2,7 +2,7 @@ import type { VcsTerminology } from "@t3tools/shared/vcs";
 import { ComposerSelectControl } from "./chat/ComposerControl";
 import { ComposerContextLabel } from "./ComposerContextLabel";
 import { FolderGit2Icon, FolderGitIcon, FolderIcon } from "lucide-react";
-import { memo, useMemo, type MouseEvent as ReactMouseEvent } from "react";
+import { memo, type MouseEvent as ReactMouseEvent } from "react";
 
 import {
   resolveCurrentWorkspaceLabel,
@@ -49,19 +49,16 @@ export const BranchToolbarEnvModeSelector = memo(function BranchToolbarEnvModeSe
 }: BranchToolbarEnvModeSelectorProps) {
   const composerFloatingLayerProps = useComposerMenuProps();
   const showPreviousWorktree = Boolean(previousWorktreeLabel && onUsePreviousWorktree);
-  const envModeItems = useMemo(
-    () => [
-      {
-        value: "local",
-        label: resolveCurrentWorkspaceLabel(activeWorktreePath, terminology),
-      },
-      { value: "worktree", label: resolveEnvModeLabel("worktree", terminology) },
-      ...(showPreviousWorktree && previousWorktreeLabel
-        ? [{ value: PREVIOUS_WORKTREE_SELECT_VALUE, label: previousWorktreeLabel }]
-        : []),
-    ],
-    [activeWorktreePath, previousWorktreeLabel, showPreviousWorktree, terminology],
-  );
+  const envModeItems = [
+    {
+      value: "local",
+      label: resolveCurrentWorkspaceLabel(activeWorktreePath, terminology),
+    },
+    { value: "worktree", label: resolveEnvModeLabel("worktree", terminology) },
+    ...(showPreviousWorktree && previousWorktreeLabel
+      ? [{ value: PREVIOUS_WORKTREE_SELECT_VALUE, label: previousWorktreeLabel }]
+      : []),
+  ];
 
   const stopContextMenuMouseDown = (event: ReactMouseEvent) => {
     if (event.button !== 0 || event.ctrlKey) {
@@ -72,7 +69,7 @@ export const BranchToolbarEnvModeSelector = memo(function BranchToolbarEnvModeSe
   if (envLocked || forceNewWorktree) {
     const lockedRow = (
       <span
-        className="inline-flex h-7 min-w-0 items-center gap-1 border border-transparent px-1.75 font-normal text-muted-foreground/70 text-xs sm:h-6"
+        className="inline-flex h-7 min-w-0 items-center gap-1.5 border border-transparent px-1.75 font-normal text-muted-foreground/70 text-sm sm:h-6 sm:text-xs"
         data-composer-context-control
       >
         {activeWorktreePath ? (

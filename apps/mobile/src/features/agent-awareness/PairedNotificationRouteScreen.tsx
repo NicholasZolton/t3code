@@ -54,6 +54,7 @@ export function PairedNotificationRouteScreen({
       request: { connection, reference: reference.value, environmentId: saved.environmentId },
     };
   }, [preferences, savedConnectionsById, isLoadingSavedConnection, route.params]);
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- resolves the native notification deep link and replaces this route while it remains mounted
   useEffect(() => {
     const request = target.request;
     if (!request) return;

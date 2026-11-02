@@ -9,7 +9,7 @@ import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 
-import { buildRemoteLaunchScript } from "./tunnel.ts";
+import { captureLaunchScript } from "./launchScript.fixture.ts";
 
 const Started = Schema.Struct({ pid: Schema.Int, port: Schema.Int });
 const decodeStarted = Schema.decodeUnknownEffect(Schema.fromJsonString(Started));
@@ -58,8 +58,7 @@ server.listen(0, "127.0.0.1", () => process.stdout.write(JSON.stringify({ pid: p
             Effect.flatMap(decodeStarted),
           );
           assert.equal(started.pid, child.pid);
-          const runner = { nodeScriptPath: cliPath };
-          const script = buildRemoteLaunchScript(runner)
+          const script = (yield* captureLaunchScript(cliPath))
             .replace(/^STATE_DIR=.*$/mu, 'STATE_DIR="$T3_TEST_STATE_DIR"')
             .replace(/^DEFAULT_SERVER_HOME=.*$/mu, 'DEFAULT_SERVER_HOME="$T3_TEST_SERVER_HOME"');
           const runnerContents = script

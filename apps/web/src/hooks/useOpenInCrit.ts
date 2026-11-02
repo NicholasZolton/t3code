@@ -14,6 +14,35 @@ import { usePreparedConnection } from "../state/session";
 import { ensureLocalApi } from "../localApi";
 import { resolveCritForwarding } from "./useOpenInCrit.logic";
 
+async function syncCritForwarding(
+  forwarding: ReturnType<typeof resolveCritForwarding>,
+  cwd: string,
+): Promise<number | null> {
+  if (forwarding.kind !== "ssh") return null;
+  const sync = window.desktopBridge?.syncSshPortlessForward;
+  if (!sync) throw new Error("SSH Portless forwarding requires the desktop app.");
+  const port = await sync({ target: forwarding.target, cwd });
+  if (port === null) throw new Error("No SSH Portless forward is available for this project.");
+  return port;
+}
+
+async function openCritUrl(url: string | null, remote: boolean): Promise<void> {
+  if (url === null) {
+    if (remote)
+      throw new Error("The remote server did not forward Crit. Update the server and try again.");
+    return;
+  }
+  await ensureLocalApi().shell.openExternal(url);
+}
+
+function reportCritError(error: unknown): void {
+  toastManager.add({
+    type: "error",
+    title: "Could not open Crit",
+    description: error instanceof Error ? error.message : String(error),
+  });
+}
+
 export function useOpenInCrit(environmentId: EnvironmentId | null): {
   open: (input: CritOpenInput) => Promise<void>;
   opening: boolean;
@@ -31,14 +60,7 @@ export function useOpenInCrit(environmentId: EnvironmentId | null): {
         environment?.entry ?? null,
         Option.getOrNull(prepared),
       );
-      let portlessPort: number | null = null;
-      if (forwarding.kind === "ssh") {
-        const sync = window.desktopBridge?.syncSshPortlessForward;
-        if (!sync) throw new Error("SSH Portless forwarding requires the desktop app.");
-        portlessPort = await sync({ target: forwarding.target, cwd: input.cwd });
-        if (portlessPort === null)
-          throw new Error("No SSH Portless forward is available for this project.");
-      }
+      const portlessPort = await syncCritForwarding(forwarding, input.cwd);
       const result = await command({
         environmentId,
         input: {
@@ -47,29 +69,16 @@ export function useOpenInCrit(environmentId: EnvironmentId | null): {
           ...(forwarding.kind === "tailscale" ? { tailscale: true } : {}),
         },
       });
-      if (result._tag === "Success" && result.value === null && forwarding.kind !== "local") {
-        throw new Error("The remote server did not forward Crit. Update the server and try again.");
-      }
-      if (result._tag === "Success" && result.value !== null) {
-        await ensureLocalApi().shell.openExternal(result.value);
+      if (result._tag === "Success") {
+        await openCritUrl(result.value, forwarding.kind !== "local");
       }
       if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
-        const error = squashAtomCommandFailure(result);
-        toastManager.add({
-          type: "error",
-          title: "Could not open Crit",
-          description: error instanceof Error ? error.message : String(error),
-        });
+        reportCritError(squashAtomCommandFailure(result));
       }
     } catch (error) {
-      toastManager.add({
-        type: "error",
-        title: "Could not open Crit",
-        description: error instanceof Error ? error.message : String(error),
-      });
-    } finally {
-      setOpening(false);
+      reportCritError(error);
     }
+    setOpening(false);
   };
 
   return { open, opening };

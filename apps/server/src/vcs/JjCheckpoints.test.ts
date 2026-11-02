@@ -1,11 +1,10 @@
 import { assert, it } from "@effect/vitest";
-import { ThreadId } from "@t3tools/contracts";
+import { CheckpointRef } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import type * as FileSystem from "effect/FileSystem";
 import type * as Path from "effect/Path";
 
 import { parseTurnDiffFilesFromNumstat } from "../checkpointing/Diffs.ts";
-import { checkpointRefForThreadTurn } from "../checkpointing/Utils.ts";
 import type * as JjVcsDriver from "./JjVcsDriver.ts";
 import type * as VcsDriver from "./VcsDriver.ts";
 import { makeJjCheckpointOps } from "./JjCheckpoints.ts";
@@ -22,10 +21,10 @@ import {
   write,
 } from "./testing/JjTestSupport.ts";
 
-const threadId = ThreadId.make("thread-jj-checkpoints");
-const baselineRef = checkpointRefForThreadTurn(threadId, 0);
-const firstTurnRef = checkpointRefForThreadTurn(threadId, 1);
-const missingRef = checkpointRefForThreadTurn(threadId, 99);
+const checkpointPrefix = "refs/t3/orchestration-v2/checkpoints/jj-test/ordinal";
+const baselineRef = CheckpointRef.make(`${checkpointPrefix}/0`);
+const firstTurnRef = CheckpointRef.make(`${checkpointPrefix}/1`);
+const missingRef = CheckpointRef.make(`${checkpointPrefix}/99`);
 
 function requireCheckpoints(driver: JjVcsDriver.JjVcsDriverShape): VcsDriver.VcsCheckpointOps {
   const checkpoints = driver.checkpoints;

@@ -66,7 +66,7 @@ export class FcmClient extends Context.Service<
   }
 >()("@t3tools/shared/FcmClient") {}
 
-export const make = Effect.gen(function* () {
+const make = Effect.gen(function* () {
   const config = yield* FcmConfiguration;
   const signer = yield* FcmAssertionSigner.FcmAssertionSigner;
   const client = yield* HttpClient.HttpClient;

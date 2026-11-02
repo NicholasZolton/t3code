@@ -4,8 +4,9 @@ import { JJ_VCS_TERMINOLOGY, JJ_WORKING_COPY_REVISION } from "@t3tools/shared/vc
 
 import {
   filterNewTaskBranches,
-  resolveNewTaskBranchWorktreePath,
+  fillNewTaskWorkspaceBranch,
   resolveNewTaskBranchLabel,
+  resolveNewTaskBranchWorktreePath,
   resolveNewTaskLocalWorkspaceSelection,
   resolveNewTaskWorkspaceLabel,
 } from "./new-task-context-presentation";
@@ -29,6 +30,22 @@ describe("new task VCS nouns", () => {
   });
 });
 
+describe("resolveNewTaskBranchLabel", () => {
+  it.each([
+    ["https://github.com/acme/repo/pull/123", "From PR #123"],
+    ["https://gitlab.com/acme/repo/-/merge_requests/123", "From MR #123"],
+  ])("names the change request a worktree starts from (%s)", (pullRequestReference, label) => {
+    expect(
+      resolveNewTaskBranchLabel({
+        branchName: null,
+        startFromOrigin: false,
+        workspaceMode: "worktree",
+        pullRequestReference,
+      }),
+    ).toBe(label);
+  });
+});
+
 describe("resolveNewTaskLocalWorkspaceSelection", () => {
   it("waits for refs instead of carrying a worktree base into Current checkout", () => {
     expect(
@@ -40,22 +57,6 @@ describe("resolveNewTaskLocalWorkspaceSelection", () => {
       branch: null,
       worktreePath: null,
       awaitsCurrentBranch: true,
-    });
-  });
-
-  it("adopts the checkout's current branch once refs load", () => {
-    expect(
-      resolveNewTaskLocalWorkspaceSelection({
-        branches: [
-          { name: "feature/worktree-base", current: false, worktreePath: "/worktree" },
-          { name: "main", current: true, worktreePath: "/repo" },
-        ],
-        projectCwd: "/repo",
-      }),
-    ).toEqual({
-      branch: "main",
-      worktreePath: null,
-      awaitsCurrentBranch: false,
     });
   });
 
@@ -77,26 +78,6 @@ describe("resolveNewTaskLocalWorkspaceSelection", () => {
 });
 
 describe("resolveNewTaskBranchWorktreePath", () => {
-  it("moves Current checkout to the selected existing worktree", () => {
-    expect(
-      resolveNewTaskBranchWorktreePath({
-        workspaceMode: "local",
-        projectCwd: "/repo",
-        branchWorktreePath: "/repo/.t3/worktrees/feature",
-      }),
-    ).toBe("/repo/.t3/worktrees/feature");
-  });
-
-  it("keeps the project checkout represented by a null override", () => {
-    expect(
-      resolveNewTaskBranchWorktreePath({
-        workspaceMode: "local",
-        projectCwd: "/repo",
-        branchWorktreePath: "/repo",
-      }),
-    ).toBeNull();
-  });
-
   it("does not reuse an existing worktree while creating a new one", () => {
     expect(
       resolveNewTaskBranchWorktreePath({
@@ -191,5 +172,68 @@ describe("filterNewTaskBranches", () => {
 
   it("matches a typed space against the dash a branch name uses", () => {
     expect(search("  login page ")).toEqual(["Feature/Login-Page"]);
+  });
+});
+
+describe("fillNewTaskWorkspaceBranch", () => {
+  const branches = [
+    { name: "origin/main", current: false, isDefault: true, isRemote: true },
+    { name: "feature", current: true, isDefault: false, worktreePath: "/repo-feature" },
+  ];
+  const base = {
+    branches,
+    projectCwd: "/repo",
+    worktreeDefaultSettled: true,
+  };
+
+  it("bases a new worktree on the default branch, even when only the remote has it", () => {
+    expect(
+      fillNewTaskWorkspaceBranch({
+        ...base,
+        selection: { mode: "worktree", branch: null, worktreePath: null },
+      }),
+    ).toEqual({ mode: "worktree", branch: "origin/main", worktreePath: null });
+  });
+
+  it("waits for the workspace default to settle before picking a base", () => {
+    const selection = { mode: "worktree", branch: null, worktreePath: null } as const;
+    expect(fillNewTaskWorkspaceBranch({ ...base, selection, worktreeDefaultSettled: false })).toBe(
+      selection,
+    );
+  });
+
+  it("follows the current checkout only for a local selection the user just chose", () => {
+    const selection = { mode: "local", branch: null, worktreePath: null } as const;
+    expect(fillNewTaskWorkspaceBranch({ ...base, selection })).toBe(selection);
+    expect(
+      fillNewTaskWorkspaceBranch({
+        ...base,
+        selection: { ...selection, followsCurrentCheckout: true },
+      }),
+    ).toEqual({
+      mode: "local",
+      branch: "feature",
+      worktreePath: "/repo-feature",
+      followsCurrentCheckout: true,
+    });
+  });
+
+  it("fills the current branch once refs arrive after local mode was chosen", () => {
+    const selection = {
+      mode: "local",
+      branch: null,
+      worktreePath: null,
+      followsCurrentCheckout: true,
+    } as const;
+    expect(fillNewTaskWorkspaceBranch({ ...base, branches: [], selection })).toBe(selection);
+    expect(fillNewTaskWorkspaceBranch({ ...base, selection })).toMatchObject({
+      branch: "feature",
+      worktreePath: "/repo-feature",
+    });
+  });
+
+  it("keeps an explicit branch", () => {
+    const selection = { mode: "worktree", branch: "release", worktreePath: null } as const;
+    expect(fillNewTaskWorkspaceBranch({ ...base, selection })).toBe(selection);
   });
 });

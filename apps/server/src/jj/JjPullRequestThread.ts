@@ -138,8 +138,10 @@ export const makeJjPullRequestThread = (deps: JjPullRequestThreadDeps): JjPullRe
       } else {
         // Hosting refs materialize fork heads without checking out Git behind jj's back.
         if (remoteName === null) {
-          return yield* Effect.fail(
-            jjFailure(operation, input.cwd, "This repository has no remote to fetch from."),
+          return yield* jjFailure(
+            operation,
+            input.cwd,
+            "This repository has no remote to fetch from.",
           );
         }
         const headRef =

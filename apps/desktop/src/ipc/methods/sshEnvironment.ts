@@ -1,7 +1,6 @@
 import {
   bootstrapRemoteBearerSession,
   fetchRemoteSessionState,
-  issueRemoteWebSocketTicket,
   RemoteEnvironmentAuthUndeclaredStatusError,
   type RemoteEnvironmentAuthError,
 } from "@t3tools/client-runtime/authorization";
@@ -25,7 +24,6 @@ import {
   EnvironmentScopeRequiredError,
   AuthAccessTokenResult,
   AuthSessionState,
-  AuthWebSocketTicketResult,
 } from "@t3tools/contracts";
 import { SshHttpBridgeError } from "@t3tools/ssh/errors";
 import { resolveLoopbackSshHttpBaseUrl } from "@t3tools/ssh/tunnel";
@@ -41,8 +39,7 @@ import * as DesktopSshPasswordPrompts from "../../ssh/DesktopSshPasswordPrompts.
 type DesktopSshEnvironmentRequestOperation =
   | "fetch-environment-descriptor"
   | "bootstrap-bearer-session"
-  | "fetch-session-state"
-  | "issue-websocket-ticket";
+  | "fetch-session-state";
 
 type DesktopSshEnvironmentRequestCause = RemoteEnvironmentAuthError | SshHttpBridgeError;
 
@@ -84,6 +81,7 @@ export class DesktopSshEnvironmentRequestError extends Data.TaggedError(
   readonly cause: DesktopSshEnvironmentRequestCause;
   readonly sshHttpStatus: number | null;
 }> {
+  // The web client matches "[ssh_http:500]" to explain version-skewed SSH pairing.
   override get message() {
     const prefix = this.sshHttpStatus === null ? "" : `[ssh_http:${this.sshHttpStatus}] `;
     return `${prefix}SSH remote API request failed during ${this.operation}.`;
@@ -206,23 +204,6 @@ export const fetchSshSessionState = DesktopIpc.makeIpcMethod({
   }) {
     return yield* withLoopbackSshApi("fetch-session-state", (resolvedHttpBaseUrl) =>
       fetchRemoteSessionState({
-        httpBaseUrl: resolvedHttpBaseUrl,
-        bearerToken,
-      }),
-    )(httpBaseUrl);
-  }),
-});
-
-export const issueSshWebSocketTicket = DesktopIpc.makeIpcMethod({
-  channel: IpcChannels.ISSUE_SSH_WEBSOCKET_TOKEN_CHANNEL,
-  payload: DesktopSshBearerRequestInputSchema,
-  result: AuthWebSocketTicketResult,
-  handler: Effect.fn("desktop.ipc.sshEnvironment.issueWebSocketTicket")(function* ({
-    httpBaseUrl,
-    bearerToken,
-  }) {
-    return yield* withLoopbackSshApi("issue-websocket-ticket", (resolvedHttpBaseUrl) =>
-      issueRemoteWebSocketTicket({
         httpBaseUrl: resolvedHttpBaseUrl,
         bearerToken,
       }),

@@ -1,14 +1,7 @@
 import { useAtomCommand } from "~/state/use-atom-command";
-/**
- * Putting a label on, and taking one off, from the row that says which it already wears.
- *
- * The repository's labels are read only once this menu opens, for the reason the reviewer menu
- * reads its people then: they are worth a request when somebody wants them and worth nothing on
- * every pull request they merely open.
- */
 import type { EnvironmentId, PullRequestLabelCandidate, PullRequestRef } from "@t3tools/contracts";
 import { CheckIcon, TagIcon } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { searchItems, SEARCH_SECONDARY_FIELD_WEIGHT } from "@t3tools/shared/searchRanking";
 
 import { pullRequestEnvironment } from "~/state/pullRequests";
@@ -27,15 +20,12 @@ export function PullRequestLabelPicker({
 }: {
   environmentId: EnvironmentId;
   reference: PullRequestRef;
-  /** False where the host would refuse this account's change. Disabled with the reason rather
-   * than hidden, like the reviewer control beside it. */
   allowed: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [pending, setPending] = useState<string | null>(null);
 
-  // Mounted with the menu closed, so nothing is asked of the host until it opens.
   const candidatesQuery = useEnvironmentQuery(
     open ? pullRequestEnvironment.labelCandidates({ environmentId, input: reference }) : null,
   );
@@ -43,14 +33,10 @@ export function PullRequestLabelPicker({
     reportFailure: false,
   });
 
-  const candidates = useMemo(
-    () =>
-      searchItems(candidatesQuery.data?.candidates ?? [], query, (entry) => [
-        entry.name,
-        { value: entry.description ?? "", weight: SEARCH_SECONDARY_FIELD_WEIGHT, fuzzy: false },
-      ]),
-    [candidatesQuery.data, query],
-  );
+  const candidates = searchItems(candidatesQuery.data?.candidates ?? [], query, (entry) => [
+    entry.name,
+    { value: entry.description ?? "", weight: SEARCH_SECONDARY_FIELD_WEIGHT, fuzzy: false },
+  ]);
 
   const toggle = async (candidate: PullRequestLabelCandidate) => {
     if (pending !== null) return;

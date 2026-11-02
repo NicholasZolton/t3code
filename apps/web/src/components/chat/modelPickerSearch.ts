@@ -6,13 +6,7 @@ import {
 } from "@t3tools/shared/searchRanking";
 
 type ModelPickerSearchableModel = {
-  /** Driver kind — indexed so "codex" still matches a Codex Personal instance. */
   driverKind: string;
-  /**
-   * Instance display name (e.g. "Codex Personal"). Indexed as a search
-   * field so typing the custom instance's user-authored name matches its
-   * models directly instead of just the driver kind.
-   */
   providerDisplayName: string;
   name: string;
   shortName?: string;
@@ -35,14 +29,6 @@ function getModelPickerSearchFields(model: ModelPickerSearchableModel): SearchFi
 
 function normalizeModelName(name: string): string {
   return normalizeSearchQuery(name).replace(/\s+/gu, " ");
-}
-
-export function buildModelPickerSearchText(model: ModelPickerSearchableModel): string {
-  return normalizeSearchQuery(
-    [model.name, model.shortName, model.subProvider, model.driverKind, model.providerDisplayName]
-      .filter((value): value is string => typeof value === "string" && value.length > 0)
-      .join(" "),
-  );
 }
 
 export function scoreModelPickerSearch(
@@ -68,10 +54,6 @@ export function scoreModelPickerSearch(
   return model.isFavorite ? score - SEARCH_FAVORITE_SCORE_BOOST : score;
 }
 
-/**
- * Filters `items` to those matching `query`, best match first. Equal matches
- * keep their order in `items`, which is the provider's own newest-first order.
- */
 export function rankModelPickerSearch<T>(
   items: ReadonlyArray<T>,
   query: string,

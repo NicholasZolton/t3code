@@ -1,9 +1,15 @@
-import type { VcsStatusResult } from "@t3tools/contracts";
+import { SourceControlProviderKind, type VcsStatusResult } from "@t3tools/contracts";
 import { assert, describe, it } from "vite-plus/test";
 
-import { GIT_VCS_TERMINOLOGY, getVcsTerminology } from "@t3tools/shared/vcs";
+import { DEFAULT_VCS_TERMINOLOGY, getVcsTerminology } from "@t3tools/shared/vcs";
 
-import { buildMenuItems, getGitActionDisabledReason, resolveQuickAction } from "./gitActions.ts";
+import {
+  buildMenuItems,
+  getGitActionDisabledReason,
+  resolveDefaultBranchActionDialogCopy,
+  resolveQuickAction,
+} from "./gitActions.ts";
+import { sourceControlClients } from "../sourceControlClients.ts";
 
 function status(overrides: Partial<VcsStatusResult> = {}): VcsStatusResult {
   return {
@@ -22,6 +28,43 @@ function status(overrides: Partial<VcsStatusResult> = {}): VcsStatusResult {
 }
 
 describe("the folded web behaviour", () => {
+  it.each([
+    { kind: "github", shortLabel: "PR", article: "a" },
+    { kind: "gitlab", shortLabel: "MR", article: "an" },
+  ])("uses $shortLabel for $kind change requests", ({ kind, shortLabel, article }) => {
+    const repository = status({
+      sourceControlProvider: {
+        kind: SourceControlProviderKind.make(kind),
+        name: kind,
+        baseUrl: `https://${kind}.com`,
+      },
+    });
+    assert.equal(
+      resolveQuickAction({ ...repository, aheadCount: 1 }, false).label,
+      `Push & create ${shortLabel}`,
+    );
+    const requestItem = buildMenuItems(repository, false).find((item) => item.id === "pr");
+    assert.isDefined(requestItem);
+    assert.equal(requestItem.label, `Create ${shortLabel}`);
+    assert.equal(
+      getGitActionDisabledReason({
+        item: requestItem,
+        gitStatus: repository,
+        isBusy: false,
+        hasPrimaryRemote: true,
+      }),
+      `No local commits to include in ${article} ${shortLabel}.`,
+    );
+    assert.equal(
+      resolveDefaultBranchActionDialogCopy({
+        action: "commit_push_pr",
+        branchName: "main",
+        includesCommit: true,
+        terminology: sourceControlClients.get(SourceControlProviderKind.make(kind)).changeRequest,
+      }).continueLabel,
+      `Commit, push & create ${shortLabel}`,
+    );
+  });
   it("explains a disabled request using the default-branch delta and behind state", () => {
     const item = {
       id: "pr",
@@ -75,7 +118,7 @@ describe("the publish quick action", () => {
     const quick = resolveQuickAction(remoteless, false, false, false);
     assert.equal(quick.kind, "show_hint");
     assert.isTrue(quick.disabled);
-    assert.equal(quick.hint, 'Add an "origin" remote before pushing or creating a pull request.');
+    assert.equal(quick.hint, 'Add an "origin" remote before pushing or creating a PR.');
   });
 });
 
@@ -96,8 +139,8 @@ describe("VCS terminology", () => {
       }),
       "Detached HEAD: check out a branch before pushing.",
     );
-    assert.equal(getVcsTerminology("unknown"), GIT_VCS_TERMINOLOGY);
-    assert.equal(getVcsTerminology(null), GIT_VCS_TERMINOLOGY);
+    assert.equal(getVcsTerminology("unknown"), DEFAULT_VCS_TERMINOLOGY);
+    assert.equal(getVcsTerminology(null), DEFAULT_VCS_TERMINOLOGY);
   });
 
   it("swaps to bookmark and change nouns under jj", () => {

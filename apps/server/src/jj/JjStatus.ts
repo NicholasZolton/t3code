@@ -227,250 +227,250 @@ export interface JjStatusOps {
   readonly status: (input: VcsStatusInput) => Effect.Effect<VcsStatusResult, GitCommandError>;
 }
 
-export const makeJjStatus = (deps: JjStatusDeps): Effect.Effect<JjStatusOps> =>
-  Effect.gen(function* () {
-    const { driver, gitManager, process, sourceControlProviders } = deps;
+export const makeJjStatus = Effect.fn("JjStatus.make")(function* (
+  deps: JjStatusDeps,
+): Effect.fn.Return<JjStatusOps> {
+  const { driver, gitManager, process, sourceControlProviders } = deps;
 
-    const upstreamRefreshFailureCounts = new Map<string, number>();
-    const recordUpstreamRefreshFailure = (key: string) => {
-      const nextCount = (upstreamRefreshFailureCounts.get(key) ?? 0) + 1;
-      upstreamRefreshFailureCounts.delete(key);
-      upstreamRefreshFailureCounts.set(key, nextCount);
-      if (upstreamRefreshFailureCounts.size > STATUS_UPSTREAM_REFRESH_CACHE_CAPACITY) {
-        const oldestKey = upstreamRefreshFailureCounts.keys().next().value;
-        if (oldestKey !== undefined) {
-          upstreamRefreshFailureCounts.delete(oldestKey);
-        }
+  const upstreamRefreshFailureCounts = new Map<string, number>();
+  const recordUpstreamRefreshFailure = (key: string) => {
+    const nextCount = (upstreamRefreshFailureCounts.get(key) ?? 0) + 1;
+    upstreamRefreshFailureCounts.delete(key);
+    upstreamRefreshFailureCounts.set(key, nextCount);
+    if (upstreamRefreshFailureCounts.size > STATUS_UPSTREAM_REFRESH_CACHE_CAPACITY) {
+      const oldestKey = upstreamRefreshFailureCounts.keys().next().value;
+      if (oldestKey !== undefined) {
+        upstreamRefreshFailureCounts.delete(oldestKey);
       }
-    };
+    }
+  };
 
-    const upstreamRefreshCache = yield* Cache.makeWith<string, true, GitCommandError>(
-      (key) => {
-        const separatorIndex = key.indexOf("\0");
-        const cwd = key.slice(0, separatorIndex);
-        const remoteName = key.slice(separatorIndex + 1);
-        return JjProcess.jjCommand(
-          process,
-          "JjStatus.refreshUpstream",
-          cwd,
-          ["git", "fetch", "--remote", remoteName],
-          {
-            env: STATUS_UPSTREAM_REFRESH_ENV,
-            timeoutMs: Duration.toMillis(STATUS_UPSTREAM_REFRESH_TIMEOUT),
-          },
-        ).pipe(
-          Effect.as(true as const),
-          Effect.mapError(
-            (cause) =>
-              new GitCommandError({
-                operation: "JjStatus.refreshUpstream",
-                command: "jj",
-                cwd,
-                detail: "Background Jujutsu fetch failed.",
-                cause,
-              }),
-          ),
-          Effect.tap(() => Effect.sync(() => upstreamRefreshFailureCounts.delete(key))),
-          Effect.tapError(() => Effect.sync(() => recordUpstreamRefreshFailure(key))),
-        );
-      },
-      {
-        capacity: STATUS_UPSTREAM_REFRESH_CACHE_CAPACITY,
-        timeToLive: (exit, key) =>
-          Exit.isSuccess(exit)
-            ? STATUS_UPSTREAM_REFRESH_INTERVAL
-            : upstreamRefreshFailureCooldown(upstreamRefreshFailureCounts.get(key) ?? 1),
-      },
+  const upstreamRefreshCache = yield* Cache.makeWith<string, true, GitCommandError>(
+    (key) => {
+      const separatorIndex = key.indexOf("\0");
+      const cwd = key.slice(0, separatorIndex);
+      const remoteName = key.slice(separatorIndex + 1);
+      return JjProcess.jjCommand(
+        process,
+        "JjStatus.refreshUpstream",
+        cwd,
+        ["git", "fetch", "--remote", remoteName],
+        {
+          env: STATUS_UPSTREAM_REFRESH_ENV,
+          timeoutMs: Duration.toMillis(STATUS_UPSTREAM_REFRESH_TIMEOUT),
+        },
+      ).pipe(
+        Effect.as(true as const),
+        Effect.mapError(
+          (cause) =>
+            new GitCommandError({
+              operation: "JjStatus.refreshUpstream",
+              command: "jj",
+              cwd,
+              detail: "Background Jujutsu fetch failed.",
+              cause,
+            }),
+        ),
+        Effect.tap(() => Effect.sync(() => upstreamRefreshFailureCounts.delete(key))),
+        Effect.tapError(() => Effect.sync(() => recordUpstreamRefreshFailure(key))),
+      );
+    },
+    {
+      capacity: STATUS_UPSTREAM_REFRESH_CACHE_CAPACITY,
+      timeToLive: (exit, key) =>
+        Exit.isSuccess(exit)
+          ? STATUS_UPSTREAM_REFRESH_INTERVAL
+          : upstreamRefreshFailureCooldown(upstreamRefreshFailureCounts.get(key) ?? 1),
+    },
+  );
+
+  const detectProvider = (cwd: string) =>
+    sourceControlProviders.resolveHandle({ cwd }).pipe(
+      Effect.map((handle) => handle.context?.provider ?? null),
+      Effect.orElseSucceed(() => null),
     );
 
-    const detectProvider = (cwd: string) =>
-      sourceControlProviders.resolveHandle({ cwd }).pipe(
-        Effect.map((handle) => handle.context?.provider ?? null),
-        Effect.orElseSucceed(() => null),
+  const localStatus: JjStatusOps["localStatus"] = Effect.fn("JjStatus.localStatus")(
+    function* (input) {
+      // `ensureUsable` already composes the version probe with the colocation test, so the
+      // "detected but unusable" reason the client renders comes from exactly one place.
+      const reason = yield* driver.ensureUsable("JjStatus.localStatus", input.cwd).pipe(
+        Effect.as(null),
+        Effect.catch((error) =>
+          Effect.succeed(error._tag === "VcsUnsupportedOperationError" ? error.detail : null),
+        ),
       );
-
-    const localStatus: JjStatusOps["localStatus"] = Effect.fn("JjStatus.localStatus")(
-      function* (input) {
-        // `ensureUsable` already composes the version probe with the colocation test, so the
-        // "detected but unusable" reason the client renders comes from exactly one place.
-        const reason = yield* driver.ensureUsable("JjStatus.localStatus", input.cwd).pipe(
-          Effect.as(null),
-          Effect.catch((error) =>
-            Effect.succeed(error._tag === "VcsUnsupportedOperationError" ? error.detail : null),
-          ),
-        );
-        if (reason !== null) {
-          return {
-            isRepo: true,
-            vcs: { kind: "jj" as const, unsupportedReason: reason },
-            ...EMPTY_LOCAL_STATUS,
-          };
-        }
-
-        const readings = yield* Effect.all({
-          change: driver.currentChange(input.cwd),
-          segment: driver.currentSegment(input.cwd),
-        }).pipe(Effect.option);
-
-        if (readings._tag === "None") {
-          return { isRepo: true, vcs: { kind: "jj" as const }, ...EMPTY_LOCAL_STATUS };
-        }
-
-        const refName = yield* resolveWorkspaceRefName(driver, input.cwd, readings.value.segment);
-        const files = readings.value.change.fileStats
-          .map((file) => ({
-            path: file.path,
-            insertions: file.linesAdded,
-            deletions: file.linesRemoved,
-          }))
-          .sort((left, right) => left.path.localeCompare(right.path));
-
-        const [provider, remoteNames, defaultBookmark] = yield* Effect.all([
-          detectProvider(input.cwd),
-          driver.listRemoteNames(input.cwd).pipe(Effect.orElseSucceed(() => [] as const)),
-          driver.resolveDefaultBookmark(input.cwd).pipe(Effect.orElseSucceed(() => null)),
-        ]);
-
-        // The snapshot of @ includes untracked files. Read only numstat from the
-        // colocated store, keeping the status poll's two-jj-command budget.
-        const branchChanges =
-          defaultBookmark === null
-            ? null
-            : yield* Effect.gen(function* () {
-                const paths = yield* driver.repoPaths(input.cwd);
-                if (paths.gitDir === null) return null;
-                const result = yield* JjProcess.colocatedGitCommand(
-                  process,
-                  "JjStatus.branchChanges",
-                  { gitDir: paths.gitDir, cwd: input.cwd },
-                  [
-                    "diff",
-                    "--no-ext-diff",
-                    "--no-textconv",
-                    "--numstat",
-                    "-z",
-                    `${defaultBookmark}...${readings.value.change.commitId}`,
-                    "--",
-                    ...JJ_CONFLICT_PATHSPECS,
-                  ],
-                  { maxOutputBytes: 16 * 1024 * 1024 },
-                );
-                const stats = parseReviewNumstat(result.stdout);
-                return {
-                  baseRef: defaultBookmark,
-                  insertions: stats.reduce((sum, file) => sum + file.additions, 0),
-                  deletions: stats.reduce((sum, file) => sum + file.deletions, 0),
-                };
-              }).pipe(Effect.orElseSucceed(() => null));
-
+      if (reason !== null) {
         return {
           isRepo: true,
-          vcs: { kind: "jj" as const },
-          ...(branchChanges === null ? {} : { branchChanges }),
-          ...(provider ? { sourceControlProvider: provider } : {}),
-          hasPrimaryRemote: remoteNames.length > 0,
-          isDefaultRef: refName !== null && refName === defaultBookmark,
-          refName,
-          hasWorkingTreeChanges: files.length > 0,
-          workingTree: {
-            files,
-            insertions: files.reduce((total, file) => total + file.insertions, 0),
-            deletions: files.reduce((total, file) => total + file.deletions, 0),
-          },
+          vcs: { kind: "jj" as const, unsupportedReason: reason },
+          ...EMPTY_LOCAL_STATUS,
         };
-      },
-    );
+      }
 
-    const remoteStatus: JjStatusOps["remoteStatus"] = Effect.fn("JjStatus.remoteStatus")(
-      function* (input, options) {
-        const paths = yield* driver
-          .ensureUsable("JjStatus.remoteStatus", input.cwd)
-          .pipe(
-            mapJjFailure(
-              "JjStatus.remoteStatus",
-              input.cwd,
-              "This Jujutsu repository cannot be read.",
-            ),
-          );
+      const readings = yield* Effect.all({
+        change: driver.currentChange(input.cwd),
+        segment: driver.currentSegment(input.cwd),
+      }).pipe(Effect.option);
 
-        const segment = yield* driver
-          .currentSegment(input.cwd)
-          .pipe(Effect.orElseSucceed(() => [] as ReadonlyArray<JjSegmentRow>));
-        const refName = yield* resolveWorkspaceRefName(driver, input.cwd, segment);
-        if (refName === null) {
-          return {
-            hasUpstream: false,
-            aheadCount: 0,
-            behindCount: 0,
-            aheadOfDefaultCount: 0,
-            pr: null,
-          };
-        }
+      if (readings._tag === "None") {
+        return { isRepo: true, vcs: { kind: "jj" as const }, ...EMPTY_LOCAL_STATUS };
+      }
 
-        const primaryRemote = yield* driver
-          .resolvePrimaryRemoteName(input.cwd)
-          .pipe(Effect.orElseSucceed(() => null));
+      const refName = yield* resolveWorkspaceRefName(driver, input.cwd, readings.value.segment);
+      const files = readings.value.change.fileStats
+        .map((file) => ({
+          path: file.path,
+          insertions: file.linesAdded,
+          deletions: file.linesRemoved,
+        }))
+        .sort((left, right) => left.path.localeCompare(right.path));
 
-        if (options?.refreshUpstream === true && primaryRemote !== null) {
-          yield* Cache.get(
-            upstreamRefreshCache,
-            `${paths.mainWorkspaceRoot}\0${primaryRemote}`,
-          ).pipe(Effect.ignore);
-        }
+      const [provider, remoteNames, defaultBookmark] = yield* Effect.all([
+        detectProvider(input.cwd),
+        driver.listRemoteNames(input.cwd).pipe(Effect.orElseSucceed(() => [] as const)),
+        driver.resolveDefaultBookmark(input.cwd).pipe(Effect.orElseSucceed(() => null)),
+      ]);
 
-        const upstream = yield* resolveUpstreamContext(driver, input.cwd, refName);
-        const counts = yield* computeAheadBehindCounts(driver, input.cwd, {
-          refName,
-          primaryRemote,
-          defaultBookmark: upstream.defaultBookmark,
-          hasUpstream: upstream.hasUpstream,
-        });
+      // The snapshot of @ includes untracked files. Read only numstat from the
+      // colocated store, keeping the status poll's two-jj-command budget.
+      const branchChanges =
+        defaultBookmark === null
+          ? null
+          : yield* Effect.gen(function* () {
+              const paths = yield* driver.repoPaths(input.cwd);
+              if (paths.gitDir === null) return null;
+              const result = yield* JjProcess.colocatedGitCommand(
+                process,
+                "JjStatus.branchChanges",
+                { gitDir: paths.gitDir, cwd: input.cwd },
+                [
+                  "diff",
+                  "--no-ext-diff",
+                  "--no-textconv",
+                  "--numstat",
+                  "-z",
+                  `${defaultBookmark}...${readings.value.change.commitId}`,
+                  "--",
+                  ...JJ_CONFLICT_PATHSPECS,
+                ],
+                { maxOutputBytes: 16 * 1024 * 1024 },
+              );
+              const stats = parseReviewNumstat(result.stdout);
+              return {
+                baseRef: defaultBookmark,
+                insertions: stats.reduce((sum, file) => sum + file.additions, 0),
+                deletions: stats.reduce((sum, file) => sum + file.deletions, 0),
+              };
+            }).pipe(Effect.orElseSucceed(() => null));
 
-        // The PR half of the product runs against the colocated git store: every local bookmark is
-        // `refs/heads/<name>` there, so the existing lookup, its cache and its backoff all apply.
-        const pullRequest = yield* gitManager
-          .branchPullRequest(
-            { cwd: paths.mainWorkspaceRoot, branch: refName },
-            options?.refreshMissingPullRequest === true ? { refresh: true } : undefined,
-          )
-          .pipe(Effect.orElseSucceed(() => null));
-
-        return {
-          ...counts,
-          hasUpstream: upstream.hasUpstream,
-          pr:
-            pullRequest === null
-              ? null
-              : {
-                  number: pullRequest.number,
-                  title: pullRequest.title,
-                  url: pullRequest.url,
-                  baseRef: pullRequest.baseRef,
-                  headRef: pullRequest.headRef,
-                  state: pullRequest.state,
-                  ...(pullRequest.isDraft !== undefined ? { isDraft: pullRequest.isDraft } : {}),
-                  ...(pullRequest.updatedAt !== undefined
-                    ? { updatedAt: pullRequest.updatedAt }
-                    : {}),
-                },
-        };
-      },
-    );
-
-    const status: JjStatusOps["status"] = Effect.fn("JjStatus.status")(function* (input) {
-      const local = yield* localStatus(input);
-      const remote = yield* remoteStatus(input);
       return {
-        ...local,
-        ...(remote ?? {
+        isRepo: true,
+        vcs: { kind: "jj" as const },
+        ...(branchChanges === null ? {} : { branchChanges }),
+        ...(provider ? { sourceControlProvider: provider } : {}),
+        hasPrimaryRemote: remoteNames.length > 0,
+        isDefaultRef: refName !== null && refName === defaultBookmark,
+        refName,
+        hasWorkingTreeChanges: files.length > 0,
+        workingTree: {
+          files,
+          insertions: files.reduce((total, file) => total + file.insertions, 0),
+          deletions: files.reduce((total, file) => total + file.deletions, 0),
+        },
+      };
+    },
+  );
+
+  const remoteStatus: JjStatusOps["remoteStatus"] = Effect.fn("JjStatus.remoteStatus")(
+    function* (input, options) {
+      const paths = yield* driver
+        .ensureUsable("JjStatus.remoteStatus", input.cwd)
+        .pipe(
+          mapJjFailure(
+            "JjStatus.remoteStatus",
+            input.cwd,
+            "This Jujutsu repository cannot be read.",
+          ),
+        );
+
+      const segment = yield* driver
+        .currentSegment(input.cwd)
+        .pipe(Effect.orElseSucceed(() => [] as ReadonlyArray<JjSegmentRow>));
+      const refName = yield* resolveWorkspaceRefName(driver, input.cwd, segment);
+      if (refName === null) {
+        return {
           hasUpstream: false,
           aheadCount: 0,
           behindCount: 0,
           aheadOfDefaultCount: 0,
           pr: null,
-        }),
-      };
-    });
+        };
+      }
 
-    return { localStatus, remoteStatus, status };
+      const primaryRemote = yield* driver
+        .resolvePrimaryRemoteName(input.cwd)
+        .pipe(Effect.orElseSucceed(() => null));
+
+      if (options?.refreshUpstream === true && primaryRemote !== null) {
+        yield* Cache.get(upstreamRefreshCache, `${paths.mainWorkspaceRoot}\0${primaryRemote}`).pipe(
+          Effect.ignore,
+        );
+      }
+
+      const upstream = yield* resolveUpstreamContext(driver, input.cwd, refName);
+      const counts = yield* computeAheadBehindCounts(driver, input.cwd, {
+        refName,
+        primaryRemote,
+        defaultBookmark: upstream.defaultBookmark,
+        hasUpstream: upstream.hasUpstream,
+      });
+
+      // The PR half of the product runs against the colocated git store: every local bookmark is
+      // `refs/heads/<name>` there, so the existing lookup, its cache and its backoff all apply.
+      const pullRequest = yield* gitManager
+        .branchPullRequest(
+          { cwd: paths.mainWorkspaceRoot, branch: refName },
+          options?.refreshMissingPullRequest === true ? { refresh: true } : undefined,
+        )
+        .pipe(Effect.orElseSucceed(() => null));
+
+      return {
+        ...counts,
+        hasUpstream: upstream.hasUpstream,
+        pr:
+          pullRequest === null
+            ? null
+            : {
+                number: pullRequest.number,
+                title: pullRequest.title,
+                url: pullRequest.url,
+                baseRef: pullRequest.baseRef,
+                headRef: pullRequest.headRef,
+                state: pullRequest.state,
+                ...(pullRequest.isDraft !== undefined ? { isDraft: pullRequest.isDraft } : {}),
+                ...(pullRequest.updatedAt !== undefined
+                  ? { updatedAt: pullRequest.updatedAt }
+                  : {}),
+              },
+      };
+    },
+  );
+
+  const status: JjStatusOps["status"] = Effect.fn("JjStatus.status")(function* (input) {
+    const local = yield* localStatus(input);
+    const remote = yield* remoteStatus(input);
+    return {
+      ...local,
+      ...(remote ?? {
+        hasUpstream: false,
+        aheadCount: 0,
+        behindCount: 0,
+        aheadOfDefaultCount: 0,
+        pr: null,
+      }),
+    };
   });
+
+  return { localStatus, remoteStatus, status };
+});

@@ -54,7 +54,7 @@ class OpenCodeAccountError extends Schema.TaggedError<OpenCodeAccountError>()(
 ) {}
 
 /** Only the local OpenCode V2 store is readable; an external server owns its own logins. */
-export function readOpenCodeCredentials(dataHome: string): readonly OpenCodeCredential[] {
+function readOpenCodeCredentials(dataHome: string): readonly OpenCodeCredential[] {
   const file = NodePath.join(dataHome, "opencode", "opencode.db");
   if (!NodeFS.existsSync(file)) return [];
   const db = new NodeSqlite.DatabaseSync(file, { readOnly: true });

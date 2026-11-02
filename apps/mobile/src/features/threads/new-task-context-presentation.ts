@@ -1,14 +1,28 @@
 import { sanitizeNewRefName } from "@t3tools/shared/git";
+import type { VcsDriverKind } from "@t3tools/contracts";
 import { searchItems } from "@t3tools/shared/searchRanking";
 import {
   DEFAULT_VCS_TERMINOLOGY,
   JJ_WORKING_COPY_LABEL,
   JJ_WORKING_COPY_REVISION,
+  resolveWorktreeBaseRef,
   type VcsTerminology,
 } from "@t3tools/shared/vcs";
-import { parseChangeRequestUrl } from "@t3tools/shared/changeRequestUrl";
+import { sourceControlClients } from "@t3tools/client-runtime/source-control-clients";
+import { resolveSendEnvMode } from "@t3tools/shared/projectSettings";
+import type { ComposerDraftWorkspaceSelection } from "../../state/use-composer-drafts";
 
 type WorkspaceMode = "local" | "worktree";
+
+export function resolveNewTaskWorkspaceSelection(input: {
+  readonly selection: ComposerDraftWorkspaceSelection | undefined;
+  readonly fallback: ComposerDraftWorkspaceSelection;
+  readonly isGitRepo: boolean;
+}): ComposerDraftWorkspaceSelection {
+  const selection = input.selection ?? input.fallback;
+  const mode = resolveSendEnvMode({ requestedEnvMode: selection.mode, isGitRepo: input.isGitRepo });
+  return input.isGitRepo ? selection : { mode, branch: null, worktreePath: null };
+}
 
 export function resolveNewTaskWorkspaceLabel(input: {
   readonly workspaceMode: WorkspaceMode;
@@ -79,8 +93,8 @@ export function resolveNewTaskBranchLabel(input: {
   readonly pullRequestReference?: string;
 }): string {
   if (input.workspaceMode === "worktree" && input.pullRequestReference) {
-    const pr = parseChangeRequestUrl(input.pullRequestReference);
-    if (pr) return `From PR #${pr.number}`;
+    const parsed = sourceControlClients.parseChangeRequestUrl(input.pullRequestReference);
+    if (parsed) return `From ${parsed.definition.changeRequest.shortLabel} #${parsed.link.number}`;
   }
   if (!input.branchName) {
     return `Choose ${(input.terminology ?? DEFAULT_VCS_TERMINOLOGY).refNoun}`;
@@ -110,4 +124,76 @@ export function filterNewTaskBranches<T extends { readonly name: string }>(
   rawQuery: string,
 ): ReadonlyArray<T> {
   return searchItems(branches, sanitizeNewRefName(rawQuery), (branch) => [branch.name]);
+}
+
+/**
+ * A worktree with no chosen base starts from the default branch, and a local
+ * selection the user just switched to follows the current checkout until refs
+ * load. Both are derived, never written back, so a late ref list or t3.json
+ * default still wins.
+ */
+export function fillNewTaskWorkspaceBranch(input: {
+  readonly selection: ComposerDraftWorkspaceSelection;
+  readonly branches: ReadonlyArray<{
+    readonly name: string;
+    readonly current: boolean;
+    readonly isDefault: boolean;
+    readonly isRemote?: boolean;
+    readonly worktreePath?: string | null;
+  }>;
+  readonly projectCwd: string | null;
+  readonly worktreeDefaultSettled: boolean;
+  readonly vcsKind?: VcsDriverKind | undefined;
+}): ComposerDraftWorkspaceSelection {
+  const { selection } = input;
+  if (selection.branch !== null) return selection;
+  if (selection.mode === "worktree") {
+    // The default may only exist as origin/<default>, so search remote refs too.
+    const base = resolveWorktreeBaseRef({
+      defaultRef: input.branches.find((branch) => branch.isDefault)?.name ?? null,
+      currentRef: input.branches.find((branch) => !branch.isRemote && branch.current)?.name ?? null,
+      vcsKind: input.vcsKind,
+    });
+    return input.worktreeDefaultSettled && base
+      ? { ...selection, branch: base, worktreePath: null }
+      : selection;
+  }
+  if (!selection.followsCurrentCheckout || input.projectCwd === null) return selection;
+  const local = resolveNewTaskLocalWorkspaceSelection({
+    branches: input.branches.filter((branch) => !branch.isRemote),
+    projectCwd: input.projectCwd,
+  });
+  return local.awaitsCurrentBranch
+    ? selection
+    : { ...selection, branch: local.branch, worktreePath: local.worktreePath };
+}
+
+/**
+ * The workspace a new-task draft starts in: its own selection, else the
+ * project's default mode, with the branch filled in as above. The new-task
+ * flow, its send path and the home pending-drafts list all resolve through
+ * this, so what each shows is what is sent.
+ */
+export function resolveNewTaskDraftWorkspace(input: {
+  readonly selection: ComposerDraftWorkspaceSelection | undefined;
+  readonly canChooseWorkspace: boolean;
+  readonly defaultMode: WorkspaceMode;
+  readonly defaultModeSettled: boolean;
+  readonly isGitRepo: boolean;
+  readonly branches: Parameters<typeof fillNewTaskWorkspaceBranch>[0]["branches"];
+  readonly projectCwd: string | null;
+  readonly vcsKind?: VcsDriverKind | undefined;
+}): ComposerDraftWorkspaceSelection {
+  const selection = input.canChooseWorkspace ? input.selection : undefined;
+  return fillNewTaskWorkspaceBranch({
+    selection: resolveNewTaskWorkspaceSelection({
+      selection,
+      fallback: { mode: input.defaultMode, branch: null, worktreePath: null },
+      isGitRepo: input.isGitRepo,
+    }),
+    branches: input.branches,
+    projectCwd: input.projectCwd,
+    worktreeDefaultSettled: selection?.mode !== undefined || input.defaultModeSettled,
+    vcsKind: input.vcsKind,
+  });
 }

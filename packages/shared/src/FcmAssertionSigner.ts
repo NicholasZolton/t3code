@@ -37,7 +37,7 @@ export class FcmAssertionSigner extends Context.Service<
   }
 >()("@t3tools/shared/FcmAssertionSigner") {}
 
-export const make = Effect.gen(function* () {
+const make = Effect.gen(function* () {
   const { subtle } = yield* WebCrypto;
   return FcmAssertionSigner.of({
     sign: Effect.fn("fcm.assertion")(function* (input) {

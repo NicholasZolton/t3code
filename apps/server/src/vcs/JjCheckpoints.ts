@@ -23,17 +23,8 @@ export interface JjCheckpointDeps {
   readonly currentChange: (cwd: string) => Effect.Effect<JjChange, VcsError>;
 }
 
-/**
- * A conflicted jj commit materialises into git as `.jjconflict-base-N/`, `.jjconflict-side-N/`
- * trees plus `JJ-CONFLICT-README`. Excluding them costs nothing in a clean repo (jj reserves the
- * names) and keeps a conflicted turn from rendering files that do not exist in the user's tree.
- * Note the limitation this cannot fix: the same tree also holds the conflicted path itself with
- * ONE arbitrary side's content, so a conflicted turn's diff shows that side rather than the
- * markers on disk.
- *
- * The exclusion carries no `glob` magic on purpose: with it, `*` stops matching `/` and the
- * `.jjconflict-base-0/f.txt` rows survive the filter.
- */
+// Hide jj's synthetic conflict trees; the conflicted path still contains one arbitrary side.
+// No `glob` magic: `*` must match `/` to exclude the files below those trees too.
 export const JJ_CONFLICT_PATHSPECS = [
   "--",
   ".",
@@ -95,15 +86,13 @@ export const makeJjCheckpointOps = (deps: JjCheckpointDeps): VcsDriver.VcsCheckp
 
         const retried = yield* restoreFrom(operation, cwd, commitId);
         if (retried.exitCode !== 0) {
-          return yield* Effect.fail(
-            new VcsProcessExitError({
-              operation,
-              command: "jj restore",
-              cwd,
-              exitCode: retried.exitCode,
-              detail: retried.stderr.trim() || "jj restore failed.",
-            }),
-          );
+          return yield* new VcsProcessExitError({
+            operation,
+            command: "jj restore",
+            cwd,
+            exitCode: retried.exitCode,
+            detail: retried.stderr.trim() || "jj restore failed.",
+          });
         }
       }).pipe(
         Effect.ensuring(
@@ -243,15 +232,13 @@ export const makeJjCheckpointOps = (deps: JjCheckpointDeps): VcsDriver.VcsCheckp
       }
 
       if (!MISSING_REVISION_PATTERN.test(restored.stderr)) {
-        return yield* Effect.fail(
-          new VcsProcessExitError({
-            operation,
-            command: "jj restore",
-            cwd: input.cwd,
-            exitCode: restored.exitCode,
-            detail: restored.stderr.trim() || "jj restore failed.",
-          }),
-        );
+        return yield* new VcsProcessExitError({
+          operation,
+          command: "jj restore",
+          cwd: input.cwd,
+          exitCode: restored.exitCode,
+          detail: restored.stderr.trim() || "jj restore failed.",
+        });
       }
 
       yield* restoreThroughGitObject(operation, gitDir, input.cwd, commitId);
@@ -281,15 +268,13 @@ export const makeJjCheckpointOps = (deps: JjCheckpointDeps): VcsDriver.VcsCheckp
           : null);
 
       if (fromOid === null || toOid === null) {
-        return yield* Effect.fail(
-          new VcsProcessExitError({
-            operation,
-            command: "git diff",
-            cwd: input.cwd,
-            exitCode: 1,
-            detail: CHECKPOINT_REF_UNAVAILABLE_DETAIL,
-          }),
-        );
+        return yield* new VcsProcessExitError({
+          operation,
+          command: "git diff",
+          cwd: input.cwd,
+          exitCode: 1,
+          detail: CHECKPOINT_REF_UNAVAILABLE_DETAIL,
+        });
       }
 
       const result = yield* colocatedGitCommand(
@@ -316,15 +301,13 @@ export const makeJjCheckpointOps = (deps: JjCheckpointDeps): VcsDriver.VcsCheckp
       );
 
       if (result.exitCode !== 0) {
-        return yield* Effect.fail(
-          new VcsProcessExitError({
-            operation,
-            command: "git diff",
-            cwd: input.cwd,
-            exitCode: result.exitCode,
-            detail: result.stderr.trim() || CHECKPOINT_REF_UNAVAILABLE_DETAIL,
-          }),
-        );
+        return yield* new VcsProcessExitError({
+          operation,
+          command: "git diff",
+          cwd: input.cwd,
+          exitCode: result.exitCode,
+          detail: result.stderr.trim() || CHECKPOINT_REF_UNAVAILABLE_DETAIL,
+        });
       }
 
       return result.stdout;

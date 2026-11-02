@@ -6,6 +6,7 @@ import { Platform, Pressable, ScrollView, useWindowDimensions, View } from "reac
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { AndroidSheetHeader } from "../../../components/ui/AndroidScreenHeader";
+import { SheetHeader } from "../../../components/ui/SheetHeader";
 import { ScreenContent } from "../../../components/ui/ScreenContent";
 import { NativeStackScreenOptions } from "../../../native/StackHeader";
 import { AppText as Text, AppTextInput as TextInput } from "../../../components/ui/AppText";
@@ -51,14 +52,14 @@ export function GitBranchesSheet(_props: GitBranchesSheetProps) {
   const busy = gitState.gitOperationLabel !== null;
 
   const [newBranchName, setNewBranchName] = useState("");
-  const [worktreeBaseBranch, setWorktreeBaseBranch] = useState(
-    currentBranchLabel === noRefLabel ? "main" : currentBranchLabel,
-  );
+  const [worktreeBaseBranchOverride, setWorktreeBaseBranchOverride] = useState<string | null>(null);
+  const worktreeBaseBranch =
+    worktreeBaseBranchOverride ?? (currentBranchLabel === noRefLabel ? "main" : currentBranchLabel);
   const [worktreeBranchName, setWorktreeBranchName] = useState("");
 
   const disabledExistingBranchNames: Array<string> = [];
   for (const branch of availableBranches) {
-    if (branch.worktreePath !== null && branch.worktreePath !== currentWorktreePath) {
+    if (branch.worktreePath !== null && branch.worktreePath !== selectedThreadCwd) {
       disabledExistingBranchNames.push(branch.name);
     }
   }
@@ -84,11 +85,18 @@ export function GitBranchesSheet(_props: GitBranchesSheetProps) {
           onBack={() => navigation.goBack()}
           hideBottomBorder
         />
-      ) : null}
+      ) : (
+        <SheetHeader
+          presentation="native"
+          title="Branches & worktrees"
+          onClose={() => navigation.goBack()}
+        />
+      )}
       <ScreenContent fitToContents>
         <ScrollView
           nestedScrollEnabled
           className="android:shrink android:grow-0 ios:flex-1"
+          contentInsetAdjustmentBehavior={Platform.OS === "ios" ? "automatic" : "never"}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
           contentInset={{ bottom: Math.max(insets.bottom, 18) + 18 }}
@@ -136,7 +144,7 @@ export function GitBranchesSheet(_props: GitBranchesSheetProps) {
             ) : null}
             <TextInput
               value={worktreeBaseBranch}
-              onChangeText={setWorktreeBaseBranch}
+              onChangeText={setWorktreeBaseBranchOverride}
               placeholder="main"
               accessibilityLabel="Worktree base branch"
               className="android:rounded-xl android:bg-sheet-solid ios:rounded-[18px]"
@@ -213,7 +221,7 @@ export function GitBranchesSheet(_props: GitBranchesSheetProps) {
             {availableBranches.map((branch) => {
               const disabled = disabledExistingBranches.has(branch.name);
               const subtitle = branch.worktreePath
-                ? branch.worktreePath === currentWorktreePath
+                ? branch.worktreePath === selectedThreadCwd
                   ? "Checked out in this thread"
                   : `Checked out in another ${vcsTerminology.workspaceNoun}`
                 : branch.isDefault

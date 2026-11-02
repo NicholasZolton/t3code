@@ -306,7 +306,7 @@ it.effect("maps branch, turn, pull request, and commit selections to Crit scopes
         kind: "turn",
         threadId: ThreadId.make("turn-test"),
         fromTurnCount: 0,
-        toRef: CheckpointRef.make("refs/t3/checkpoints/dHVybi10ZXN0/turn/2"),
+        toRef: CheckpointRef.make("refs/t3/orchestration-v2/checkpoints/scope-test/ordinal/2"),
       },
     });
     yield* manager.open({
@@ -343,9 +343,9 @@ it.effect("maps branch, turn, pull request, and commit selections to Crit scopes
     NodeAssert.deepEqual(branchArgs.slice(4), ["--range", `${head}..HEAD`]);
     const turnRange = args[1]?.[5];
     NodeAssert.ok(turnRange);
-    NodeAssert.match(
+    NodeAssert.equal(
       turnRange,
-      /^refs\/t3\/checkpoints\/[^/]+\/turn\/0\.\.refs\/t3\/checkpoints\/[^/]+\/turn\/2$/,
+      "refs/t3/orchestration-v2/checkpoints/scope-test/ordinal/0..refs/t3/orchestration-v2/checkpoints/scope-test/ordinal/2",
     );
     NodeAssert.deepEqual(args[2]?.slice(4), [
       "--range",

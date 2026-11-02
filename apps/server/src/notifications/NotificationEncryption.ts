@@ -55,13 +55,14 @@ const make = Effect.gen(function* () {
     );
 
   return NotificationEncryption.of({
-    validatePublicKey: (publicKey) =>
+    validatePublicKey: Effect.fn("NotificationEncryption.validatePublicKey")((publicKey) =>
       Effect.tryPromise({
         try: async () => {
           await importPublicKey(publicKey);
         },
         catch: (cause) => new NotificationEncryptionError({ cause }),
       }),
+    ),
     // Only the envelope reaches FCM. The matching private key never leaves Android.
     seal: Effect.fn("NotificationEncryption.seal")(function* (input) {
       const nonce = yield* crypto

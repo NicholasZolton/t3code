@@ -25,7 +25,6 @@ const execFileAsync = NodeUtil.promisify(NodeChildProcess.execFile);
 const probe = NodeChildProcess.spawnSync("jj", ["--version"], { encoding: "utf8" });
 const probedVersion = probe.status === 0 ? parseJjVersion(probe.stdout) : null;
 
-export const JJ_VERSION: string | null = probedVersion;
 export const JJ_AVAILABLE: boolean = probedVersion !== null && isJjVersionSupported(probedVersion);
 
 /**
@@ -144,20 +143,19 @@ export interface JjRepoFixture extends SeededJjRepo {
 }
 
 /** {@link seedJjRepo} plus the driver, with the real driver layer already provided. */
-export const withJjRepo = <A, E>(
+export const withJjRepo = Effect.fn("withJjRepo")(function* <A, E>(
   input: SeedJjRepoInput,
   use: (fixture: JjRepoFixture) => Effect.Effect<A, E, FileSystem.FileSystem | Path.Path>,
-) =>
-  Effect.gen(function* () {
-    const seeded = yield* seedJjRepo(input);
-    return yield* use({
-      ...seeded,
-      driver: yield* JjVcsDriver.JjVcsDriver,
-      process: yield* VcsProcess.VcsProcess,
-      fileSystem: yield* FileSystem.FileSystem,
-      path: yield* Path.Path,
-    });
-  }).pipe(Effect.provide(JjDriverLayer));
+) {
+  const seeded = yield* seedJjRepo(input);
+  return yield* use({
+    ...seeded,
+    driver: yield* JjVcsDriver.JjVcsDriver,
+    process: yield* VcsProcess.VcsProcess,
+    fileSystem: yield* FileSystem.FileSystem,
+    path: yield* Path.Path,
+  });
+}, Effect.provide(JjDriverLayer));
 
 interface RepoPaths {
   readonly fileSystem: FileSystem.FileSystem;

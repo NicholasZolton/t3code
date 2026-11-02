@@ -27,6 +27,8 @@ export interface VcsRestoreCheckpointInput {
   readonly fallbackToHead?: boolean;
 }
 
+export const CHECKPOINT_DIFF_MAX_OUTPUT_BYTES = 10_000_000;
+
 export interface VcsDiffCheckpointsInput {
   readonly cwd: string;
   readonly fromCheckpointRef: CheckpointRef;
@@ -34,7 +36,9 @@ export interface VcsDiffCheckpointsInput {
   readonly fallbackFromToHead?: boolean;
   readonly ignoreWhitespace: boolean;
   readonly format?: "patch" | "numstat";
-  /** Limits the diff to these exact paths. An empty list yields an empty diff. */
+  /** Maximum bytes collected from the diff command. */
+  readonly maxOutputBytes?: number;
+  /** An empty list yields an empty diff. */
   readonly filePaths?: ReadonlyArray<string>;
 }
 
@@ -80,7 +84,7 @@ export class VcsDriver extends Context.Service<
     readonly execute: (
       input: Omit<VcsProcess.VcsProcessInput, "command">,
     ) => Effect.Effect<VcsProcess.VcsProcessOutput, VcsError>;
-    readonly checkpoints?: VcsCheckpointOps;
+    readonly checkpoints: VcsCheckpointOps;
     readonly detectRepository: (
       cwd: string,
     ) => Effect.Effect<VcsRepositoryIdentity | null, VcsError>;
@@ -97,18 +101,11 @@ export class VcsDriver extends Context.Service<
     readonly getDiffPreview?: (
       input: ReviewDiffPreviewInput,
     ) => Effect.Effect<ReviewDiffPreviewResult, VcsError>;
-    /**
-     * Expand unchanged context in a review diff. Optional for the same reason as `getDiffPreview`:
-     * the Git driver reaches its implementation through the legacy `GitVcsDriver` service instead.
-     */
+    /** Git reaches review diffs through its legacy GitVcsDriver service. */
     readonly getDiffFileContents?: (
       input: ReviewDiffFileContentsInput,
     ) => Effect.Effect<ReviewDiffFileContentsResult, VcsError>;
-    /**
-     * Whether `checkpoints` can actually run against THIS repository, as opposed to whether this
-     * driver implements checkpointing at all. A driver that is always usable once detected omits
-     * it; absent means yes. Never fails: a probe error reads as `false`.
-     */
+    /** Probe repository-specific checkpoint availability; absent means usable, probe errors mean false. */
     readonly checkpointsUsable?: (cwd: string) => Effect.Effect<boolean, never>;
   }
 >()("t3/vcs/VcsDriver") {}

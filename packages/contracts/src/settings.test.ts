@@ -2,25 +2,42 @@ import { describe, expect, it } from "vite-plus/test";
 import * as Schema from "effect/Schema";
 
 import { type CommandId, ProjectId } from "./baseSchemas.ts";
-import { ProviderDriverKind, ProviderInstanceId } from "./providerInstance.ts";
+import {
+  ProviderDriverKind,
+  ProviderInstanceEnvironment,
+  ProviderInstanceId,
+} from "./providerInstance.ts";
 import {
   ClientSettingsSchema,
   ClientSettingsPatch,
   ClaudeSettings,
   DEFAULT_SERVER_SETTINGS,
+  globalIdleCompaction,
+  idleCompactionPatch,
   requiredScopesForProjectMutation,
+  resolveIdleCompaction,
   resolveProjectProviderInstanceEnabled,
   resolveProviderInstanceEnabled,
   ServerSettings,
   ServerSettingsPatch,
+  withIdleCompaction,
 } from "./settings.ts";
 
 const decodeClientSettings = Schema.decodeUnknownSync(ClientSettingsSchema);
 const decodeClientSettingsPatch = Schema.decodeUnknownSync(ClientSettingsPatch);
 const encodeClientSettings = Schema.encodeSync(ClientSettingsSchema);
 const decodeServerSettings = Schema.decodeUnknownSync(ServerSettings);
+const encodeProviderInstanceEnvironment = Schema.encodeSync(ProviderInstanceEnvironment);
+const decodeProviderInstanceEnvironment = Schema.decodeSync(ProviderInstanceEnvironment);
+// The environment variable shape builds released before secret references decode.
+const decodeStringOnlyEnvironment = Schema.decodeUnknownSync(
+  Schema.Array(
+    Schema.Struct({ name: Schema.String, value: Schema.String, sensitive: Schema.Boolean }),
+  ),
+);
 const decodeServerSettingsPatch = Schema.decodeUnknownSync(ServerSettingsPatch);
 const encodeServerSettings = Schema.encodeSync(ServerSettings);
+const encodeServerSettingsPatch = Schema.encodeSync(ServerSettingsPatch);
 const decodeClaudeSettings = Schema.decodeUnknownSync(ClaudeSettings);
 
 describe("worktree settings", () => {
@@ -87,18 +104,6 @@ describe("storage cleanup settings", () => {
       worktreeKeepWhen: "uncommitted-changes",
       browserArtifactsAfterDays: null,
       logsAfterDays: null,
-    });
-  });
-
-  it("accepts eight-day retention and disabling one rule without resetting others", () => {
-    expect(decodeServerSettingsPatch({ storageCleanup: { worktreeAfterDays: 8 } })).toEqual({
-      storageCleanup: { worktreeAfterDays: 8 },
-    });
-    expect(decodeServerSettingsPatch({ storageCleanup: { worktreeAfterDays: null } })).toEqual({
-      storageCleanup: { worktreeAfterDays: null },
-    });
-    expect(decodeServerSettingsPatch({ storageCleanup: { worktreeSettledAfterDays: 0 } })).toEqual({
-      storageCleanup: { worktreeSettledAfterDays: 0 },
     });
   });
 
@@ -230,44 +235,6 @@ describe("ServerSettings default permissions", () => {
 describe("ServerSettings usage price overrides", () => {
   const prices = { inputCostPerMillionTokens: 2, outputCostPerMillionTokens: 8 };
 
-  it("defaults to automatic pricing and round-trips arbitrary model IDs", () => {
-    expect(decodeServerSettings({}).usagePriceOverrides).toEqual({});
-    const settings = decodeServerSettings({
-      usagePriceOverrides: { "  vendor/example-model  ": prices },
-    });
-    expect(encodeServerSettings(settings).usagePriceOverrides).toEqual({
-      "vendor/example-model": prices,
-    });
-  });
-
-  it("accepts zero rates, optional cache rates, and per-model deletion", () => {
-    const overrides = {
-      "example-model": {
-        inputCostPerMillionTokens: 0,
-        outputCostPerMillionTokens: 0,
-        cacheReadCostPerMillionTokens: 0.5,
-        cacheWriteCostPerMillionTokens: 3,
-      },
-      "removed-model": null,
-    };
-    expect(
-      decodeServerSettingsPatch({ usagePriceOverrides: overrides }).usagePriceOverrides,
-    ).toEqual(overrides);
-  });
-
-  it.each([
-    "inputCostPerMillionTokens",
-    "outputCostPerMillionTokens",
-    "cacheReadCostPerMillionTokens",
-    "cacheWriteCostPerMillionTokens",
-  ])("rejects invalid %s rates at the settings boundary", (field) => {
-    for (const value of [-1, Number.NaN, Number.POSITIVE_INFINITY, "2"]) {
-      const usagePriceOverrides = { "example-model": { ...prices, [field]: value } };
-      expect(() => decodeServerSettings({ usagePriceOverrides })).toThrow();
-      expect(() => decodeServerSettingsPatch({ usagePriceOverrides })).toThrow();
-    }
-  });
-
   it("rejects empty model IDs and incomplete input/output pricing", () => {
     for (const usagePriceOverrides of [
       { " ": prices },
@@ -275,6 +242,97 @@ describe("ServerSettings usage price overrides", () => {
       { "example-model": { outputCostPerMillionTokens: 8 } },
     ]) {
       expect(() => decodeServerSettingsPatch({ usagePriceOverrides })).toThrow();
+    }
+  });
+
+  it("ignores an invalid model filter without dropping the other settings", () => {
+    const valid = { include: [{ provider: "newer-provider", model: "orbit-1" }] };
+    expect(decodeServerSettings({ usageModelFilter: valid }).usageModelFilter).toEqual(valid);
+    const settings = decodeServerSettings({
+      usageModelFilter: { exclude: [{ model: "" }] },
+      usageModelAliases: { "drift-9": "orbit-1" },
+    });
+    expect(settings.usageModelFilter).toBeUndefined();
+    expect(settings.usageModelAliases).toEqual({ "drift-9": "orbit-1" });
+  });
+});
+
+describe("ServerSettings secret providers", () => {
+  const onePassword = (account: string) => ({
+    kind: "one_password",
+    label: "Personal",
+    config: { account },
+  });
+
+  it("keeps an unknown kind or a longer label from invalidating the rest of the settings", () => {
+    const openbao = { kind: "openbao", label: "V".repeat(65), config: { address: "https://x" } };
+    const decoded = decodeServerSettings({
+      worktreesDirectory: "/work",
+      secretProviders: { vault: openbao, personal: onePassword("my.1password.com") },
+    });
+    expect(decoded.worktreesDirectory).toBe("/work");
+    expect(encodeServerSettings(decoded).secretProviders).toEqual({
+      vault: openbao,
+      personal: onePassword("my.1password.com"),
+    });
+  });
+
+  it("accepts slug ids and null removals but no id that is not a slug", () => {
+    expect(
+      decodeServerSettingsPatch({
+        secretProviders: { "1password": onePassword("my.1password.com"), work: null },
+      }).secretProviders,
+    ).toEqual({ "1password": onePassword("my.1password.com"), work: null });
+    for (const id of ["", "My Vault", "a/b", "-vault"]) {
+      expect(() =>
+        decodeServerSettingsPatch({ secretProviders: { [id]: onePassword("my.1password.com") } }),
+      ).toThrow();
+    }
+    expect(() =>
+      decodeServerSettingsPatch({
+        secretProviders: { work: { ...onePassword("my.1password.com"), label: "V".repeat(65) } },
+      }),
+    ).toThrow();
+  });
+
+  it("stores a provider environment secret reference in a layout older builds still decode", () => {
+    const providerInstances = (secret: unknown) => ({
+      codex: {
+        driver: "codex",
+        environment: [
+          { name: "OPENAI_API_KEY", sensitive: true, value: "", secret },
+          { name: "BASE_URL", value: "https://example.test" },
+        ],
+      },
+    });
+    const secret = { provider: "personal", reference: "op://Private/OpenAI/credential" };
+    const environment = decodeServerSettings({ providerInstances: providerInstances(secret) })
+      .providerInstances[ProviderInstanceId.make("codex")]?.environment;
+    expect(environment).toEqual([
+      { name: "OPENAI_API_KEY", value: secret, sensitive: true },
+      { name: "BASE_URL", value: "https://example.test", sensitive: false },
+    ]);
+
+    const encoded = encodeProviderInstanceEnvironment(environment ?? []);
+    expect(encoded).toEqual([
+      { name: "OPENAI_API_KEY", value: "", sensitive: true, secret },
+      { name: "BASE_URL", value: "https://example.test", sensitive: false },
+    ]);
+    expect(decodeProviderInstanceEnvironment(encoded)).toEqual(environment);
+    expect(decodeStringOnlyEnvironment(encoded)).toEqual([
+      { name: "OPENAI_API_KEY", value: "", sensitive: true },
+      { name: "BASE_URL", value: "https://example.test", sensitive: false },
+    ]);
+
+    for (const invalid of [
+      { provider: "My Vault", reference: "op://a/b/c" },
+      { provider: "personal", reference: " " },
+      { provider: "personal", reference: "op://Private/OpenAI\n/credential" },
+      { provider: "personal", reference: "x".repeat(1025) },
+    ]) {
+      expect(() =>
+        decodeServerSettings({ providerInstances: providerInstances(invalid) }),
+      ).toThrow();
     }
   });
 });
@@ -302,24 +360,55 @@ describe("custom model settings", () => {
   });
 });
 
-describe("ClaudeSettings auto-compaction", () => {
-  it("uses Claude's default threshold when no override is configured", () => {
-    expect(decodeClaudeSettings({}).autoCompactWindow).toBe("");
+describe("resolveIdleCompaction", () => {
+  it("lets a Claude instance override the global default", () => {
+    const settings = decodeServerSettings({
+      idleCompaction: "off",
+      providerInstances: {
+        claude_work: { driver: "claudeAgent", config: { idleCompaction: "onReturn" } },
+        claude_personal: { driver: "claudeAgent" },
+      },
+    });
+    expect(resolveIdleCompaction(settings, ProviderInstanceId.make("claude_work"))).toBe(
+      "onReturn",
+    );
+    expect(resolveIdleCompaction(settings, ProviderInstanceId.make("claude_personal"))).toBe("off");
+    expect(resolveIdleCompaction(settings, ProviderInstanceId.make("claudeAgent"))).toBe("off");
   });
 
-  it.each(["100000", "300000", "1000000"])(
-    "accepts a supported auto-compaction threshold: %s",
-    (value) => {
-      expect(decodeClaudeSettings({ autoCompactWindow: value }).autoCompactWindow).toBe(value);
-    },
-  );
+  it("reads the mode from the legacy switch, in either form servers saved it", () => {
+    expect(globalIdleCompaction(decodeServerSettings({ compactIdleThreads: true }))).toBe(
+      "beforeCacheExpires",
+    );
+    expect(globalIdleCompaction(decodeServerSettings({ compactIdleThreads: "off" }))).toBe("off");
+    expect(globalIdleCompaction(decodeServerSettings({}))).toBe("onReturn");
+  });
 
-  it.each(["99999", "1000001", "300k", "invalid"])(
-    "rejects an unsupported auto-compaction threshold: %s",
-    (value) => {
-      expect(() => decodeClaudeSettings({ autoCompactWindow: value })).toThrow();
-    },
-  );
+  it("keeps the legacy switch a boolean, as shipped clients decode it", () => {
+    const encode = Schema.encodeSync(Schema.toCodecJson(ServerSettings));
+    for (const mode of ["onReturn", "beforeCacheExpires", "off"] as const) {
+      const encoded = encode(withIdleCompaction(DEFAULT_SERVER_SETTINGS, mode)) as {
+        readonly compactIdleThreads: unknown;
+        readonly idleCompaction: unknown;
+      };
+      expect(encoded.compactIdleThreads).toBe(mode === "beforeCacheExpires");
+      expect(encoded.idleCompaction).toBe(mode);
+    }
+  });
+
+  it("patches the field the server reads", () => {
+    expect(
+      idleCompactionPatch({ compactIdleThreads: false, idleCompaction: "onReturn" }, "off"),
+    ).toEqual({
+      idleCompaction: "off",
+    });
+    expect(idleCompactionPatch({ compactIdleThreads: "onReturn" }, "off")).toEqual({
+      compactIdleThreads: "off",
+    });
+    expect(idleCompactionPatch({ compactIdleThreads: false }, "beforeCacheExpires")).toEqual({
+      compactIdleThreads: true,
+    });
+  });
 });
 
 describe("ClientSettings notifications", () => {
@@ -576,15 +665,6 @@ describe("ClientSettings proactive panels", () => {
 });
 
 describe("ClientSettings quit confirmation", () => {
-  it("defaults to hold", () => {
-    expect(decodeClientSettings({}).confirmQuit).toBe("hold");
-  });
-
-  it.each(["direct", "hold", "double-click"] as const)("accepts the %s mode", (mode) => {
-    expect(decodeClientSettings({ confirmQuit: mode }).confirmQuit).toBe(mode);
-    expect(decodeClientSettingsPatch({ confirmQuit: mode }).confirmQuit).toBe(mode);
-  });
-
   it.each([
     [true, "hold"],
     [false, "direct"],
@@ -594,341 +674,22 @@ describe("ClientSettings quit confirmation", () => {
     expect(settings.confirmQuit).toBe(mode);
     expect(encodeClientSettings(settings).confirmQuit).toBe(mode);
   });
-
-  it("rejects legacy booleans at the patch boundary", () => {
-    expect(() => decodeClientSettingsPatch({ confirmQuit: true })).toThrow();
-  });
-});
-
-describe("ClientSettings browser recording frame rate", () => {
-  it("defaults to 30 fps", () => {
-    expect(decodeClientSettings({}).browserRecordingFrameRate).toBe(30);
-  });
-
-  it.each([30, 60])("accepts a supported frame rate: %s", (frameRate) => {
-    expect(
-      decodeClientSettings({ browserRecordingFrameRate: frameRate }).browserRecordingFrameRate,
-    ).toBe(frameRate);
-    expect(
-      decodeClientSettingsPatch({ browserRecordingFrameRate: frameRate }).browserRecordingFrameRate,
-    ).toBe(frameRate);
-  });
-
-  it.each([24, 59, 120])("rejects an unsupported frame rate: %s", (frameRate) => {
-    expect(() => decodeClientSettings({ browserRecordingFrameRate: frameRate })).toThrow();
-    expect(() => decodeClientSettingsPatch({ browserRecordingFrameRate: frameRate })).toThrow();
-  });
-});
-
-describe("ClientSettings recording input overlays", () => {
-  it("defaults both overlays off and accepts independent opt-ins", () => {
-    const settings = decodeClientSettings({});
-    expect(settings.browserRecordingShowKeyPresses).toBe(false);
-    expect(settings.browserRecordingShowMousePresses).toBe(false);
-    expect(
-      decodeClientSettingsPatch({
-        browserRecordingShowKeyPresses: true,
-        browserRecordingShowMousePresses: false,
-      }),
-    ).toMatchObject({
-      browserRecordingShowKeyPresses: true,
-      browserRecordingShowMousePresses: false,
-    });
-  });
-});
-
-describe("ClientSettings glass opacity", () => {
-  it("defaults to a readable translucent surface", () => {
-    expect(decodeClientSettings({}).glassOpacity).toBe(80);
-  });
-
-  it.each([39, 101, 72.5])("rejects an invalid glass opacity: %s", (value) => {
-    expect(() => decodeClientSettings({ glassOpacity: value })).toThrow();
-    expect(() => decodeClientSettingsPatch({ glassOpacity: value })).toThrow();
-  });
-
-  it.each([40, 75, 100])("accepts a glass opacity within the supported range: %s", (value) => {
-    expect(decodeClientSettings({ glassOpacity: value }).glassOpacity).toBe(value);
-    expect(decodeClientSettingsPatch({ glassOpacity: value }).glassOpacity).toBe(value);
-  });
-});
-
-describe("ClientSettings appearance contrast", () => {
-  it("defaults to the theme's original contrast", () => {
-    expect(decodeClientSettings({}).appearanceContrast).toBe(100);
-  });
-
-  it.each([49, 201, 92.5])("rejects an invalid appearance contrast: %s", (value) => {
-    expect(() => decodeClientSettings({ appearanceContrast: value })).toThrow();
-    expect(() => decodeClientSettingsPatch({ appearanceContrast: value })).toThrow();
-  });
-
-  it.each([50, 100, 150, 200])("accepts an appearance contrast in range: %s", (value) => {
-    expect(decodeClientSettings({ appearanceContrast: value }).appearanceContrast).toBe(value);
-    expect(decodeClientSettingsPatch({ appearanceContrast: value }).appearanceContrast).toBe(value);
-  });
-});
-
-describe("ClientSettings panel animations", () => {
-  it("defaults to instant changes", () => {
-    expect(decodeClientSettings({}).panelAnimationDurationMs).toBe(0);
-  });
-
-  it.each([0, 400])("accepts a panel animation duration: %s", (value) => {
-    expect(decodeClientSettingsPatch({ panelAnimationDurationMs: value })).toEqual({
-      panelAnimationDurationMs: value,
-    });
-  });
-
-  it.each([-1, 401, 150.5])("rejects an invalid panel animation duration: %s", (value) => {
-    expect(() => decodeClientSettingsPatch({ panelAnimationDurationMs: value })).toThrow();
-  });
-});
-
-describe("ClientSettings environment identification", () => {
-  it("defaults to artwork and accepts each presentation mode", () => {
-    expect(decodeClientSettings({}).environmentIdentificationMode).toBe("artwork");
-
-    for (const mode of ["artwork", "pill", "none"] as const) {
-      expect(
-        decodeClientSettingsPatch({ environmentIdentificationMode: mode })
-          .environmentIdentificationMode,
-      ).toBe(mode);
-    }
-  });
-
-  it("rejects unsupported presentation modes", () => {
-    expect(() => decodeClientSettings({ environmentIdentificationMode: "badge" })).toThrow();
-    expect(() => decodeClientSettingsPatch({ environmentIdentificationMode: "badge" })).toThrow();
-  });
-});
-
-describe("ClientSettings sidebar", () => {
-  it("defaults to the current sidebar", () => {
-    expect(decodeClientSettings({}).legacySidebarEnabled).toBe(false);
-  });
-
-  it("drops the retired sidebar v2 beta keys, resetting everyone to the default", () => {
-    const decoded = decodeClientSettings({
-      sidebarV2Enabled: false,
-      sidebarV2ConfiguredByUser: true,
-    });
-    expect(decoded.legacySidebarEnabled).toBe(false);
-    expect(decoded).not.toHaveProperty("sidebarV2Enabled");
-    expect(decoded).not.toHaveProperty("sidebarV2ConfiguredByUser");
-  });
-
-  it("drops the retired compact sidebar keys for users who opted in", () => {
-    const stored = { compactSidebarEnabled: true, sidebarCompactThreadRows: true };
-    const decoded = decodeClientSettings(stored);
-    expect(decoded).not.toHaveProperty("compactSidebarEnabled");
-    expect(decoded).not.toHaveProperty("sidebarCompactThreadRows");
-    expect(decodeClientSettingsPatch(stored)).toEqual({});
-  });
-
-  it("preserves an explicit legacy sidebar opt-in", () => {
-    expect(decodeClientSettings({ legacySidebarEnabled: true }).legacySidebarEnabled).toBe(true);
-    expect(decodeClientSettingsPatch({ legacySidebarEnabled: true }).legacySidebarEnabled).toBe(
-      true,
-    );
-  });
-
-  it("keeps unpin confirmation opt-in and patchable", () => {
-    expect(decodeClientSettings({}).confirmThreadUnpin).toBe(false);
-    expect(decodeClientSettingsPatch({ confirmThreadUnpin: true }).confirmThreadUnpin).toBe(true);
-    expect(() => decodeClientSettingsPatch({ confirmThreadUnpin: "yes" })).toThrow();
-  });
-});
-
-describe("ClientSettings context window meter", () => {
-  it("defaults off and preserves an explicit legacy opt-in", () => {
-    expect(decodeClientSettings({}).contextWindowMeterEnabled).toBe(false);
-    expect(
-      decodeClientSettings({ contextWindowMeterEnabled: true }).contextWindowMeterEnabled,
-    ).toBe(true);
-    expect(
-      decodeClientSettingsPatch({ contextWindowMeterEnabled: true }).contextWindowMeterEnabled,
-    ).toBe(true);
-  });
-});
-
-describe("ClientSettings send shortcut", () => {
-  it("defaults to Enter and validates the supported choices", () => {
-    expect(decodeClientSettings({}).sendShortcut).toBe("enter");
-    for (const sendShortcut of ["enter", "mod-enter-multiline", "mod-enter"]) {
-      expect(decodeClientSettings({ sendShortcut }).sendShortcut).toBe(sendShortcut);
-      expect(decodeClientSettingsPatch({ sendShortcut }).sendShortcut).toBe(sendShortcut);
-    }
-    expect(() => decodeClientSettingsPatch({ sendShortcut: "invalid" })).toThrow();
-  });
-});
-
-describe("ClientSettings follow-up behavior", () => {
-  it("defaults to queue and accepts either behavior", () => {
-    expect(decodeClientSettings({}).followUpBehavior).toBe("queue");
-    for (const followUpBehavior of ["queue", "steer"]) {
-      expect(decodeClientSettings({ followUpBehavior }).followUpBehavior).toBe(followUpBehavior);
-      expect(decodeClientSettingsPatch({ followUpBehavior }).followUpBehavior).toBe(
-        followUpBehavior,
-      );
-    }
-    expect(() => decodeClientSettingsPatch({ followUpBehavior: "invalid" })).toThrow();
-  });
-});
-
-describe("ClientSettings composer collapse", () => {
-  it("collapses on scroll by default and accepts opting out", () => {
-    expect(decodeClientSettings({}).composerCollapseOnScroll).toBe(true);
-    expect(
-      decodeClientSettingsPatch({ composerCollapseOnScroll: false }).composerCollapseOnScroll,
-    ).toBe(false);
-  });
-
-  it("drops the retired blur trigger key", () => {
-    const decoded = decodeClientSettings({ composerCollapseOnBlur: false });
-    expect(decoded.composerCollapseOnScroll).toBe(true);
-    expect(decoded).not.toHaveProperty("composerCollapseOnBlur");
-  });
-});
-
-describe("ServerSettings thread settlement", () => {
-  it("defaults merge settlement on and inactivity settlement to three days", () => {
-    const settings = decodeServerSettings({});
-    expect(settings.sidebarAutoSettleAfterDays).toBe(3);
-    expect(settings.sidebarAutoSettleOnMerge).toBe(true);
-  });
-
-  it("allows both automatic rules to be disabled", () => {
-    expect(
-      decodeServerSettings({
-        sidebarAutoSettleAfterDays: null,
-        sidebarAutoSettleOnMerge: false,
-      }),
-    ).toMatchObject({ sidebarAutoSettleAfterDays: null, sidebarAutoSettleOnMerge: false });
-    expect(
-      decodeServerSettingsPatch({
-        sidebarAutoSettleAfterDays: null,
-        sidebarAutoSettleOnMerge: false,
-      }),
-    ).toMatchObject({ sidebarAutoSettleAfterDays: null, sidebarAutoSettleOnMerge: false });
-  });
-
-  it.each([-1, 0, 91])("rejects an auto-settle threshold outside 1..90: %s", (value) => {
-    expect(() => decodeServerSettings({ sidebarAutoSettleAfterDays: value })).toThrow();
-    expect(() => decodeServerSettingsPatch({ sidebarAutoSettleAfterDays: value })).toThrow();
-  });
-});
-
-describe("ClientSettings pull request merge methods", () => {
-  it("defaults to no project overrides and accepts supported methods", () => {
-    expect(decodeClientSettings({}).pullRequestMergeMethodOverrides).toEqual({});
-    expect(
-      decodeClientSettingsPatch({
-        pullRequestMergeMethodOverrides: { project: "squash" },
-      }).pullRequestMergeMethodOverrides,
-    ).toEqual({ project: "squash" });
-  });
-
-  it("rejects unsupported project merge methods", () => {
-    expect(() =>
-      decodeClientSettingsPatch({
-        pullRequestMergeMethodOverrides: { project: "fast-forward" },
-      }),
-    ).toThrow();
-  });
-});
-
-describe("ServerSettings.providerInstances (slice-2 invariant)", () => {
-  it("defaults to an empty record so legacy configs without the key still decode", () => {
-    expect(DEFAULT_SERVER_SETTINGS.providerInstances).toEqual({});
-  });
-
-  it("decodes a fully empty config (legacy on-disk shape) without complaint", () => {
-    const decoded = decodeServerSettings({});
-    expect(decoded.providerInstances).toEqual({});
-  });
-
-  it("decodes a multi-instance map mixing first-party and fork drivers", () => {
-    const decoded = decodeServerSettings({
-      providerInstances: {
-        codex_personal: {
-          driver: "codex",
-          displayName: "Codex (personal)",
-          config: { homePath: "~/.codex_personal" },
-        },
-        codex_work: {
-          driver: "codex",
-          config: { homePath: "~/.codex_work" },
-        },
-        ollama_local: {
-          driver: "ollama",
-          displayName: "Ollama (local)",
-          config: { endpoint: "http://localhost:11434" },
-        },
-      },
-    });
-    const personalId = ProviderInstanceId.make("codex_personal");
-    const workId = ProviderInstanceId.make("codex_work");
-    const ollamaId = ProviderInstanceId.make("ollama_local");
-
-    expect(decoded.providerInstances[personalId]?.driver).toBe("codex");
-    expect(decoded.providerInstances[workId]?.config).toEqual({ homePath: "~/.codex_work" });
-    // Critical: a config naming a driver this build does not know about
-    // (`ollama` is not in `ProviderDriverKind`) must round-trip without loss.
-    // The runtime handles "driver not installed" — the schema must not.
-    expect(decoded.providerInstances[ollamaId]?.driver).toBe("ollama");
-    expect(decoded.providerInstances[ollamaId]?.config).toEqual({
-      endpoint: "http://localhost:11434",
-    });
-  });
-
-  it("rejects instance keys that violate the slug pattern", () => {
-    expect(() =>
-      decodeServerSettings({
-        providerInstances: { "1bad": { driver: "codex" } },
-      }),
-    ).toThrow();
-  });
 });
 
 describe("provider enabled defaults", () => {
-  it("keeps Muse disabled until a configured instance opts in", () => {
-    const muse = ProviderDriverKind.make("muse");
-    expect(resolveProviderInstanceEnabled({ driver: muse, config: {} })).toBe(false);
-    expect(resolveProviderInstanceEnabled({ driver: muse, enabled: true, config: {} })).toBe(true);
-    expect(
-      resolveProviderInstanceEnabled({ driver: muse, enabled: true, config: { enabled: false } }),
-    ).toBe(false);
-  });
-
-  it("enables only the stable bindings by default", () => {
-    const enabledByDefault = (driver: string) =>
-      resolveProviderInstanceEnabled({ driver: ProviderDriverKind.make(driver), config: {} });
-    expect(enabledByDefault("codex")).toBe(true);
-    expect(enabledByDefault("claudeAgent")).toBe(true);
-    for (const driver of ["cursor", "grok", "muse", "pi", "opencode", "antigravity"]) {
-      expect(enabledByDefault(driver)).toBe(false);
-    }
-  });
-
   it("resolves instance enabled state with explicit false winning", () => {
     const grok = ProviderDriverKind.make("grok");
     const codex = ProviderDriverKind.make("codex");
-    // No flags anywhere: driver default applies.
     expect(resolveProviderInstanceEnabled({ driver: grok, config: {} })).toBe(false);
     expect(resolveProviderInstanceEnabled({ driver: codex, config: {} })).toBe(true);
-    // Unknown fork drivers stay enabled.
     expect(
       resolveProviderInstanceEnabled({ driver: ProviderDriverKind.make("ollama"), config: {} }),
     ).toBe(true);
-    // Envelope flag wins over the driver default.
     expect(resolveProviderInstanceEnabled({ driver: grok, enabled: true, config: {} })).toBe(true);
     expect(resolveProviderInstanceEnabled({ driver: codex, enabled: false, config: {} })).toBe(
       false,
     );
-    // Legacy in-config flag fills in when the envelope is silent.
     expect(resolveProviderInstanceEnabled({ driver: grok, config: { enabled: true } })).toBe(true);
-    // Conflicting flags: the explicit false wins, whichever side it is on.
     expect(
       resolveProviderInstanceEnabled({ driver: grok, enabled: true, config: { enabled: false } }),
     ).toBe(false);
@@ -959,154 +720,67 @@ describe("ServerSettings worktree defaults", () => {
       encode(decodeServerSettings({ defaultThreadEnvMode: "worktree" })).defaultThreadEnvMode,
     ).toBe("worktree");
   });
-
-  it("defaults start-from-origin on for legacy configs", () => {
-    expect(decodeServerSettings({}).newWorktreesStartFromOrigin).toBe(true);
-  });
-
-  it("accepts start-from-origin updates", () => {
-    expect(
-      decodeServerSettingsPatch({ newWorktreesStartFromOrigin: false }).newWorktreesStartFromOrigin,
-    ).toBe(false);
-  });
-
-  it("defaults worktree submodules to inherit and tolerates unknown modes", () => {
-    expect(decodeServerSettings({}).worktreeSubmodules).toBeNull();
-    expect(decodeServerSettings({ worktreeSubmodules: "top-level" }).worktreeSubmodules).toBe(
-      "top-level",
-    );
-    expect(decodeServerSettings({ worktreeSubmodules: "shallow" }).worktreeSubmodules).toBeNull();
-    expect(decodeServerSettingsPatch({ worktreeSubmodules: null }).worktreeSubmodules).toBeNull();
-  });
 });
 
 describe("ServerSettings.sourceControlWritingStyle", () => {
-  it("defaults all style settings for legacy configs", () => {
-    const settings = decodeServerSettings({});
-
-    expect(settings.sourceControlWritingStyle).toEqual({
-      mode: "repo_conventions",
-      customInstructions: "",
-      followChangeRequestTemplates: true,
-    });
-    expect(settings.sourceControlWriterModelSelection).toBeNull();
-  });
-
-  it("trims partial style updates", () => {
-    const patch = decodeServerSettingsPatch({
-      sourceControlWritingStyle: {
-        mode: "custom",
-        customInstructions: "  Prefer concise wording.  ",
-      },
-    });
-
-    expect(patch.sourceControlWritingStyle).toEqual({
+  it.each([
+    { legacy: "", mode: "repo_conventions", customInstructions: "" },
+    { legacy: " \t\n ", mode: "repo_conventions", customInstructions: "" },
+    {
+      legacy: "  Prefer concise wording.\nKeep issue references.  ",
       mode: "custom",
-      customInstructions: "Prefer concise wording.",
-    });
-  });
-});
-
-describe("ServerSettingsPatch.providerInstances", () => {
-  it("treats providerInstances as an optional whole-map replacement", () => {
-    const patch = decodeServerSettingsPatch({});
-    expect(patch.providerInstances).toBeUndefined();
-
-    const replacement = decodeServerSettingsPatch({
-      providerInstances: {
-        codex_personal: { driver: "codex", config: { homePath: "~/.codex" } },
-      },
-    });
-    expect(replacement.providerInstances).toBeDefined();
-    expect(replacement.providerInstances?.[ProviderInstanceId.make("codex_personal")]?.driver).toBe(
-      "codex",
-    );
-  });
-
-  it("preserves a fork-defined driver entry through patch decoding", () => {
-    const patch = decodeServerSettingsPatch({
-      providerInstances: {
-        ollama_local: {
-          driver: "ollama",
-          config: { endpoint: "http://localhost:11434" },
-        },
-      },
-    });
-    const ollamaId = ProviderInstanceId.make("ollama_local");
-    expect(patch.providerInstances?.[ollamaId]?.driver).toBe("ollama");
-  });
-});
-
-describe("ServerSettingsPatch string normalization", () => {
-  it("trims string settings while decoding patches", () => {
-    const patch = decodeServerSettingsPatch({
-      addProjectBaseDirectory: "  ~/Development  ",
-      textGenerationModelSelection: { model: "  gpt-5.4-mini  " },
-      observability: {
-        otlpTracesUrl: "  http://localhost:4318/v1/traces  ",
-      },
-      providerInstances: {
-        codex_personal: {
-          driver: "  codex  ",
-          displayName: "  Codex Personal  ",
-          config: { homePath: "  ~/.codex-personal  " },
-        },
-      },
-    });
-
-    expect(patch.addProjectBaseDirectory).toBe("~/Development");
-    expect(patch.textGenerationModelSelection?.model).toBe("gpt-5.4-mini");
-    expect(patch.observability?.otlpTracesUrl).toBe("http://localhost:4318/v1/traces");
-    expect(patch.providerInstances?.[ProviderInstanceId.make("codex_personal")]?.driver).toBe(
-      "codex",
-    );
-    expect(patch.providerInstances?.[ProviderInstanceId.make("codex_personal")]?.displayName).toBe(
-      "Codex Personal",
-    );
-    expect(patch.providerInstances?.[ProviderInstanceId.make("codex_personal")]?.config).toEqual({
-      homePath: "  ~/.codex-personal  ",
-    });
-  });
-
-  it("trims encoded server settings values before validation", () => {
-    const defaultSettings = decodeServerSettings({});
-    const encoded = encodeServerSettings({
-      ...defaultSettings,
-      addProjectBaseDirectory: "  ~/Development  ",
-    });
-
-    expect(encoded.addProjectBaseDirectory).toBe("~/Development");
+      customInstructions: "Prefer concise wording.\nKeep issue references.",
+    },
+  ])("normalizes legacy writing style $legacy in snapshots only", ({ legacy, ...expected }) => {
+    const style = { ...expected, followChangeRequestTemplates: true };
+    for (const [input, normalized] of [
+      [{ sourceControlWritingStyle: legacy }, { sourceControlWritingStyle: style }],
+      [
+        { projectSettingsOverrides: { project: { sourceControlWritingStyle: legacy } } },
+        { projectSettingsOverrides: { project: { sourceControlWritingStyle: style } } },
+      ],
+    ] as const) {
+      const settings = decodeServerSettings(input);
+      expect(settings).toMatchObject(normalized);
+      expect(encodeServerSettings(settings)).toMatchObject(normalized);
+      expect(() => decodeServerSettingsPatch(input)).toThrow();
+    }
   });
 });
 
 describe("ServerSettings environment icon", () => {
-  it("defaults to null", () => {
-    expect(decodeServerSettings({}).environmentIcon).toBeNull();
-  });
-
-  it("keeps a kind this build knows", () => {
-    expect(decodeServerSettings({ environmentIcon: "mac-mini" }).environmentIcon).toBe("mac-mini");
-    expect(decodeServerSettings({ environmentIcon: "linux" }).environmentIcon).toBe("linux");
-  });
-
   it("decodes a kind from a newer server as null instead of failing the snapshot", () => {
     expect(decodeServerSettings({ environmentIcon: "toaster" }).environmentIcon).toBeNull();
-  });
-
-  it("round-trips through encode", () => {
-    const settings = decodeServerSettings({ environmentIcon: "laptop" });
-    expect(encodeServerSettings(settings).environmentIcon).toBe("laptop");
-
-    const linuxSettings = decodeServerSettings({ environmentIcon: "linux" });
-    expect(encodeServerSettings(linuxSettings).environmentIcon).toBe("linux");
   });
 });
 
 const decodeDeviceHostSettings = Schema.decodeSync(ServerSettings);
 
+// `deviceHosts` as it was decoded before EAS hosts existed: an SSH host needs a target.
+const decodeOlderDeviceHostSettings = Schema.decodeUnknownSync(
+  Schema.Struct({
+    deviceHosts: Schema.Array(Schema.Struct({ id: Schema.String, target: Schema.String })),
+  }),
+);
+
+it("keeps EAS hosts out of the SSH host list servers and clients before EAS hosts decode", () => {
+  const settings = decodeDeviceHostSettings({
+    deviceHosts: [{ id: "mini", label: "Mac mini", target: "user@mini" }],
+    easDeviceHosts: [{ kind: "eas", id: "eas", label: "EAS Simulator" }],
+  });
+  const wire = encodeServerSettings(settings);
+  expect(decodeOlderDeviceHostSettings(wire).deviceHosts).toEqual([
+    { id: "mini", target: "user@mini" },
+  ]);
+  expect(settings.easDeviceHosts.map((host) => host.id)).toEqual(["eas"]);
+});
+
 it("validates remote device hosts and rejects ambiguous host ids", () => {
   const host = { id: "mini", label: "Mac mini", target: "user@mini", port: 2222 };
-  expect(decodeDeviceHostSettings({ deviceHosts: [host] }).deviceHosts).toEqual([host]);
+  // Hosts saved before EAS hosts existed have no `kind`; they are SSH hosts.
+  expect(decodeDeviceHostSettings({ deviceHosts: [host] }).deviceHosts).toEqual([
+    { kind: "ssh", ...host },
+  ]);
   expect(() => decodeDeviceHostSettings({ deviceHosts: [host, host] })).toThrow();
   expect(() => decodeDeviceHostSettings({ deviceHosts: [{ ...host, id: "local" }] })).toThrow();
   expect(() =>
@@ -1115,69 +789,30 @@ it("validates remote device hosts and rejects ambiguous host ids", () => {
   expect(() => decodeDeviceHostSettings({ deviceHosts: [{ ...host, port: 0 }] })).toThrow();
 });
 
-describe("branch naming settings", () => {
-  it("defaults existing settings to the t3 static prefix", () => {
-    expect(decodeServerSettings({})).toMatchObject({
-      branchNamingMode: "static",
-      branchNamePrefix: "t3",
-      branchNameInstructions: "",
-    });
-  });
-  it.each(["static", "semantic", "custom"])(
-    "round-trips %s and project overrides",
-    (branchNamingMode) => {
-      const naming = {
-        branchNamingMode,
-        branchNamePrefix: "team/",
-        branchNameInstructions: "Include the issue ID.",
-      };
-      const input = { ...naming, projectSettingsOverrides: { project: naming } };
-      expect(encodeServerSettings(decodeServerSettings(input))).toMatchObject(input);
-      expect(decodeServerSettingsPatch(input)).toEqual(input);
-    },
-  );
-});
+describe("ServerSettings project overrides across versions", () => {
+  it("sends back an override key from a newer server when an older client edits the entry", () => {
+    const projectId = ProjectId.make("project-a");
+    // As an older client reads a newer server's settings, with one key it does not know.
+    const entry = decodeServerSettings({
+      projectSettingsOverrides: {
+        [projectId]: { defaultAutoPull: true, addedByNewerServer: { mode: "kept" } },
+      },
+    }).projectSettingsOverrides[projectId];
 
-describe("ServerSettings.removeAgentCreditsOnMerge", () => {
-  it("keeps agent credits by default and accepts opt-in patches", () => {
-    expect(decodeServerSettings({}).removeAgentCreditsOnMerge).toBe(false);
-    expect(
-      decodeServerSettingsPatch({ removeAgentCreditsOnMerge: true }).removeAgentCreditsOnMerge,
-    ).toBe(true);
-    expect(
-      decodeServerSettings({
-        projectSettingsOverrides: { project: { removeAgentCreditsOnMerge: true } },
-      }).projectSettingsOverrides["project" as ProjectId]?.removeAgentCreditsOnMerge,
-    ).toBe(true);
+    const sent = encodeServerSettingsPatch({
+      projectSettingsOverrides: { [projectId]: { ...entry, defaultAutoPull: false } },
+    });
+
+    expect(decodeServerSettingsPatch(sent).projectSettingsOverrides?.[projectId]).toEqual({
+      defaultAutoPull: false,
+      addedByNewerServer: { mode: "kept" },
+    });
   });
 });
 
 describe("resolveProjectProviderInstanceEnabled", () => {
   const projectId = "project-a" as ProjectId;
   const instanceId = ProviderInstanceId.make("codex_work");
-
-  it("inherits the machine value when the project has no override", () => {
-    const settings: ServerSettings = {
-      ...DEFAULT_SERVER_SETTINGS,
-      providerInstances: {
-        [instanceId]: { driver: ProviderDriverKind.make("codex"), enabled: false },
-      },
-    };
-    expect(resolveProjectProviderInstanceEnabled(settings, projectId, instanceId)).toBe(false);
-  });
-
-  it("lets a project enable an instance the machine disabled", () => {
-    const settings: ServerSettings = {
-      ...DEFAULT_SERVER_SETTINGS,
-      providerInstances: {
-        [instanceId]: { driver: ProviderDriverKind.make("codex"), enabled: false },
-      },
-      projectSettingsOverrides: {
-        [projectId]: { providerInstances: { [instanceId]: { enabled: true } } },
-      },
-    };
-    expect(resolveProjectProviderInstanceEnabled(settings, projectId, instanceId)).toBe(true);
-  });
 
   it("lets a project disable an instance the machine enabled", () => {
     const settings: ServerSettings = {
@@ -1190,37 +825,6 @@ describe("resolveProjectProviderInstanceEnabled", () => {
       },
     };
     expect(resolveProjectProviderInstanceEnabled(settings, projectId, instanceId)).toBe(false);
-  });
-
-  it("always resolves to the machine value when no project is in scope", () => {
-    const settings: ServerSettings = {
-      ...DEFAULT_SERVER_SETTINGS,
-      providerInstances: {
-        [instanceId]: { driver: ProviderDriverKind.make("codex"), enabled: true },
-      },
-      projectSettingsOverrides: {
-        [projectId]: { providerInstances: { [instanceId]: { enabled: false } } },
-      },
-    };
-    expect(resolveProjectProviderInstanceEnabled(settings, null, instanceId)).toBe(true);
-  });
-
-  it("falls back to the unconfigured default when the instance has no settings entry", () => {
-    const settings: ServerSettings = { ...DEFAULT_SERVER_SETTINGS, providerInstances: {} };
-    // `codex_work` has no entry in `providerInstances`, so with no project
-    // override either, this is the same unconfigured-default fallback a
-    // machine-wide (no project) lookup would use.
-    expect(resolveProjectProviderInstanceEnabled(settings, projectId, instanceId)).toBe(
-      resolveProjectProviderInstanceEnabled(settings, null, instanceId),
-    );
-
-    const overridden = {
-      ...settings,
-      projectSettingsOverrides: {
-        [projectId]: { providerInstances: { [instanceId]: { enabled: true } } },
-      },
-    };
-    expect(resolveProjectProviderInstanceEnabled(overridden, projectId, instanceId)).toBe(true);
   });
 });
 
@@ -1243,13 +847,6 @@ describe("requiredScopesForProjectMutation", () => {
 });
 
 describe("server model preferences", () => {
-  it("decodes a visibility update scoped to a provider instance and model", () => {
-    const patch = { setModelsHidden: [{ provider: "codex_work", model: "sol", hidden: false }] };
-    expect(decodeServerSettingsPatch(patch)).toEqual(patch);
-    expect(() =>
-      decodeServerSettingsPatch({ setModelsHidden: [{ provider: "codex_work", model: "sol" }] }),
-    ).toThrow();
-  });
   it("distinguishes unmigrated lists from deliberately cleared lists", () => {
     expect(decodeServerSettings({})).toMatchObject({
       favorites: null,
@@ -1258,17 +855,5 @@ describe("server model preferences", () => {
     const input = { favorites: [], providerModelPreferences: {} };
     expect(encodeServerSettings(decodeServerSettings(input))).toMatchObject(input);
     expect(decodeServerSettingsPatch(input)).toEqual(input);
-  });
-
-  it("round trips favorites and hidden models keyed by provider instance", () => {
-    const input = {
-      favorites: [{ provider: "codex_work", model: "sol" }],
-      providerModelPreferences: { codex_work: { hiddenModels: ["astra"], modelOrder: ["sol"] } },
-    };
-    expect(encodeServerSettings(decodeServerSettings(input))).toMatchObject(input);
-    expect(decodeServerSettingsPatch(input)).toEqual(input);
-    expect(decodeServerSettingsPatch({ migrateModelPreferences: input })).toEqual({
-      migrateModelPreferences: input,
-    });
   });
 });

@@ -36,14 +36,8 @@ const isDirectory = (fileSystem: FileSystem.FileSystem, candidate: string) =>
 const exists = (fileSystem: FileSystem.FileSystem, candidate: string) =>
   fileSystem.exists(candidate).pipe(Effect.orElseSucceed(() => false));
 
-/**
- * Walks up from `cwd` and stops at the FIRST directory holding `.jj` or `.git`. Pure filesystem, no
- * subprocess. A nearer `.git` outranks a `.jj` further up, so a git worktree nested inside a jj repo
- * keeps its own driver and no operation ever reaches across into the outer workspace.
- *
- * `null` when `cwd` itself does not exist. A deleted thread directory must never walk up into an
- * unrelated repository above it, and it is null when neither marker is found up to the filesystem root.
- */
+// The nearest marker owns cwd, including Git worktrees nested inside a Jujutsu repository.
+// Missing directories must not resolve to an unrelated repository above them.
 export const findVcsMarkerRoot = Effect.fn("JjRepo.findVcsMarkerRoot")(function* (
   fileSystem: FileSystem.FileSystem,
   path: Path.Path,

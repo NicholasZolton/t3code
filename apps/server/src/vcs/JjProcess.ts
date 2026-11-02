@@ -1,6 +1,10 @@
 import * as Effect from "effect/Effect";
 
-import { type VcsError, VcsProcessExitError } from "@t3tools/contracts";
+import {
+  type VcsError,
+  VcsProcessExitError,
+  type VcsProcessExitFailureKind,
+} from "@t3tools/contracts";
 import * as VcsProcess from "./VcsProcess.ts";
 
 export interface JjCommandOptions {
@@ -22,6 +26,17 @@ const LARGE_FILE_BANNER = "refused to snapshot some files";
 const UPDATE_STALE_TIMEOUT_MS = 30_000;
 const LOGGED_STDERR_MAX_CHARS = 2_000;
 export const SNAPSHOT_MAX_NEW_FILE_SIZE_BYTES = 10 * 1024 * 1024;
+
+export function classifyJjExit(stderr: string): VcsProcessExitFailureKind {
+  return VcsProcess.classifyNonZeroExit(stderr, (output) => {
+    const normalized = output.toLowerCase();
+    return normalized.includes("there is no jj repo in") ||
+      normalized.includes("doesn't exist") ||
+      normalized.includes("no such bookmark")
+      ? "not-found"
+      : null;
+  });
+}
 
 /**
  * A colocated repository imports git refs on every jj command that touches the working copy, so
@@ -127,7 +142,7 @@ export const jjCommand = Effect.fn("JjProcess.jjCommand")(function* (
         stderr: result.stderr,
         stderrTruncated: result.stderrTruncated,
       },
-      VcsProcess.classifyNonZeroExit("jj", result.stderr),
+      classifyJjExit(result.stderr),
     );
   }
 

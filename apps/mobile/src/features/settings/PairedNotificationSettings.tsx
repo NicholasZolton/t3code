@@ -81,19 +81,16 @@ export function PairedNotificationSettings(): JSX.Element | null {
           "Notifications are off on this phone",
           "Couldn't remove the server subscription yet. It will retry when this environment is reachable.",
         );
-        return;
+      } else {
+        Dialog.alert(
+          "Couldn't update notifications",
+          error instanceof Error
+            ? error.message
+            : "Could not update this device's notification registration.",
+        );
       }
-      Dialog.alert(
-        "Couldn't update notifications",
-        error instanceof Error
-          ? error.message
-          : "Could not update this device's notification registration.",
-      );
-    } finally {
-      setPending(
-        (current) => new Set([...current].filter((id) => id !== connection.environmentId)),
-      );
     }
+    setPending((current) => new Set([...current].filter((id) => id !== connection.environmentId)));
   }
 
   return (

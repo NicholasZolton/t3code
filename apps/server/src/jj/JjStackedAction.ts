@@ -10,7 +10,7 @@ import {
   type GitRunStackedActionResult,
 } from "@t3tools/contracts";
 import { resolveAutoFeatureBranchName } from "@t3tools/shared/git";
-import { getChangeRequestTerminologyForKind } from "@t3tools/shared/sourceControl";
+import { sourceControlDefinitions } from "../sourceControl/sourceControlDefinitions.ts";
 
 import {
   isCommitAction,
@@ -93,27 +93,29 @@ export const makeJjStackedAction = (deps: JjStackedActionDeps): JjStackedActionO
   const run = JjProcess.jjRunner(process);
 
   /** `@` against `@-`, in the shape the shared message generator reads. */
-  const prepareCommitContext = (cwd: string, filePaths?: readonly string[]) =>
-    Effect.gen(function* () {
-      const operation = "JjStackedAction.prepareCommitContext";
-      const paths = filesetArguments(filePaths);
-      const [summary, patch] = yield* Effect.all([
-        run(operation, cwd, ["diff", "-r", "@", "--stat", ...paths], {
-          timeoutMs: 60_000,
-          maxOutputBytes: DIFF_SUMMARY_MAX_BYTES,
-          outputMode: "truncate",
-        }),
-        run(operation, cwd, ["diff", "-r", "@", "--git", ...paths], {
-          timeoutMs: 60_000,
-          maxOutputBytes: DIFF_PATCH_MAX_BYTES,
-          outputMode: "truncate",
-        }),
-      ]).pipe(mapJjFailure(operation, cwd, "Could not read the working-copy diff."));
+  const prepareCommitContext = Effect.fn("JjStackedAction.prepareCommitContext")(function* (
+    cwd: string,
+    filePaths?: readonly string[],
+  ) {
+    const operation = "JjStackedAction.prepareCommitContext";
+    const paths = filesetArguments(filePaths);
+    const [summary, patch] = yield* Effect.all([
+      run(operation, cwd, ["diff", "-r", "@", "--stat", ...paths], {
+        timeoutMs: 60_000,
+        maxOutputBytes: DIFF_SUMMARY_MAX_BYTES,
+        outputMode: "truncate",
+      }),
+      run(operation, cwd, ["diff", "-r", "@", "--git", ...paths], {
+        timeoutMs: 60_000,
+        maxOutputBytes: DIFF_PATCH_MAX_BYTES,
+        outputMode: "truncate",
+      }),
+    ]).pipe(mapJjFailure(operation, cwd, "Could not read the working-copy diff."));
 
-      return summary.stdout.trim().length === 0 && patch.stdout.trim().length === 0
-        ? null
-        : { stagedSummary: summary.stdout, stagedPatch: patch.stdout };
-    });
+    return summary.stdout.trim().length === 0 && patch.stdout.trim().length === 0
+      ? null
+      : { stagedSummary: summary.stdout, stagedPatch: patch.stdout };
+  });
 
   const runStackedAction: JjStackedActionOps["runStackedAction"] = Effect.fn(
     "JjStackedAction.runStackedAction",
@@ -138,6 +140,7 @@ export const makeJjStackedAction = (deps: JjStackedActionDeps): JjStackedActionO
         operation: "JjStackedAction.runStackedAction",
         cwd,
         ...(input.threadId !== undefined ? { threadId: input.threadId } : {}),
+        ...(input.projectId !== undefined ? { projectId: input.projectId } : {}),
       }).pipe(
         Effect.mapError((cause) =>
           jjFailure(
@@ -190,12 +193,10 @@ export const makeJjStackedAction = (deps: JjStackedActionDeps): JjStackedActionO
         .currentChange(cwd)
         .pipe(mapJjFailure("JjStackedAction.runStackedAction", cwd, "Could not read `@`."));
       if (change.conflict && (wantsPush || wantsPr)) {
-        return yield* Effect.fail(
-          jjFailure(
-            "JjStackedAction.runStackedAction",
-            cwd,
-            "Resolve conflicts in this change before pushing.",
-          ),
+        return yield* jjFailure(
+          "JjStackedAction.runStackedAction",
+          cwd,
+          "Resolve conflicts in this change before pushing.",
         );
       }
 
@@ -238,12 +239,10 @@ export const makeJjStackedAction = (deps: JjStackedActionDeps): JjStackedActionO
           ),
         );
         if (suggestion === null) {
-          return yield* Effect.fail(
-            jjFailure(
-              "JjStackedAction.branchPhase",
-              cwd,
-              "Cannot create a bookmark because there are no changes to commit.",
-            ),
+          return yield* jjFailure(
+            "JjStackedAction.branchPhase",
+            cwd,
+            "Cannot create a bookmark because there are no changes to commit.",
           );
         }
         const bookmarks = yield* driver
@@ -287,12 +286,10 @@ export const makeJjStackedAction = (deps: JjStackedActionDeps): JjStackedActionO
             yield* Ref.set(currentPhase, "push");
             yield* emit({ kind: "phase_started", phase: "push", label: "Pushing..." });
             if (refName === null) {
-              return yield* Effect.fail(
-                jjFailure(
-                  "JjStackedAction.pushPhase",
-                  cwd,
-                  "This change is not on a bookmark yet. Create one before pushing.",
-                ),
+              return yield* jjFailure(
+                "JjStackedAction.pushPhase",
+                cwd,
+                "This change is not on a bookmark yet. Create one before pushing.",
               );
             }
             const remoteName = yield* remotes.requirePrimaryRemoteName(
@@ -321,6 +318,7 @@ export const makeJjStackedAction = (deps: JjStackedActionDeps): JjStackedActionO
               settings,
               cwd,
               fallbackRefName: refName,
+              threadId: input.threadId,
               emit,
               reads,
             }).pipe(
@@ -461,9 +459,9 @@ export const makeJjStackedAction = (deps: JjStackedActionDeps): JjStackedActionO
     result: Pick<GitRunStackedActionResult, "action" | "branch" | "commit" | "push" | "pr">,
   ) {
     const terms = yield* sourceControlProviders.resolve({ cwd }).pipe(
-      Effect.map((provider) => getChangeRequestTerminologyForKind(provider.kind)),
-      Effect.orElseSucceed(() =>
-        getChangeRequestTerminologyForKind(SourceControlProviderKind.make("unknown")),
+      Effect.map((provider) => sourceControlDefinitions.get(provider.kind).changeRequest),
+      Effect.orElseSucceed(
+        () => sourceControlDefinitions.get(SourceControlProviderKind.make("unknown")).changeRequest,
       ),
     );
     const summary = summarizeGitActionResult(result, terms);
