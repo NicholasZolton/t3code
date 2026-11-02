@@ -6,24 +6,30 @@ tags: [upstream, fork, integration]
 status: stable
 generated:
   by: opencode/gpt-6.1-sol
-  at: 2026-11-02T04:28:13+00:00
+  at: 2026-11-02T05:02:31+00:00
 verified:
   - by: opencode/gpt-6.1-sol
-    at: 2026-11-02T04:28:13+00:00
+    at: 2026-11-02T05:02:31+00:00
 snapshot:
-  at: 2026-11-02T04:28:13+00:00
-  fork_main: 9a73f5dd047b5a63069cb8350863f6a35f2735a2
-  upstream_main: dd6c05ec313c6c870c7a7688e87143da5084031d
+  at: 2026-11-02T05:02:31+00:00
+  fork_main: 0bc9dcd3885cae1884aedb2363fc5522175b46f4
+  upstream_main: 0c4454ca6adc09058f3d311db6744788507d6af5
   shared_baseline: dd6c05ec313c6c870c7a7688e87143da5084031d
   last_main_integration: ed52b86b6a9ffb6afad94980cc3d7d8cb5c851aa
   last_main_upstream: dd6c05ec313c6c870c7a7688e87143da5084031d
-  missing_upstream_on_main: 0
+  missing_upstream_on_main: 7
   missing_upstream_at_integrated_tip: 0
-  branch_integration: ed52b86b6a9ffb6afad94980cc3d7d8cb5c851aa
-  branch_parent: e7d7a393d980059c14fc65f2892f6b04112bf06f
-  branch_code_tip: 1a21e4d0e63552b32678c3bf0e07be47f2a45198
+  branch_integration: 8721903beab2742585c9fd838582145fcf3f5e24
+  branch_parent: 0bc9dcd3885cae1884aedb2363fc5522175b46f4
+  branch_code_tip: 8721903beab2742585c9fd838582145fcf3f5e24
   missing_upstream_on_branch: 0
 sources:
+  - id: november-2-follow-up-git
+    resource: "Local Git verification at 2026-11-02T05:02:31+00:00: fork main and origin/main equal 0bc9dcd3885cae1884aedb2363fc5522175b46f4. Their shared baseline with fetched upstream 0c4454ca6adc09058f3d311db6744788507d6af5 is dd6c05ec313c6c870c7a7688e87143da5084031d, leaving seven upstream commits missing on main. Local merge 8721903beab2742585c9fd838582145fcf3f5e24 has fork main and the fetched upstream tip as parents, with zero missing upstream commits on the branch. All 48 incoming paths without prior fork changes match upstream byte-for-byte; the ten overlapping paths preserve their existing fork additions. Nothing has been pushed or deployed."
+    title: Local follow-up merge, distinct main gap, and upstream-first source audit
+  - id: november-2-follow-up-upstream
+    resource: https://github.com/pingdotgg/t3code/commit/0c4454ca6adc09058f3d311db6744788507d6af5
+    title: Pinned upstream tip for the seven-commit follow-up integration
   - id: november-2-main-integration
     resource: https://github.com/NicholasZolton/t3code/pull/52
     title: Completed November 2 upstream integration into fork main
@@ -259,14 +265,36 @@ sources:
 The newest completed sync on fork `main` is
 [PR #52](https://github.com/NicholasZolton/t3code/pull/52), which reached
 `main` at `9a73f5dd04`. All 3,337 incoming upstream commits through pinned tip
-`dd6c05ec31` are incorporated with ancestry preserved. Local `main` and
-`origin/main` share that upstream baseline, with zero missing upstream commits.
-Remote deployment is a separate operation.
+`dd6c05ec31` are incorporated with ancestry preserved. Fetched fork `main` is
+now `0bc9dcd388` after the provenance update. It still has that upstream baseline,
+but lacks seven newer commits through `0c4454ca6a`; the local follow-up merge below
+contains them all. Remote deployment is a separate operation.
 [^november-2-main-integration][^november-2-main-review-git]
+[^november-2-follow-up-git]
 
 This is a revision-pinned snapshot, not a claim about newer upstream work.
 Refresh it after the next review or integration using the
 [maintenance guidance](maintenance.md).
+
+## Local follow-up after PR #52
+
+Merge `8721903beab2742585c9fd838582145fcf3f5e24` on
+`NicholasZolton/merge-upstream-changes-7` has parents fork
+`0bc9dcd3885cae1884aedb2363fc5522175b46f4` and upstream
+`0c4454ca6adc09058f3d311db6744788507d6af5`. The branch incorporates all seven
+new upstream commits with zero ancestry gap; fork `main` has not incorporated
+this follow-up. All 48 incoming paths without prior fork changes match upstream
+exactly. The ten overlapping paths retain their existing fork additions without
+introducing another implementation.[^november-2-follow-up-git]
+
+Adopt upstream's request-level token accounting and confirmed-model reporting,
+Claude entrypoint identification, parallel desktop renderer/backend startup,
+request-scoped PR actions, IME-safe settings search, mobile voice-input guidance,
+and direct Codex `t3_thread_wait` registration. Keep OpenCode reused-child/input
+delivery safeguards, mixed Git/Jujutsu recovery, SSH readiness guards, prompts,
+Vim, accounts, paired notifications, Crit/Portless, Tailscale publication, and
+private signing. This is a local integration, not a main landing or deployment.
+[^november-2-follow-up-git][^november-2-follow-up-upstream]
 
 ## Completed November 2 sync
 
@@ -511,16 +539,16 @@ migrates to upstream branch naming while preserving temporary branch names. The 
 | -------------------------------------------------- | ---------------------------------------- |
 | Fork                                               | `NicholasZolton/t3code`, remote `origin` |
 | Upstream                                           | `pingdotgg/t3code`, remote `upstream`    |
-| Main landing commit                                | `d3b3491750`: merge of PR #50            |
-| Upstream integration commit                        | `837d227b91`: merge through `3962ae8586` |
-| Fork-side parent                                   | `f2d43354c9`                             |
-| Upstream-side parent / shared baseline             | `3962ae8586`                             |
+| Main landing commit                                | `9a73f5dd04`: merge of PR #52            |
+| Upstream integration commit                        | `ed52b86b6a`: merge through `dd6c05ec31` |
+| Fork-side parent                                   | `e7d7a393d9`                             |
+| Upstream-side parent / shared baseline             | `dd6c05ec31`                             |
 | Missing commits at that integration's upstream tip | **0**                                    |
 
 Default to upstream implementations. Retain fork code for explicit features
 or fixes upstream does not provide. Native OpenCode 2 and thread management now
 use upstream services; fork configuration and UI improvements remain layered on
-those paths.[^october-16-branch-integration]
+those paths.[^november-2-local-integration]
 
 ## Earlier integration boundaries
 
@@ -677,6 +705,10 @@ git merge-base --is-ancestor a8df093eb6 origin/main
 git rev-list --count origin/main..upstream/main
 git log --reverse --oneline origin/main..upstream/main
 ```
+
+[^november-2-follow-up-git]: Local follow-up ancestry and upstream-first source audit; fork main still lacks seven commits.
+
+[^november-2-follow-up-upstream]: Exact upstream revision incorporated into the local follow-up merge.
 
 [^main-integration]: PR #27 and its recorded merge time and verification.
 

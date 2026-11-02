@@ -2,6 +2,8 @@
 
 ## 2026-11-02
 
+- **Local follow-up integration**: [Upstream integration](upstream-integration.md#local-follow-up-after-pr-52) records merge `8721903bea` through `0c4454ca6a`, incorporating all seven newer upstream commits with zero branch gap. The 48 upstream-only incoming paths match exactly and existing fork additions remain. Fork `main` is still `0bc9dcd388` with those seven commits pending; no push or deployment has occurred.
+
 - **Integration**: [PR #52](https://github.com/NicholasZolton/t3code/pull/52) reached fork `main` at `9a73f5dd04`. Refreshed [upstream integration](upstream-integration.md#completed-november-2-sync): all 3,337 incoming commits through `dd6c05ec31` are incorporated with ancestry preserved and zero main gap. The main local checkout is fast-forwarded; remote deployment remains separate.
 
 - **Local branch integration**: [Upstream integration](upstream-integration.md#completed-november-2-sync) initially recorded merge `ed52b86b6a` through upstream `dd6c05ec31`, retaining reused merge `e7d7a393d9` and all 3,337 incoming commits with zero branch gap. Follow-up repairs through `1a21e4d0e6` preserved that merge hash. At that observation, fork `main` remained at `c98f21e930` with the same gap still pending. Upstream owns thread ranking and shared client/workflow boundaries; unreplaced fork behavior remains. Nothing had been pushed, packaged, deployed, or restarted.
