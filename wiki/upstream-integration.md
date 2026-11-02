@@ -6,27 +6,33 @@ tags: [upstream, fork, integration]
 status: stable
 generated:
   by: opencode/gpt-6.1-sol
-  at: 2026-11-02T04:18:39+00:00
+  at: 2026-11-02T04:28:13+00:00
 verified:
   - by: opencode/gpt-6.1-sol
-    at: 2026-11-02T04:18:39+00:00
+    at: 2026-11-02T04:28:13+00:00
 snapshot:
-  at: 2026-11-02T04:18:39+00:00
-  fork_main: c98f21e930f67ead4aac04137b2a0e1398849b0a
+  at: 2026-11-02T04:28:13+00:00
+  fork_main: 9a73f5dd047b5a63069cb8350863f6a35f2735a2
   upstream_main: dd6c05ec313c6c870c7a7688e87143da5084031d
-  shared_baseline: 3962ae8586333310eeef655c917389b35f7b679d
-  last_main_integration: 837d227b910791a9f9c28c6fea2609af3f40085c
-  last_main_upstream: 3962ae8586333310eeef655c917389b35f7b679d
-  missing_upstream_on_main: 3337
+  shared_baseline: dd6c05ec313c6c870c7a7688e87143da5084031d
+  last_main_integration: ed52b86b6a9ffb6afad94980cc3d7d8cb5c851aa
+  last_main_upstream: dd6c05ec313c6c870c7a7688e87143da5084031d
+  missing_upstream_on_main: 0
   missing_upstream_at_integrated_tip: 0
   branch_integration: ed52b86b6a9ffb6afad94980cc3d7d8cb5c851aa
   branch_parent: e7d7a393d980059c14fc65f2892f6b04112bf06f
   branch_code_tip: 1a21e4d0e63552b32678c3bf0e07be47f2a45198
   missing_upstream_on_branch: 0
 sources:
+  - id: november-2-main-integration
+    resource: https://github.com/NicholasZolton/t3code/pull/52
+    title: Completed November 2 upstream integration into fork main
+  - id: november-2-main-review-git
+    resource: "Local Git verification at 2026-11-02T04:28:13+00:00: fetched origin/main and local main both equal 9a73f5dd047b5a63069cb8350863f6a35f2735a2, with parents c98f21e930f67ead4aac04137b2a0e1398849b0a and 892da10b7eee5193eba7393fa091113833b94c7a. Reused merge e7d7a393d980059c14fc65f2892f6b04112bf06f, integration ed52b86b6a9ffb6afad94980cc3d7d8cb5c851aa, and upstream dd6c05ec313c6c870c7a7688e87143da5084031d are ancestors of main. The shared baseline equals the pinned upstream tip, all 3337 incoming commits are incorporated, and zero upstream commits are missing on main. PR 52 merged at 2026-11-02T04:27:11Z. Remote deployment remains separate."
+    title: Completed main ancestry checks against the pinned upstream tip
   - id: november-2-local-integration
-    resource: "Local Git object ed52b86b6a9ffb6afad94980cc3d7d8cb5c851aa on NicholasZolton/merge-upstream-changes-6; parents e7d7a393d980059c14fc65f2892f6b04112bf06f and dd6c05ec313c6c870c7a7688e87143da5084031d. Reused merge e7d7a393d980059c14fc65f2892f6b04112bf06f has parents c98f21e930f67ead4aac04137b2a0e1398849b0a and 18e27425195686a5215fdc2cfa2bca088cdb8972. Descendant repairs are 8df64329df2f7e3ce954e875ad8866ef800de545 and 1a21e4d0e63552b32678c3bf0e07be47f2a45198; the merge itself is unchanged. None of these commits is published by this task."
-    title: Local ancestry-preserving integration through the pinned November upstream tip
+    resource: "Git object ed52b86b6a9ffb6afad94980cc3d7d8cb5c851aa on NicholasZolton/merge-upstream-changes-6; parents e7d7a393d980059c14fc65f2892f6b04112bf06f and dd6c05ec313c6c870c7a7688e87143da5084031d. Reused merge e7d7a393d980059c14fc65f2892f6b04112bf06f has parents c98f21e930f67ead4aac04137b2a0e1398849b0a and 18e27425195686a5215fdc2cfa2bca088cdb8972. Descendant repairs are 8df64329df2f7e3ce954e875ad8866ef800de545 and 1a21e4d0e63552b32678c3bf0e07be47f2a45198; the merge itself is unchanged. These commits subsequently reached main through PR 52."
+    title: Ancestry-preserving integration through the pinned November upstream tip
   - id: november-2-review-git
     resource: "Local Git verification at 2026-11-02T04:18:39+00:00: local main and origin/main both equal c98f21e930f67ead4aac04137b2a0e1398849b0a. The shared baseline with upstream/main dd6c05ec313c6c870c7a7688e87143da5084031d is 3962ae8586333310eeef655c917389b35f7b679d, leaving 3337 upstream commits missing on main. Fork main, reused merge e7d7a393d980059c14fc65f2892f6b04112bf06f, and pinned upstream are ancestors of local integration ed52b86b6a9ffb6afad94980cc3d7d8cb5c851aa. That integration is an ancestor of code tip 1a21e4d0e63552b32678c3bf0e07be47f2a45198; the branch's merge base equals the pinned upstream tip and its missing-upstream count is zero. Integration ed52b86b6a9ffb6afad94980cc3d7d8cb5c851aa is not an ancestor of main. No push, PR, packaging, deployment, or server restart has occurred."
     title: Distinct local-branch and unchanged-main integration boundaries
@@ -250,34 +256,35 @@ sources:
 
 # Upstream integration
 
-The local integration branch contains all 3,337 upstream commits missing from
-fork `main`, through pinned upstream `dd6c05ec31`. Merge `ed52b86b6a` preserves
-ancestry, with zero missing upstream commits on the branch. It has **not** reached
-`main`: local `main` and `origin/main` remain at `c98f21e930`, sharing baseline
-`3962ae8586` with upstream and still missing those 3,337 commits.
-[^november-2-local-integration][^november-2-review-git]
-
-The newest completed sync on `main` is
-[PR #50](https://github.com/NicholasZolton/t3code/pull/50), which reached fork
-`main` at `d3b3491750`. Merge `837d227b91` contains all 96 incoming commits
-through upstream `3962ae8586`, with ancestry preserved and zero gap against
-that older tip.
-[^october-16-main-integration][^october-16-main-review-git]
+The newest completed sync on fork `main` is
+[PR #52](https://github.com/NicholasZolton/t3code/pull/52), which reached
+`main` at `9a73f5dd04`. All 3,337 incoming upstream commits through pinned tip
+`dd6c05ec31` are incorporated with ancestry preserved. Local `main` and
+`origin/main` share that upstream baseline, with zero missing upstream commits.
+Remote deployment is a separate operation.
+[^november-2-main-integration][^november-2-main-review-git]
 
 This is a revision-pinned snapshot, not a claim about newer upstream work.
 Refresh it after the next review or integration using the
 [maintenance guidance](maintenance.md).
 
-## Local November integration, not on main
+## Completed November 2 sync
+
+[PR #52](https://github.com/NicholasZolton/t3code/pull/52) merged on November 2,
+2026, at 04:27:11 UTC. Its landing commit
+`9a73f5dd047b5a63069cb8350863f6a35f2735a2` preserves previous fork `main`
+`c98f21e930f67ead4aac04137b2a0e1398849b0a` and integrated branch tip
+`892da10b7eee5193eba7393fa091113833b94c7a` as parents.
+[^november-2-main-integration][^november-2-main-review-git]
 
 Merge `ed52b86b6a9ffb6afad94980cc3d7d8cb5c851aa` has parents reused integration
 `e7d7a393d980059c14fc65f2892f6b04112bf06f` and pinned upstream
 `dd6c05ec313c6c870c7a7688e87143da5084031d`. The reused merge already contains
 fork `main` `c98f21e930` and upstream `18e2742519`; both integrations are retained
 in ancestry rather than replayed or squashed. Follow-up repairs through code tip
-`1a21e4d0e6` leave the merge hash unchanged. The branch has zero upstream gap,
-but the 3,337-commit gap on unchanged fork `main` remains until this branch lands.
-No push, PR, packaging, deployment, or server restart was performed.
+`1a21e4d0e6` leave the merge hash unchanged. The initial branch snapshot had
+zero upstream gap while fork `main` still lacked those 3,337 commits; PR #52
+subsequently closed that gap on `main`.
 [^november-2-local-integration][^november-2-review-git][^november-2-upstream]
 
 Use upstream's thread-search ranking, mobile list/review extraction,
@@ -814,6 +821,10 @@ git log --reverse --oneline origin/main..upstream/main
 [^november-2-review-git]: Revision-pinned ancestry checks, zero branch gap, and the separate 3,337-commit gap on unchanged fork main.
 
 [^november-2-upstream]: Exact upstream revision incorporated into the local integration branch.
+
+[^november-2-main-integration]: PR #52 and its recorded merge time.
+
+[^november-2-main-review-git]: Completed main integration, exact parents, and zero ancestry gap against the pinned upstream tip.
 
 [^workspace-recovery]: Shared recovery service preserves backend ownership and retained-branch priority.
 
