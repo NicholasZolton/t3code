@@ -1,5 +1,5 @@
 import {
-  GIT_VCS_TERMINOLOGY,
+  DEFAULT_VCS_TERMINOLOGY,
   JJ_VCS_TERMINOLOGY,
   JJ_WORKING_COPY_REVISION,
 } from "@t3tools/shared/vcs";
@@ -103,11 +103,11 @@ describe("resolvePreviousWorktreeLabel", () => {
     expect(
       resolvePreviousWorktreeLabel(
         { branch: "t3/fix-thing", worktreePath: "/wt" },
-        GIT_VCS_TERMINOLOGY,
+        DEFAULT_VCS_TERMINOLOGY,
       ),
     ).toBe("Previous worktree (t3/fix-thing)");
     expect(
-      resolvePreviousWorktreeLabel({ branch: null, worktreePath: "/wt" }, GIT_VCS_TERMINOLOGY),
+      resolvePreviousWorktreeLabel({ branch: null, worktreePath: "/wt" }, DEFAULT_VCS_TERMINOLOGY),
     ).toBe("Previous worktree");
   });
 });
@@ -199,7 +199,7 @@ describe("resolveBranchTriggerLabel", () => {
       resolvedActiveBranchIsRemote: null,
       startFromOrigin: true,
     };
-    expect(resolveBranchTriggerLabel({ ...input, terminology: GIT_VCS_TERMINOLOGY })).toBe(
+    expect(resolveBranchTriggerLabel({ ...input, terminology: DEFAULT_VCS_TERMINOLOGY })).toBe(
       "Select branch",
     );
     expect(resolveBranchTriggerLabel({ ...input, terminology: JJ_VCS_TERMINOLOGY })).toBe(
@@ -215,7 +215,7 @@ describe("resolveBranchTriggerLabel", () => {
         resolvedActiveBranch: "main",
         resolvedActiveBranchIsRemote: false,
         startFromOrigin: true,
-        terminology: GIT_VCS_TERMINOLOGY,
+        terminology: DEFAULT_VCS_TERMINOLOGY,
       }),
     ).toBe("From origin/main");
   });
@@ -228,7 +228,7 @@ describe("resolveBranchTriggerLabel", () => {
         resolvedActiveBranch: "feature/demo",
         resolvedActiveBranchIsRemote: false,
         startFromOrigin: true,
-        terminology: GIT_VCS_TERMINOLOGY,
+        terminology: DEFAULT_VCS_TERMINOLOGY,
       }),
     ).toBe("From origin/feature/demo");
   });
@@ -241,7 +241,7 @@ describe("resolveBranchTriggerLabel", () => {
         resolvedActiveBranch: "main",
         resolvedActiveBranchIsRemote: false,
         startFromOrigin: false,
-        terminology: GIT_VCS_TERMINOLOGY,
+        terminology: DEFAULT_VCS_TERMINOLOGY,
       }),
     ).toBe("From main");
   });
@@ -254,7 +254,7 @@ describe("resolveBranchTriggerLabel", () => {
         resolvedActiveBranch: "origin/feature/demo",
         resolvedActiveBranchIsRemote: true,
         startFromOrigin: true,
-        terminology: GIT_VCS_TERMINOLOGY,
+        terminology: DEFAULT_VCS_TERMINOLOGY,
       }),
     ).toBe("From origin/feature/demo");
   });
@@ -267,7 +267,7 @@ describe("resolveBranchTriggerLabel", () => {
         resolvedActiveBranch: "upstream/feature/demo",
         resolvedActiveBranchIsRemote: true,
         startFromOrigin: true,
-        terminology: GIT_VCS_TERMINOLOGY,
+        terminology: DEFAULT_VCS_TERMINOLOGY,
       }),
     ).toBe("From upstream/feature/demo");
   });
@@ -280,7 +280,7 @@ describe("resolveBranchTriggerLabel", () => {
         resolvedActiveBranch: "main",
         resolvedActiveBranchIsRemote: false,
         startFromOrigin: true,
-        terminology: GIT_VCS_TERMINOLOGY,
+        terminology: DEFAULT_VCS_TERMINOLOGY,
       }),
     ).toBe("main");
     expect(
@@ -290,7 +290,7 @@ describe("resolveBranchTriggerLabel", () => {
         resolvedActiveBranch: null,
         resolvedActiveBranchIsRemote: null,
         startFromOrigin: true,
-        terminology: GIT_VCS_TERMINOLOGY,
+        terminology: DEFAULT_VCS_TERMINOLOGY,
       }),
     ).toBe("Select branch");
   });
@@ -303,7 +303,7 @@ describe("resolveBranchTriggerLabel", () => {
         resolvedActiveBranch: "upstream/feature/demo",
         resolvedActiveBranchIsRemote: null,
         startFromOrigin: true,
-        terminology: GIT_VCS_TERMINOLOGY,
+        terminology: DEFAULT_VCS_TERMINOLOGY,
       }),
     ).toBe("From upstream/feature/demo");
   });
@@ -369,20 +369,20 @@ describe("resolveEffectiveEnvMode", () => {
 
 describe("resolveEnvModeLabel", () => {
   it("uses explicit workspace labels", () => {
-    expect(resolveEnvModeLabel("local", GIT_VCS_TERMINOLOGY)).toBe("Current checkout");
-    expect(resolveEnvModeLabel("worktree", GIT_VCS_TERMINOLOGY)).toBe("New worktree");
+    expect(resolveEnvModeLabel("local", DEFAULT_VCS_TERMINOLOGY)).toBe("Current checkout");
+    expect(resolveEnvModeLabel("worktree", DEFAULT_VCS_TERMINOLOGY)).toBe("New worktree");
   });
 });
 
 describe("resolveCurrentWorkspaceLabel", () => {
   it("describes the main repo checkout when no worktree path is active", () => {
-    expect(resolveCurrentWorkspaceLabel(null, GIT_VCS_TERMINOLOGY)).toBe("Current checkout");
+    expect(resolveCurrentWorkspaceLabel(null, DEFAULT_VCS_TERMINOLOGY)).toBe("Current checkout");
   });
 
   it("describes the active checkout as a worktree when one is attached", () => {
-    expect(resolveCurrentWorkspaceLabel("/repo/.t3/worktrees/feature-a", GIT_VCS_TERMINOLOGY)).toBe(
-      "Current worktree",
-    );
+    expect(
+      resolveCurrentWorkspaceLabel("/repo/.t3/worktrees/feature-a", DEFAULT_VCS_TERMINOLOGY),
+    ).toBe("Current worktree");
   });
 });
 

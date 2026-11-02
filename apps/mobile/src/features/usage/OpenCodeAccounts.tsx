@@ -64,17 +64,16 @@ function InstanceAccounts({
   const [actionMessage, setMessage] = useState<string | null>(null);
   const message = accountsQuery.error ?? actionMessage;
 
-  const switchAccount = async (credentialId: string) => {
+  const switchAccount = async (credentialId: string): Promise<void> => {
     setBusyId(credentialId);
     setMessage(null);
-    try {
-      const result = await activate({ environmentId, input: { instanceId, credentialId } });
-      if (result._tag === "Success") {
-        setMessage("OpenCode account switched.");
-      } else setMessage("Could not switch the OpenCode account.");
-    } finally {
-      setBusyId(null);
-    }
+    const result = await activate({ environmentId, input: { instanceId, credentialId } });
+    setMessage(
+      result._tag === "Success"
+        ? "OpenCode account switched."
+        : "Could not switch the OpenCode account.",
+    );
+    setBusyId(null);
   };
 
   const limitAccounts = openCodeLimitAccounts(accounts ?? [], environmentId, instanceId, label);

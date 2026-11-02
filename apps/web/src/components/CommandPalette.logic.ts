@@ -10,6 +10,7 @@ import {
   type ThreadSearchSubject,
 } from "@t3tools/shared/paletteSearch";
 import { threadSearchSubject } from "@t3tools/client-runtime/state/thread-search";
+import { scoreSearchFields, SEARCH_SECONDARY_FIELD_WEIGHT } from "@t3tools/shared/searchRanking";
 import type { CommandPaletteLinkedThreads } from "../commandPaletteBus";
 import {
   addProjectRemoteSourceLabel,
@@ -534,7 +535,19 @@ function scorePaletteItem(
       ? [name, ...item.searchTerms]
       : item.searchTerms;
   const match = scoreSearchTerms(normalizedQuery, terms, options);
-  return match && (item.title === terms[0] ? match : { ...match, ranges: [] });
+  if (match) return item.title === terms[0] ? match : { ...match, ranges: [] };
+  const searchCost = scoreSearchFields(
+    terms.map((value, index) => ({ value, weight: index * SEARCH_SECONDARY_FIELD_WEIGHT })),
+    normalizedQuery,
+  );
+  if (searchCost === null) return null;
+  // Fuzzy labels precede keyword-only hits; hidden-field fuzziness stays a last resort.
+  return {
+    score: -searchCost,
+    quality: searchCost < SEARCH_SECONDARY_FIELD_WEIGHT ? 0.7 : 0,
+    strong: false,
+    ranges: [],
+  };
 }
 
 /**

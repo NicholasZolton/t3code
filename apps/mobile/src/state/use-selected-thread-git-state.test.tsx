@@ -5,6 +5,7 @@ import * as NodePath from "node:path";
 import { act, useLayoutEffect } from "react";
 import { createRoot } from "react-dom/client";
 import { expect, it, vi } from "vite-plus/test";
+import { DEFAULT_VCS_TERMINOLOGY } from "@t3tools/shared/vcs";
 
 const harness = vi.hoisted(() => ({
   root: "",
@@ -23,6 +24,7 @@ vi.mock("./use-selected-thread-worktree", () => ({
 vi.mock("./use-vcs-action-state", () => ({
   useVcsActionState: () => ({ currentLabel: null }),
 }));
+vi.mock("./vcs", () => ({ useVcsTerminology: () => DEFAULT_VCS_TERMINOLOGY }));
 vi.mock("./sourceControl", () => ({
   sourceControlEnvironment: { discovery: () => null },
 }));

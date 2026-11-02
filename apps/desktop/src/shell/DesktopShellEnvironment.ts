@@ -514,13 +514,6 @@ const installPosixEnvironment = Effect.fn("desktop.shellEnvironment.installPosix
       }
     }
 
-    if (
-      config.platform === "darwin" &&
-      Option.isNone(trimNonEmpty(config.env[FCM_SERVICE_ACCOUNT_ENV_NAME]))
-    ) {
-      const credential = yield* readMacNotificationCredential;
-      if (Option.isSome(credential)) config.env[FCM_SERVICE_ACCOUNT_ENV_NAME] = credential.value;
-    }
     return Option.isSome(trimNonEmpty(shellEnvironment.PATH));
   },
 );
@@ -643,6 +636,14 @@ export const make = Effect.gen(function* () {
   );
   const installIntoProcess = yield* Effect.cached(
     Effect.gen(function* () {
+      // Load before backend spawn; credentials must never enter shell snapshots or the disk cache.
+      if (
+        environment.platform === "darwin" &&
+        Option.isNone(trimNonEmpty(env[FCM_SERVICE_ACCOUNT_ENV_NAME]))
+      ) {
+        const credential = yield* readMacNotificationCredential;
+        if (Option.isSome(credential)) env[FCM_SERVICE_ACCOUNT_ENV_NAME] = credential.value;
+      }
       const cache = yield* fileSystem
         .readFileString(cachePath)
         .pipe(Effect.flatMap(decodeCache), Effect.option);

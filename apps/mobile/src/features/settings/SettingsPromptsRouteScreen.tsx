@@ -44,7 +44,7 @@ export function SettingsPromptsRouteScreen() {
     setBody(promptName === null ? "" : (prompts[promptName] ?? ""));
     setEditing(promptName ?? "");
   };
-  const write = async (patch: Record<string, string | null>) => {
+  const write = async (patch: Record<string, string | null>): Promise<void> => {
     setPending(true);
     try {
       const results = await Promise.all(
@@ -55,14 +55,15 @@ export function SettingsPromptsRouteScreen() {
           }),
         ),
       );
-      if (results.some((result) => result._tag !== "Success"))
-        throw new Error("One or more machines could not save the prompt.");
-      setEditing(null);
+      if (results.some((result) => result._tag !== "Success")) {
+        Dialog.alert("Prompt not saved", "One or more machines could not save the prompt.");
+      } else {
+        setEditing(null);
+      }
     } catch (error) {
       Dialog.alert("Prompt not saved", error instanceof Error ? error.message : "Try again.");
-    } finally {
-      setPending(false);
     }
+    setPending(false);
   };
 
   return (

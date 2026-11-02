@@ -79,39 +79,38 @@ const providerInstanceFor = (instanceId: ProviderInstanceId) =>
     },
   }) as ProviderInstance;
 
+const projectAndProviderLayers = Layer.mergeAll(
+  Layer.succeed(ProviderInstanceRegistry.ProviderInstanceRegistry, {
+    getInstance: (instanceId) => Effect.succeed(providerInstanceFor(instanceId)),
+    listInstances: Effect.succeed([]),
+    listUnavailable: Effect.succeed([]),
+    streamChanges: Stream.empty,
+    subscribeChanges: Effect.never,
+  }),
+  Layer.mock(ProjectStore.ProjectStoreV2)({
+    get: () =>
+      Effect.succeedSome({
+        projectId,
+        title: "Project",
+        workspaceRoot: "/project-root",
+        defaultModelSelection: null,
+        defaultThreadEnvMode: null,
+        autoPull: false,
+        faviconPath: null,
+        projectIcon: null,
+        scripts: [],
+        pinnedAt: null,
+        archivedAt: null,
+        createdAt: "2026-06-21T00:00:00.000Z",
+        updatedAt: "2026-06-21T00:00:00.000Z",
+        deletedAt: null,
+      }),
+  }),
+);
+
 const layerWithPolicy = (policy?: ManagedPolicySummary) =>
   RuntimePolicy.layerFromProjectStore.pipe(
-    Layer.provide(ServerSettings.layerTest({}, policy)),
-    Layer.provide(
-      Layer.succeed(ProviderInstanceRegistry.ProviderInstanceRegistry, {
-        getInstance: (instanceId) => Effect.succeed(providerInstanceFor(instanceId)),
-        listInstances: Effect.succeed([]),
-        listUnavailable: Effect.succeed([]),
-        streamChanges: Stream.empty,
-        subscribeChanges: Effect.never,
-      }),
-    ),
-    Layer.provide(
-      Layer.mock(ProjectStore.ProjectStoreV2)({
-        get: () =>
-          Effect.succeedSome({
-            projectId,
-            title: "Project",
-            workspaceRoot: "/project-root",
-            defaultModelSelection: null,
-            defaultThreadEnvMode: null,
-            autoPull: false,
-            faviconPath: null,
-            projectIcon: null,
-            scripts: [],
-            pinnedAt: null,
-            archivedAt: null,
-            createdAt: "2026-06-21T00:00:00.000Z",
-            updatedAt: "2026-06-21T00:00:00.000Z",
-            deletedAt: null,
-          }),
-      }),
-    ),
+    Layer.provide(Layer.mergeAll(projectAndProviderLayers, ServerSettings.layerTest({}, policy))),
   );
 
 const layerTest = layerWithPolicy();
@@ -198,7 +197,13 @@ it.effect("resolves VCS hints in the thread workspace and honors live settings",
       };
       assert.equal((yield* policy.resolve({ thread, modelSelection })).vcsAgentHint, undefined);
       assert.deepEqual(detected, ["/jj-workspace"]);
-    }).pipe(Effect.provide(layerTest.pipe(Layer.provide(dependencies))));
+    }).pipe(
+      Effect.provide(
+        RuntimePolicy.layerFromProjectStore.pipe(
+          Layer.provide(Layer.mergeAll(projectAndProviderLayers, dependencies)),
+        ),
+      ),
+    );
   }),
 );
 it.layer(

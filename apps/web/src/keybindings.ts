@@ -226,7 +226,7 @@ export function resolveShortcutCommand(
     const binding = keybindings[index];
     if (!binding) continue;
     if (!matchesWhenClause(binding.whenAst, context)) continue;
-    if (!matchesKeybindingShortcut(event, binding.shortcut, platform)) continue;
+    if (!matchesKeybindingShortcut(event, shortcutForContext(binding, context), platform)) continue;
     if (closeYieldsToComposerWordDeletion(binding, keybindings, context, platform, event)) continue;
     return binding.command;
   }

@@ -171,6 +171,20 @@ describe("DesktopShellEnvironment", () => {
         env,
         platform: "darwin",
         handler: () => envOutput({ PATH: "/usr/bin" }),
+        use: (service) =>
+          Effect.gen(function* () {
+            yield* service.installIntoProcess;
+            assert.equal(env.T3CODE_FCM_SERVICE_ACCOUNT, credential);
+            const prepared = yield* service.awaitDiscovery;
+            const snapshot = yield* Stream.runHead(service.updates);
+            assert.isTrue(Option.isSome(snapshot));
+            if (Option.isSome(snapshot)) {
+              assert.isFalse(
+                Object.hasOwn(snapshot.value.environment, "T3CODE_FCM_SERVICE_ACCOUNT"),
+              );
+            }
+            return prepared;
+          }),
       });
 
       assert.equal(env.T3CODE_FCM_SERVICE_ACCOUNT, credential);

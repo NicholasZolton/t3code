@@ -134,6 +134,7 @@ export const SETTINGS_NAV_GROUPS: ReadonlyArray<{
     paths: [
       "/settings/providers",
       "/settings/threads",
+      "/settings/prompts",
       "/settings/browser",
       "/settings/devices",
       "/settings/scheduled-tasks",

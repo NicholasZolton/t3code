@@ -71,6 +71,12 @@ import { scoreSlashSkillQuery } from "./composerSlashSkillSearch";
 
 const EMPTY_SETTINGS_ATOM = Atom.make(DEFAULT_SERVER_SETTINGS);
 
+async function savedPromptClipboard(body: string): Promise<string> {
+  if (!body.includes("{{clipboard}}")) return "";
+  const clipboard = await import("expo-clipboard");
+  return clipboard.getStringAsync();
+}
+
 const providerWorkspaceSnapshotRefresh = createProviderWorkspaceSnapshotRefreshAtomFamily({
   providers: serverEnvironment.providersValueAtom,
   refreshProviders: serverEnvironment.refreshProviders,
@@ -487,40 +493,38 @@ export function useComposerCommandMenu({
       )
         return;
       void (async () => {
-        try {
-          const clipboard = item.body.includes("{{clipboard}}")
-            ? await (await import("expo-clipboard")).getStringAsync()
-            : "";
-          const environment =
-            savedPromptEnvironmentNames(item.body).length > 0
-              ? await resolvePromptEnvironment({ environmentId, input: { name: item.name } })
-              : null;
-          if (environment !== null && environment._tag !== "Success")
-            throw new Error("Could not read the host environment.");
-          const replacement = expandSavedPrompt(item.body, environment?.value ?? {}, clipboard);
-          const target = promptInsertionTarget.current;
-          if (
-            target.ownerKey !== ownerKey ||
-            getComposerDraftSnapshot(ownerKey).text !== draftMessage ||
-            target.selection.start !== selection.start ||
-            target.selection.end !== selection.end
-          )
-            return;
-          const result = replaceTextRange(
-            draftMessage,
-            trigger.rangeStart,
-            trigger.rangeEnd,
-            replacement,
-          );
-          setSelection({ start: result.cursor, end: result.cursor });
-          onChangeDraftMessage(result.text);
-        } catch (error) {
-          Dialog.alert(
-            "Could not insert prompt",
-            error instanceof Error ? error.message : "Try again.",
-          );
+        const clipboard = await savedPromptClipboard(item.body);
+        const environment =
+          savedPromptEnvironmentNames(item.body).length > 0
+            ? await resolvePromptEnvironment({ environmentId, input: { name: item.name } })
+            : null;
+        if (environment !== null && environment._tag !== "Success") {
+          Dialog.alert("Could not insert prompt", "Could not read the host environment.");
+          return;
         }
-      })();
+        const replacement = expandSavedPrompt(item.body, environment?.value ?? {}, clipboard);
+        const target = promptInsertionTarget.current;
+        if (
+          target.ownerKey !== ownerKey ||
+          getComposerDraftSnapshot(ownerKey).text !== draftMessage ||
+          target.selection.start !== selection.start ||
+          target.selection.end !== selection.end
+        )
+          return;
+        const result = replaceTextRange(
+          draftMessage,
+          trigger.rangeStart,
+          trigger.rangeEnd,
+          replacement,
+        );
+        setSelection({ start: result.cursor, end: result.cursor });
+        onChangeDraftMessage(result.text);
+      })().catch((error: unknown) => {
+        Dialog.alert(
+          "Could not insert prompt",
+          error instanceof Error ? error.message : "Try again.",
+        );
+      });
       return;
     }
     if (item.type === "environment") {

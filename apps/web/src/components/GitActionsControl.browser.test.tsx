@@ -134,7 +134,7 @@ vi.mock(import("~/state/sourceControlActions"), async (original) => ({
         branch: input.featureBranch
           ? { status: "created", name: "feature" }
           : { status: "skipped_not_requested" },
-        commit: { status: "committed" },
+        commit: { status: "created" },
         push: { status: "skipped_not_requested" },
         pr: { status: "skipped_not_requested" },
         toast: {

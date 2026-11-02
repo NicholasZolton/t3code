@@ -1897,7 +1897,12 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
               ? await resolvePromptEnvironment({ environmentId, input: { name: item.name } })
               : null;
           if (environment !== null && environment._tag !== "Success") {
-            throw new Error("Could not read the host environment.");
+            toastManager.add({
+              type: "error",
+              title: "Could not insert prompt",
+              description: "Could not read the host environment.",
+            });
+            return;
           }
           const replacement = expandSavedPrompt(item.body, environment?.value ?? {}, clipboard);
           const current = resolveActiveComposerTrigger();

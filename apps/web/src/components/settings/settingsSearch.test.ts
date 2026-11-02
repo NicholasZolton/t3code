@@ -86,7 +86,7 @@ describe("searchSettings", () => {
     expect(searchSettings("thè\u{1ab0}mes")[0]?.id).toBe("theme");
     const localeLowerCase = vi.spyOn(String.prototype, "toLocaleLowerCase").mockReturnValue("gıt");
     try {
-      expect(searchSettings("GIT")[0]?.id).toBe("github-routing");
+      expect(searchSettings("GIT")[0]?.id).toBe("git-fetch-interval");
       expect(localeLowerCase).not.toHaveBeenCalled();
     } finally {
       localeLowerCase.mockRestore();
@@ -175,6 +175,7 @@ describe("searchSettings", () => {
       "auto-settle-inactive-threads",
       "auto-settle-merged-threads",
       "days-before-auto-settle",
+      "keep-threads-with-pull-requests",
       "linked-environments",
     ]);
     expect(available.map((item) => item.id).filter((id) => gatedIds.has(id))).toEqual([]);
@@ -259,6 +260,7 @@ describe("searchSettings", () => {
       "auto-settle-merged-threads",
       "auto-settle-inactive-threads",
       "days-before-auto-settle",
+      "keep-threads-with-pull-requests",
     ]);
   });
 
@@ -372,19 +374,19 @@ describe("searchSettings", () => {
     ]);
   });
 
-  it("routes browser recording quality to integrations", () => {
+  it("routes browser recording quality to browser settings", () => {
     const result = searchSettings("recording frame rate")[0];
     expect(result).toMatchObject({
       id: "browser-recording-frame-rate",
-      to: "/settings/integrations",
+      to: "/settings/browser",
     });
     expect(result).not.toHaveProperty("targetId");
   });
 
-  it("routes where links open to integrations", () => {
+  it("routes where links open to browser settings", () => {
     expect(searchSettings("open links in")[0]).toMatchObject({
       id: "browser-link-target",
-      to: "/settings/integrations",
+      to: "/settings/browser",
     });
     expect(searchSettings("external links")[0]).toMatchObject({ id: "browser-link-target" });
   });
@@ -392,15 +394,15 @@ describe("searchSettings", () => {
   it("finds the default browser profile action in the profiles list", () => {
     expect(searchSettings("default profile")[0]).toMatchObject({
       id: "browser-default-profile",
-      to: "/settings/integrations",
+      to: "/settings/browser",
       targetId: "browser-profiles",
     });
   });
 
   it.each([
-    ["default model", "default-model", "/settings/general"],
-    ["new threads", "new-threads", "/settings/general"],
-    ["agent browser access", "agent-browser-access", "/settings/integrations"],
+    ["default model", "default-model", "/settings/threads"],
+    ["new threads", "new-threads", "/settings/threads"],
+    ["agent browser access", "agent-browser-access", "/settings/browser"],
     ["automatically pull", "automatic-pull", "/settings/source-control"],
     ["actions", "project-actions", "/settings/projects"],
     ["project overview", "project-overview", "/settings/projects"],
@@ -421,7 +423,7 @@ describe("searchSettings", () => {
     expect(searchSettings("writing style", available)[0]?.id).toBe("source-control-writing-style");
     expect(
       searchSettings("auto-settle", available).filter((item) => item.requiresThreadAutoSettlement),
-    ).toHaveLength(3);
+    ).toHaveLength(4);
   });
 });
 

@@ -630,8 +630,8 @@ function PoolWindowCard({
 export function PoolSection({
   pool,
   now,
-  label = providerClients.get(pool.driver)?.label ?? String(pool.driver),
-  color = barColor(pool.driver),
+  label,
+  color,
   accountAction,
 }: {
   readonly pool: LimitPool;
@@ -641,17 +641,19 @@ export function PoolSection({
   readonly accountAction?: AccountAction | undefined;
 }) {
   const windows = displayLimitWindows(pool);
+  const displayLabel = label ?? providerClients.get(pool.driver)?.label ?? String(pool.driver);
+  const displayColor = color ?? barColor(pool.driver);
   return (
     <section className="flex flex-col gap-3">
       <h2 className="flex items-center gap-2 text-sm font-medium text-foreground">
         <ProviderInstanceIcon
           driverKind={pool.driver}
-          displayName={label}
+          displayName={displayLabel}
           indicatorBackground="var(--background)"
           className="size-5"
           iconClassName="size-4 text-foreground/80"
         />
-        {label}
+        {displayLabel}
       </h2>
       {windows.map((window) => {
         const details = pool.driver === "cursor" ? cursorUsageWindowDetails(window.id) : undefined;
@@ -659,7 +661,7 @@ export function PoolSection({
           <PoolWindowCard
             key={`${window.kind}:${window.id}`}
             pool={window}
-            color={color}
+            color={displayColor}
             now={now}
             label={details?.label}
             description={details?.description}
