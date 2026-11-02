@@ -1,5 +1,9 @@
 # Wiki update log
 
+## 2026-11-02
+
+- **Local branch integration**: Recorded [upstream integration](upstream-integration.md#local-november-integration-not-on-main) at merge `ed52b86b6a` through upstream `dd6c05ec31`, retaining reused merge `e7d7a393d9` and all 3,337 incoming commits with zero branch gap. Follow-up repairs through `1a21e4d0e6` preserve that merge hash. Fork `main` remains at `c98f21e930` with the same gap still pending. Upstream owns thread ranking and shared client/workflow boundaries; unreplaced fork behavior remains. Nothing was pushed, packaged, deployed, or restarted.
+
 ## 2026-10-16
 
 - **Signing identity**: Recorded the persistent [local macOS signing certificate](local-macos-signing.md), its fnox-backed build command, and the requirement to preserve it across rebuilds and upstream syncs. Apple release signing and the Android keystore remain separate.

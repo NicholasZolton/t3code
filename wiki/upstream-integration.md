@@ -6,23 +6,39 @@ tags: [upstream, fork, integration]
 status: stable
 generated:
   by: opencode/gpt-6.1-sol
-  at: 2026-10-16T14:32:27+00:00
+  at: 2026-11-02T04:18:39+00:00
 verified:
   - by: opencode/gpt-6.1-sol
-    at: 2026-10-16T14:32:27+00:00
+    at: 2026-11-02T04:18:39+00:00
 snapshot:
-  at: 2026-10-16T14:32:27+00:00
-  fork_main: d3b3491750d65d0ddfc8bd1b192c616005560d64
-  upstream_main: 3962ae8586333310eeef655c917389b35f7b679d
+  at: 2026-11-02T04:18:39+00:00
+  fork_main: c98f21e930f67ead4aac04137b2a0e1398849b0a
+  upstream_main: dd6c05ec313c6c870c7a7688e87143da5084031d
   shared_baseline: 3962ae8586333310eeef655c917389b35f7b679d
   last_main_integration: 837d227b910791a9f9c28c6fea2609af3f40085c
   last_main_upstream: 3962ae8586333310eeef655c917389b35f7b679d
-  missing_upstream_on_main: 0
+  missing_upstream_on_main: 3337
   missing_upstream_at_integrated_tip: 0
-  branch_integration: 837d227b910791a9f9c28c6fea2609af3f40085c
-  branch_parent: f2d43354c9acdd8b2ecd777afa8fb9103ff336fb
+  branch_integration: ed52b86b6a9ffb6afad94980cc3d7d8cb5c851aa
+  branch_parent: e7d7a393d980059c14fc65f2892f6b04112bf06f
+  branch_code_tip: 1a21e4d0e63552b32678c3bf0e07be47f2a45198
   missing_upstream_on_branch: 0
 sources:
+  - id: november-2-local-integration
+    resource: "Local Git object ed52b86b6a9ffb6afad94980cc3d7d8cb5c851aa on NicholasZolton/merge-upstream-changes-6; parents e7d7a393d980059c14fc65f2892f6b04112bf06f and dd6c05ec313c6c870c7a7688e87143da5084031d. Reused merge e7d7a393d980059c14fc65f2892f6b04112bf06f has parents c98f21e930f67ead4aac04137b2a0e1398849b0a and 18e27425195686a5215fdc2cfa2bca088cdb8972. Descendant repairs are 8df64329df2f7e3ce954e875ad8866ef800de545 and 1a21e4d0e63552b32678c3bf0e07be47f2a45198; the merge itself is unchanged. None of these commits is published by this task."
+    title: Local ancestry-preserving integration through the pinned November upstream tip
+  - id: november-2-review-git
+    resource: "Local Git verification at 2026-11-02T04:18:39+00:00: local main and origin/main both equal c98f21e930f67ead4aac04137b2a0e1398849b0a. The shared baseline with upstream/main dd6c05ec313c6c870c7a7688e87143da5084031d is 3962ae8586333310eeef655c917389b35f7b679d, leaving 3337 upstream commits missing on main. Fork main, reused merge e7d7a393d980059c14fc65f2892f6b04112bf06f, and pinned upstream are ancestors of local integration ed52b86b6a9ffb6afad94980cc3d7d8cb5c851aa. That integration is an ancestor of code tip 1a21e4d0e63552b32678c3bf0e07be47f2a45198; the branch's merge base equals the pinned upstream tip and its missing-upstream count is zero. Integration ed52b86b6a9ffb6afad94980cc3d7d8cb5c851aa is not an ancestor of main. No push, PR, packaging, deployment, or server restart has occurred."
+    title: Distinct local-branch and unchanged-main integration boundaries
+  - id: november-2-upstream
+    resource: https://github.com/pingdotgg/t3code/commit/dd6c05ec313c6c870c7a7688e87143da5084031d
+    title: Pinned upstream tip incorporated into the local integration branch
+  - id: workspace-recovery
+    resource: ../apps/server/src/git/GitWorkflowService.ts
+    title: Shared workspace recovery with backend ownership and branch-base fallback
+  - id: opencode-child-tracking
+    resource: ../packages/provider-opencode/src/server/v2/adapter.ts
+    title: Upstream OpenCode lifecycle with fork reused-child and input-delivery safeguards
   - id: october-16-main-integration
     resource: https://github.com/NicholasZolton/t3code/pull/50
     title: Completed October 16 upstream integration into fork main
@@ -234,16 +250,50 @@ sources:
 
 # Upstream integration
 
-The newest completed sync is
+The local integration branch contains all 3,337 upstream commits missing from
+fork `main`, through pinned upstream `dd6c05ec31`. Merge `ed52b86b6a` preserves
+ancestry, with zero missing upstream commits on the branch. It has **not** reached
+`main`: local `main` and `origin/main` remain at `c98f21e930`, sharing baseline
+`3962ae8586` with upstream and still missing those 3,337 commits.
+[^november-2-local-integration][^november-2-review-git]
+
+The newest completed sync on `main` is
 [PR #50](https://github.com/NicholasZolton/t3code/pull/50), which reached fork
 `main` at `d3b3491750`. Merge `837d227b91` contains all 96 incoming commits
-through upstream `3962ae8586`, with ancestry preserved. The shared baseline
-equals that pinned upstream tip, with zero missing upstream commits on `main`.
+through upstream `3962ae8586`, with ancestry preserved and zero gap against
+that older tip.
 [^october-16-main-integration][^october-16-main-review-git]
 
 This is a revision-pinned snapshot, not a claim about newer upstream work.
 Refresh it after the next review or integration using the
 [maintenance guidance](maintenance.md).
+
+## Local November integration, not on main
+
+Merge `ed52b86b6a9ffb6afad94980cc3d7d8cb5c851aa` has parents reused integration
+`e7d7a393d980059c14fc65f2892f6b04112bf06f` and pinned upstream
+`dd6c05ec313c6c870c7a7688e87143da5084031d`. The reused merge already contains
+fork `main` `c98f21e930` and upstream `18e2742519`; both integrations are retained
+in ancestry rather than replayed or squashed. Follow-up repairs through code tip
+`1a21e4d0e6` leave the merge hash unchanged. The branch has zero upstream gap,
+but the 3,337-commit gap on unchanged fork `main` remains until this branch lands.
+No push, PR, packaging, deployment, or server restart was performed.
+[^november-2-local-integration][^november-2-review-git][^november-2-upstream]
+
+Use upstream's thread-search ranking, mobile list/review extraction,
+provider-workspace refresh atoms, root-route settings navigation, and source-control
+definitions and hooks. Retain fork fuzzy matching outside thread searches; do not
+restore the old thread scorer. Git and Jujutsu share the upstream-compatible
+change-request workflow rather than separate GitHub-specific helpers.
+[^november-2-local-integration][^shared-pr-workflow]
+
+Unreplaced fork behavior remains: saved prompts, Vim, composer scroll-collapse,
+OpenCode account controls and child-input tracking, notification privacy,
+Jujutsu, SSH readiness safeguards, Crit/Portless, persistent Tailscale publication,
+and private signing. Composer collapse follows upstream timeline-navigation signals;
+missing-workspace recovery stays at the shared workflow boundary and respects the
+recorded backend owner instead of silently switching Git/Jujutsu ownership.
+[^november-2-local-integration][^workspace-recovery][^opencode-child-tracking]
 
 ## Completed October 16 sync
 
@@ -454,16 +504,16 @@ migrates to upstream branch naming while preserving temporary branch names. The 
 | -------------------------------------------------- | ---------------------------------------- |
 | Fork                                               | `NicholasZolton/t3code`, remote `origin` |
 | Upstream                                           | `pingdotgg/t3code`, remote `upstream`    |
-| Main landing commit                                | `9ce8f0a504`: merge of PR #48            |
-| Upstream integration commit                        | `30b7fbff81`: merge through `e536bfd33b` |
-| Fork-side parent                                   | `e9e7b07c0d`                             |
-| Upstream-side parent / shared baseline             | `e536bfd33b`                             |
+| Main landing commit                                | `d3b3491750`: merge of PR #50            |
+| Upstream integration commit                        | `837d227b91`: merge through `3962ae8586` |
+| Fork-side parent                                   | `f2d43354c9`                             |
+| Upstream-side parent / shared baseline             | `3962ae8586`                             |
 | Missing commits at that integration's upstream tip | **0**                                    |
 
 Default to upstream implementations. Retain fork code for explicit features
 or fixes upstream does not provide. Native OpenCode 2 and thread management now
 use upstream services; fork configuration and UI improvements remain layered on
-those paths.[^october-15-branch-integration]
+those paths.[^october-16-branch-integration]
 
 ## Earlier integration boundaries
 
@@ -517,12 +567,12 @@ for upstream's 0.0.46 threshold. Remote compatibility metadata still cannot repl
 the bundled OpenCode policy. Older 2.x versions are outside the supported baseline.
 [^upstream-current-manifest][^reviewed-upstream-main]
 
-Reused OpenCode child sessions still need fork admission and execution tracking.
-At `3962ae8586`, parent reports identify the child session but not the individual
-execution. Once a child is reused, ambiguous reports must not attach stale results
-or settle the new call; observed execution can settle it without a result. Preserve
-this safeguard until upstream can attribute reports to individual runs.
-[^october-12-branch-integration][^october-16-review-git]
+The local integration through `dd6c05ec31` retains fork admission, execution,
+and persisted input-delivery tracking for reused OpenCode child sessions. Once a
+child is reused, ambiguous parent reports must not attach stale results or settle
+the new call; observed execution can settle it without a result. Preserve this
+safeguard until upstream can attribute reports to individual runs.
+[^november-2-local-integration][^opencode-child-tracking]
 
 ## Jujutsu migration boundary
 
@@ -758,3 +808,13 @@ git log --reverse --oneline origin/main..upstream/main
 [^october-16-main-integration]: PR #50 and its recorded merge time.
 
 [^october-16-main-review-git]: Completed main ancestry checks, exact revisions and parents, and zero gap against the pinned upstream tip.
+
+[^november-2-local-integration]: Local-only merge objects, exact parents, and upstream-first compatibility decisions; not a main integration.
+
+[^november-2-review-git]: Revision-pinned ancestry checks, zero branch gap, and the separate 3,337-commit gap on unchanged fork main.
+
+[^november-2-upstream]: Exact upstream revision incorporated into the local integration branch.
+
+[^workspace-recovery]: Shared recovery service preserves backend ownership and retained-branch priority.
+
+[^opencode-child-tracking]: Native OpenCode lifecycle with reused-child admission, execution attribution, and delivery tracking.
