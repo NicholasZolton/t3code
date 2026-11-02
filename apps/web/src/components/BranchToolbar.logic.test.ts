@@ -3,10 +3,10 @@ import {
   JJ_VCS_TERMINOLOGY,
   JJ_WORKING_COPY_REVISION,
 } from "@t3tools/shared/vcs";
-import { EnvironmentId, type VcsRef } from "@t3tools/contracts";
+import type { VcsRef } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
+import { dedupeRemoteBranchesWithLocalMatches } from "@t3tools/shared/git";
 import {
-  dedupeRemoteBranchesWithLocalMatches,
   deriveLocalBranchNameFromRemoteRef,
   resolveBranchSelectionTarget,
   resolveDraftEnvModeAfterBranchChange,
@@ -23,9 +23,6 @@ import {
   sanitizeNewRefName,
   shouldIncludeBranchPickerItem,
 } from "./BranchToolbar.logic";
-
-const localEnvironmentId = EnvironmentId.make("environment-local");
-const remoteEnvironmentId = EnvironmentId.make("environment-remote");
 
 describe("resolvePreviousWorktreeSeed", () => {
   it("picks the most recently updated worktree thread", () => {

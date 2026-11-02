@@ -270,7 +270,7 @@ const makeRepoCache = <A>(
     timeToLive: Exit.match({ onSuccess: () => timeToLive, onFailure: () => Duration.zero }),
   });
 
-export const makeVcsDriverShape = Effect.gen(function* () {
+const makeVcsDriverShape = Effect.gen(function* () {
   const fileSystem = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const vcsProcess = yield* VcsProcess.VcsProcess;
@@ -298,13 +298,11 @@ export const makeVcsDriverShape = Effect.gen(function* () {
   ) {
     const marker = yield* markerRoot(cwd);
     if (marker === null || marker.marker !== "jj") {
-      return yield* Effect.fail(
-        new VcsRepositoryDetectionError({
-          operation: "JjVcsDriver.repoPaths",
-          cwd,
-          detail: "No Jujutsu workspace was found at this path.",
-        }),
-      );
+      return yield* new VcsRepositoryDetectionError({
+        operation: "JjVcsDriver.repoPaths",
+        cwd,
+        detail: "No Jujutsu workspace was found at this path.",
+      });
     }
     return yield* Cache.get(repoPathsCache, marker.root);
   });
@@ -317,13 +315,11 @@ export const makeVcsDriverShape = Effect.gen(function* () {
         colocated: paths.gitDir !== null,
       });
       if (reason !== null || paths.gitDir === null) {
-        return yield* Effect.fail(
-          new VcsUnsupportedOperationError({
-            operation,
-            kind: "jj",
-            detail: reason ?? "This Jujutsu workspace has no colocated Git store.",
-          }),
-        );
+        return yield* new VcsUnsupportedOperationError({
+          operation,
+          kind: "jj",
+          detail: reason ?? "This Jujutsu workspace has no colocated Git store.",
+        });
       }
       return { ...paths, gitDir: paths.gitDir };
     },
@@ -355,18 +351,16 @@ export const makeVcsDriverShape = Effect.gen(function* () {
     );
 
     if (result.exitCode !== 0) {
-      const failureKind = VcsProcess.classifyNonZeroExit("jj", result.stderr);
+      const failureKind = JjProcess.classifyJjExit(result.stderr);
       if (failureKind === "not-found") return null;
-      return yield* Effect.fail(
-        new VcsProcessExitError({
-          operation,
-          command: "jj log",
-          cwd,
-          exitCode: result.exitCode,
-          detail: result.stderr.trim() || "jj log failed",
-          failureKind,
-        }),
-      );
+      return yield* new VcsProcessExitError({
+        operation,
+        command: "jj log",
+        cwd,
+        exitCode: result.exitCode,
+        detail: result.stderr.trim() || "jj log failed",
+        failureKind,
+      });
     }
 
     const line = splitLineSeparatedPaths(result.stdout, result.stdoutTruncated)[0];
@@ -384,15 +378,13 @@ export const makeVcsDriverShape = Effect.gen(function* () {
       yield* ensureUsable(operation, cwd);
       const change = yield* changeFromRevset(operation, cwd, "@", false);
       if (change === null) {
-        return yield* Effect.fail(
-          new VcsProcessExitError({
-            operation,
-            command: "jj log",
-            cwd,
-            exitCode: 0,
-            detail: "jj reported no working-copy change for this workspace.",
-          }),
-        );
+        return yield* new VcsProcessExitError({
+          operation,
+          command: "jj log",
+          cwd,
+          exitCode: 0,
+          detail: "jj reported no working-copy change for this workspace.",
+        });
       }
       return change;
     },
@@ -769,15 +761,13 @@ export const makeVcsDriverShape = Effect.gen(function* () {
       );
 
       if (result.exitCode !== 0 && result.exitCode !== 1) {
-        return yield* Effect.fail(
-          new VcsProcessExitError({
-            operation,
-            command: "git check-ignore",
-            cwd,
-            exitCode: result.exitCode,
-            detail: result.stderr.trim() || "git check-ignore failed",
-          }),
-        );
+        return yield* new VcsProcessExitError({
+          operation,
+          command: "git check-ignore",
+          cwd,
+          exitCode: result.exitCode,
+          detail: result.stderr.trim() || "git check-ignore failed",
+        });
       }
 
       for (const ignoredPath of splitNullSeparatedGitStdoutPaths(result)) {
@@ -844,7 +834,7 @@ export const makeVcsDriverShape = Effect.gen(function* () {
   } satisfies JjVcsDriverShape;
 });
 
-export const makeJjVcsDriver = Effect.map(makeVcsDriverShape, (shape) => JjVcsDriver.of(shape));
+const makeJjVcsDriver = Effect.map(makeVcsDriverShape, (shape) => JjVcsDriver.of(shape));
 
 export const makeVcsDriver = Effect.map(makeVcsDriverShape, (shape) =>
   VcsDriver.VcsDriver.of(shape),

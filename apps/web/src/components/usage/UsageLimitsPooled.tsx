@@ -17,6 +17,7 @@ import {
   remainingPercent,
 } from "@t3tools/shared/usageLimits";
 import type { Popover as PopoverPrimitive } from "@base-ui/react/popover";
+import { normalizeProviderAccentColor } from "@t3tools/client-runtime/state/provider-instance-display";
 import { AlertTriangleIcon, ExternalLinkIcon, TicketIcon } from "lucide-react";
 import {
   createContext,
@@ -275,6 +276,7 @@ function ActiveSegmentPopover({
   // The trigger is gone, so the popup has nothing to anchor to: an exit transition would
   // slide it to the viewport origin. Unmount it outright, which also clears Base UI's
   // active-trigger bookkeeping so the segment can open again when it comes back.
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- closes the popover handle and unmounts the Base UI popup before paint when its trigger is gone
   useLayoutEffect(() => {
     if (available) return;
     handle.close();
@@ -441,7 +443,12 @@ function SegmentTriggers({
           {action?.active ? (
             <span className="shrink-0 text-2xs text-muted-foreground">Active</span>
           ) : null}
-          <span className="shrink-0 font-semibold text-foreground tabular-nums">{remaining}%</span>
+          {/* A single-account bar repeats the headline percentage. */}
+          {showAccountName ? (
+            <span className="shrink-0 font-semibold text-foreground tabular-nums">
+              {remaining}%
+            </span>
+          ) : null}
           {resetsIn || credits ? (
             <span className="ms-auto flex min-w-0 items-center gap-1.5 overflow-hidden rounded-sm bg-background/85 px-1.5 py-0.5 text-2xs whitespace-nowrap text-foreground tabular-nums">
               {resetsIn?.replace("resets in ", "↻ ") ?? ""}
@@ -533,14 +540,7 @@ function LegendRow({
   );
 }
 
-/**
- * One pooled window with each account's segment sized by its plan's share of
- * the quota and filled by the share of that account's quota still open.
- *
- * Wide, each segment carries its own label. Narrow, the bar is a bare strip
- * and a legend below lists the accounts in the same order; both open the
- * same popover.
- */
+// Segment widths reflect plan weights; each fill reflects that account's remaining quota.
 function PoolBar({
   pool,
   color,
@@ -571,7 +571,7 @@ function PoolBar({
               window={member.window}
               reset={restores.get(member.account.key)}
               refillPercent={member.refillPercent}
-              color={color}
+              color={normalizeProviderAccentColor(member.account.accentColor) ?? color}
               now={now}
               index={position + 1}
               showAccountName={pool.columns.length > 1}
@@ -734,6 +734,9 @@ export function UsageLimitsPooled({
             ) : null}
             <div className="min-w-0 space-y-1">
               <h2 className="text-sm font-medium">{link.label}</h2>
+              <p className="text-xs break-words text-muted-foreground">
+                {link.accounts.join(", ")}
+              </p>
               {link.url === CHATGPT_USAGE_URL ? (
                 <p className="text-xs text-muted-foreground">
                   View usage in ChatGPT with your connected account.

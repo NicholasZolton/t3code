@@ -2,6 +2,7 @@ import { describe, expect, it } from "vite-plus/test";
 
 import {
   insertRankedSearchResult,
+  normalizeSearchQuery,
   scoreQueryMatch,
   scoreSubsequenceMatch,
   scoreSearchFields,

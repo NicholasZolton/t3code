@@ -5,10 +5,11 @@ import {
   type EnvironmentProject,
   type EnvironmentThreadShell,
 } from "@t3tools/client-runtime/state/shell";
+import { threadSearchSubject } from "@t3tools/client-runtime/state/thread-search";
 import type { EnvironmentId } from "@t3tools/contracts";
+import { foldSearchQuery, rankSearchItems, scoreThreadSearch } from "@t3tools/shared/paletteSearch";
 import * as Arr from "effect/Array";
 import * as Order from "effect/Order";
-import { searchItems, SEARCH_SECONDARY_FIELD_WEIGHT } from "@t3tools/shared/searchRanking";
 
 import { scopedProjectKey } from "../../lib/scopedEntities";
 
@@ -25,6 +26,10 @@ function archiveTimestamp(thread: EnvironmentThreadShell): number {
   return Number.isNaN(timestamp) ? 0 : timestamp;
 }
 
+function matchesQuery(value: string | null, query: string): boolean {
+  return value?.toLocaleLowerCase().includes(query) ?? false;
+}
+
 export function buildArchivedThreadGroups(input: {
   readonly snapshots: ReadonlyArray<ArchivedSnapshotEntry>;
   readonly environmentLabels: Readonly<Record<string, string>>;
@@ -32,7 +37,8 @@ export function buildArchivedThreadGroups(input: {
   readonly searchQuery: string;
   readonly sortOrder: ArchivedThreadSortOrder;
 }): ReadonlyArray<ArchivedThreadGroup> {
-  const query = input.searchQuery.trim();
+  const query = input.searchQuery.trim().toLocaleLowerCase();
+  const foldedQuery = foldSearchQuery(input.searchQuery);
   const groups: ArchivedThreadGroup[] = [];
 
   for (const entry of input.snapshots) {
@@ -54,30 +60,40 @@ export function buildArchivedThreadGroups(input: {
     for (const rawProject of entry.snapshot.projects) {
       const project = scopeProject(entry.environmentId, rawProject);
       const projectThreads = threadsByProjectId.get(project.id) ?? [];
+      const groupMatches =
+        query.length === 0 ||
+        matchesQuery(project.title, query) ||
+        matchesQuery(project.workspaceRoot, query) ||
+        matchesQuery(environmentLabel, query);
+      // Threads match as in every other thread search; the list keeps its own order.
+      const matchingThreads = groupMatches
+        ? projectThreads
+        : rankSearchItems(projectThreads, (thread, options) =>
+            scoreThreadSearch(foldedQuery, threadSearchSubject(thread, null), 0, {
+              ...options,
+              picks: false,
+            }),
+          ).map(({ item }) => item);
+
+      if (matchingThreads.length === 0) {
+        continue;
+      }
+
       const timestampOrder = input.sortOrder === "newest" ? Order.flip(Order.Number) : Order.Number;
-      const orderedThreads = Arr.sort(
-        projectThreads,
-        Order.mapInput(
-          Order.Struct({ timestamp: timestampOrder, title: Order.String, id: Order.String }),
-          (thread: EnvironmentThreadShell) => ({
-            timestamp: archiveTimestamp(thread),
-            title: thread.title,
-            id: thread.id,
-          }),
-        ),
-      );
-      const matchingThreads = searchItems(orderedThreads, query, (thread) => [
-        thread.title,
-        { value: thread.branch ?? "", weight: 100 },
-        { value: project.title, weight: SEARCH_SECONDARY_FIELD_WEIGHT },
-        { value: project.workspaceRoot, weight: SEARCH_SECONDARY_FIELD_WEIGHT },
-        { value: environmentLabel ?? "", weight: SEARCH_SECONDARY_FIELD_WEIGHT },
-      ]);
-      if (matchingThreads.length === 0) continue;
       groups.push({
         key: scopedProjectKey(project.environmentId, project.id),
         project,
-        threads: matchingThreads,
+        threads: Arr.sort(
+          matchingThreads,
+          Order.mapInput(
+            Order.Struct({ timestamp: timestampOrder, title: Order.String, id: Order.String }),
+            (thread: EnvironmentThreadShell) => ({
+              timestamp: archiveTimestamp(thread),
+              title: thread.title,
+              id: thread.id,
+            }),
+          ),
+        ),
       });
     }
   }

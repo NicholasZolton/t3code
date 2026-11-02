@@ -1,6 +1,7 @@
 import { assert, it } from "@effect/vitest";
 import {
   DEFAULT_SERVER_SETTINGS,
+  type ManagedPolicySummary,
   type ModelSelection,
   type OrchestrationV2AppThread,
   ProjectId,
@@ -78,21 +79,22 @@ const providerInstanceFor = (instanceId: ProviderInstanceId) =>
     },
   }) as ProviderInstance;
 
-const layerTest = RuntimePolicy.layerFromProjectStore.pipe(
-  Layer.provide(
-    Layer.succeed(ProviderInstanceRegistry.ProviderInstanceRegistry, {
-      getInstance: (instanceId) => Effect.succeed(providerInstanceFor(instanceId)),
-      listInstances: Effect.succeed([]),
-      listUnavailable: Effect.succeed([]),
-      streamChanges: Stream.empty,
-      subscribeChanges: Effect.never,
-    }),
-  ),
-  Layer.provide(
-    Layer.mock(ProjectStore.ProjectStoreV2)({
-      get: () =>
-        Effect.succeed(
-          Option.some({
+const layerWithPolicy = (policy?: ManagedPolicySummary) =>
+  RuntimePolicy.layerFromProjectStore.pipe(
+    Layer.provide(ServerSettings.layerTest({}, policy)),
+    Layer.provide(
+      Layer.succeed(ProviderInstanceRegistry.ProviderInstanceRegistry, {
+        getInstance: (instanceId) => Effect.succeed(providerInstanceFor(instanceId)),
+        listInstances: Effect.succeed([]),
+        listUnavailable: Effect.succeed([]),
+        streamChanges: Stream.empty,
+        subscribeChanges: Effect.never,
+      }),
+    ),
+    Layer.provide(
+      Layer.mock(ProjectStore.ProjectStoreV2)({
+        get: () =>
+          Effect.succeedSome({
             projectId,
             title: "Project",
             workspaceRoot: "/project-root",
@@ -102,14 +104,17 @@ const layerTest = RuntimePolicy.layerFromProjectStore.pipe(
             faviconPath: null,
             projectIcon: null,
             scripts: [],
+            pinnedAt: null,
+            archivedAt: null,
             createdAt: "2026-06-21T00:00:00.000Z",
             updatedAt: "2026-06-21T00:00:00.000Z",
             deletedAt: null,
           }),
-        ),
-    }),
-  ),
-);
+      }),
+    ),
+  );
+
+const layerTest = layerWithPolicy();
 
 it.layer(layerTest)("RuntimePolicyV2", (it) => {
   it.effect("runs a mode the provider does not offer in Supervised", () =>
@@ -141,6 +146,14 @@ it.effect("resolves VCS hints in the thread workspace and honors live settings",
       Effect.provide(
         Layer.mock(VcsDriver.VcsDriver)({
           agentContextHint: "Use jj for this workspace.",
+          checkpoints: {
+            captureCheckpoint: () => Effect.die("unexpected checkpoint capture"),
+            hasCheckpointRef: () => Effect.die("unexpected checkpoint lookup"),
+            restoreCheckpoint: () => Effect.die("unexpected checkpoint restore"),
+            diffCheckpoints: () => Effect.die("unexpected checkpoint diff"),
+            listAuthoredPaths: () => Effect.die("unexpected authored paths lookup"),
+            deleteCheckpointRefs: () => Effect.die("unexpected checkpoint deletion"),
+          },
           capabilities: {
             kind: "jj",
             supportsWorktrees: true,
@@ -188,3 +201,32 @@ it.effect("resolves VCS hints in the thread workspace and honors live settings",
     }).pipe(Effect.provide(layerTest.pipe(Layer.provide(dependencies))));
   }),
 );
+it.layer(
+  layerWithPolicy({
+    organization: "Example Corp",
+    lockedSettings: [],
+    limits: { maxRuntimeMode: "auto-accept-edits" },
+  }),
+)("RuntimePolicyV2 under a runtime mode ceiling", (it) => {
+  it.effect("refuses to start a turn above the ceiling, such as one resumed after a restart", () =>
+    Effect.gen(function* () {
+      const policy = yield* RuntimePolicy.RuntimePolicyV2;
+      const now = yield* DateTime.now;
+      const resolve = (runtimeMode: RuntimeMode) =>
+        policy.resolve({
+          thread: makeThread({ now, worktreePath: "/work", runtimeMode }),
+          modelSelection,
+        });
+
+      const refused = yield* resolve("full-access").pipe(Effect.flip);
+      assert.equal(refused._tag, "RuntimePolicyAboveCeilingError");
+      assert.equal(
+        refused.message,
+        "Example Corp limits threads to Auto-accept edits. Switch this thread's mode to continue.",
+      );
+      const allowed = yield* resolve("auto-accept-edits");
+      assert.equal(allowed.runtimeMode, "auto-accept-edits");
+      assert.equal(allowed.maxRuntimeMode, "auto-accept-edits");
+    }),
+  );
+});

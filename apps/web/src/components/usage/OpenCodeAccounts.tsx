@@ -1,7 +1,6 @@
 import {
   ProviderDriverKind,
   type EnvironmentId,
-  type OpenCodeCodexAccount,
   type ProviderInstanceId,
 } from "@t3tools/contracts";
 import {
@@ -10,10 +9,11 @@ import {
   openCodeLimitAccounts,
   type LimitPresentations,
 } from "@t3tools/shared/usageLimits";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import { serverEnvironment } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
+import { useEnvironmentQuery } from "../../state/query";
 import { ProviderInstanceIcon } from "../chat/ProviderInstanceIcon";
 import { RedactedSensitiveText } from "../settings/RedactedSensitiveText";
 import { Button } from "../ui/button";
@@ -31,22 +31,16 @@ function InstanceAccounts({
   readonly label: string;
   readonly now: number;
 }) {
-  const read = useAtomCommand(serverEnvironment.openCodeAccounts, { reportFailure: false });
+  const accountsQuery = useEnvironmentQuery(
+    serverEnvironment.openCodeAccounts({ environmentId, input: { instanceId } }),
+  );
   const activate = useAtomCommand(serverEnvironment.activateOpenCodeAccount, {
     reportFailure: false,
   });
-  const [accounts, setAccounts] = useState<readonly OpenCodeCodexAccount[] | null>(null);
+  const accounts = accountsQuery.data ?? null;
   const [busyId, setBusyId] = useState<string | null>(null);
-  const [message, setMessage] = useState<string | null>(null);
-  useEffect(() => {
-    void read({ environmentId, input: { instanceId } }).then((result) => {
-      if (result._tag === "Success") {
-        setAccounts(result.value);
-        setMessage(null);
-      } else setMessage("Could not read OpenCode accounts on this environment.");
-    });
-    // oxlint-disable-next-line react/exhaustive-effect-dependencies -- Limits refresh changes now to refetch account quotas.
-  }, [environmentId, instanceId, now, read]);
+  const [actionMessage, setMessage] = useState<string | null>(null);
+  const message = accountsQuery.error ?? actionMessage;
 
   const switchAccount = async (credentialId: string) => {
     setBusyId(credentialId);
@@ -54,13 +48,7 @@ function InstanceAccounts({
     try {
       const result = await activate({ environmentId, input: { instanceId, credentialId } });
       if (result._tag === "Success") {
-        const updated = await read({ environmentId, input: { instanceId } });
-        if (updated._tag === "Success") setAccounts(updated.value);
-        setMessage(
-          updated._tag === "Success"
-            ? "OpenCode account switched."
-            : "Switched, but could not refresh the account list.",
-        );
+        setMessage("OpenCode account switched.");
       } else setMessage("Could not switch the OpenCode account.");
     } finally {
       setBusyId(null);

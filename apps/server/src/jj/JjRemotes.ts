@@ -43,12 +43,10 @@ export const assertBookmarkUsable = Effect.fn("JjRemotes.assertBookmarkUsable")(
     (bookmark) => bookmark.name === name && bookmark.remote === null && bookmark.conflict,
   );
   if (conflicted) {
-    return yield* Effect.fail(
-      jjFailure(
-        operation,
-        cwd,
-        `Bookmark ${name} is conflicted. Resolve it with \`jj bookmark set ${name} -r <revision>\` before using it here.`,
-      ),
+    return yield* jjFailure(
+      operation,
+      cwd,
+      `Bookmark ${name} is conflicted. Resolve it with \`jj bookmark set ${name} -r <revision>\` before using it here.`,
     );
   }
 });
@@ -177,9 +175,7 @@ export const makeJjRemotes = (deps: JjRemoteOpsDeps): JjRemoteOps => {
       .resolvePrimaryRemoteName(cwd)
       .pipe(mapJjFailure(operation, cwd, "Could not read this repository's remotes."));
     if (remoteName === null) {
-      return yield* Effect.fail(
-        jjFailure(operation, cwd, "Cannot resolve a remote for this repository."),
-      );
+      return yield* jjFailure(operation, cwd, "Cannot resolve a remote for this repository.");
     }
     return remoteName;
   });
@@ -254,8 +250,10 @@ export const makeJjRemotes = (deps: JjRemoteOpsDeps): JjRemoteOps => {
       mapJjFailure(operation, input.cwd, "Could not resolve the remote bookmark."),
     );
     if (change === null) {
-      return yield* Effect.fail(
-        jjFailure(operation, input.cwd, `${remoteName}/${name} does not exist on the remote.`),
+      return yield* jjFailure(
+        operation,
+        input.cwd,
+        `${remoteName}/${name} does not exist on the remote.`,
       );
     }
     return { commitSha: change.commitId, remoteRefName: `${remoteName}/${name}` };
@@ -300,12 +298,10 @@ export const makeJjRemotes = (deps: JjRemoteOpsDeps): JjRemoteOps => {
         .countRevset(input.cwd, `${localBookmarkRevset(input.name)} & ::(${input.revset})`)
         .pipe(mapJjFailure(input.operation, input.cwd, "Could not compare bookmark ancestry."));
       if (isDescendant === 0) {
-        return yield* Effect.fail(
-          jjFailure(
-            input.operation,
-            input.cwd,
-            `Bookmark ${input.name} points at a change that is not an ancestor of this one. Move it in jj (\`jj bookmark set ${input.name} -r @ --allow-backwards\`) if that is what you want.`,
-          ),
+        return yield* jjFailure(
+          input.operation,
+          input.cwd,
+          `Bookmark ${input.name} points at a change that is not an ancestor of this one. Move it in jj (\`jj bookmark set ${input.name} -r @ --allow-backwards\`) if that is what you want.`,
         );
       }
 
@@ -324,8 +320,10 @@ export const makeJjRemotes = (deps: JjRemoteOpsDeps): JjRemoteOps => {
         .currentChange(input.cwd)
         .pipe(mapJjFailure(input.operation, input.cwd, "Could not read the working-copy change."));
       if (change.conflict) {
-        return yield* Effect.fail(
-          jjFailure(input.operation, input.cwd, "Resolve conflicts in this change before pushing."),
+        return yield* jjFailure(
+          input.operation,
+          input.cwd,
+          "Resolve conflicts in this change before pushing.",
         );
       }
 
@@ -338,12 +336,10 @@ export const makeJjRemotes = (deps: JjRemoteOpsDeps): JjRemoteOps => {
       // A bookmark that sits on `@` follows every snapshot, and jj accepts the push, so a bare Push
       // would publish whatever is in the editor. Moving it for them is worse than refusing.
       if (existing !== undefined && existing.target === change.commitId) {
-        return yield* Effect.fail(
-          jjFailure(
-            input.operation,
-            input.cwd,
-            `Bookmark ${input.name} points at your working copy. Commit this change before pushing it.`,
-          ),
+        return yield* jjFailure(
+          input.operation,
+          input.cwd,
+          `Bookmark ${input.name} points at your working copy. Commit this change before pushing it.`,
         );
       }
 
@@ -385,7 +381,7 @@ export const makeJjRemotes = (deps: JjRemoteOpsDeps): JjRemoteOps => {
         const detail = stderr.toLowerCase().includes("no description")
           ? "Describe this change before pushing."
           : stderr || `Could not push ${input.name}.`;
-        return yield* Effect.fail(jjFailure(input.operation, input.cwd, detail));
+        return yield* jjFailure(input.operation, input.cwd, detail);
       }
 
       yield* JjProcess.exportGitRefs(process, input.operation, input.cwd).pipe(
@@ -412,12 +408,10 @@ export const makeJjRemotes = (deps: JjRemoteOpsDeps): JjRemoteOps => {
       .pipe(mapJjFailure(operation, cwd, "Could not read the current bookmark."));
     const refName = yield* resolveWorkspaceRefName(driver, cwd, segment);
     if (refName === null) {
-      return yield* Effect.fail(
-        jjFailure(
-          operation,
-          cwd,
-          "This workspace is not on a bookmark, so there is nothing to pull.",
-        ),
+      return yield* jjFailure(
+        operation,
+        cwd,
+        "This workspace is not on a bookmark, so there is nothing to pull.",
       );
     }
 
@@ -440,12 +434,10 @@ export const makeJjRemotes = (deps: JjRemoteOpsDeps): JjRemoteOps => {
       .currentChange(cwd)
       .pipe(mapJjFailure(operation, cwd, "Could not read the working-copy change."));
     if (counts.aheadCount > 0 || !change.empty) {
-      return yield* Effect.fail(
-        jjFailure(
-          operation,
-          cwd,
-          `${refName} has local changes. Rebase onto ${upstreamRef} in jj instead of pulling.`,
-        ),
+      return yield* jjFailure(
+        operation,
+        cwd,
+        `${refName} has local changes. Rebase onto ${upstreamRef} in jj instead of pulling.`,
       );
     }
 

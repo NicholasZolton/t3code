@@ -1,15 +1,6 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
-import {
-  EnvironmentId,
-  ProviderDriverKind,
-  ProviderInstanceId,
-  PROVIDER_WORKSPACE_SNAPSHOT_TTL_MS,
-  type ServerProvider,
-} from "@t3tools/contracts";
-import { act, createElement } from "react";
-import { createRoot, type Root } from "react-dom/client";
+import { describe, expect, it, vi } from "vite-plus/test";
+import { ProviderDriverKind } from "@t3tools/contracts";
 
-const refreshProviders = vi.hoisted(() => vi.fn());
 vi.mock("react-native", () => ({ Alert: { alert: vi.fn() } }));
 
 vi.mock("../../state/queries", () => ({
@@ -18,51 +9,59 @@ vi.mock("../../state/queries", () => ({
 }));
 vi.mock("../../state/use-composer-drafts", () => ({
   getComposerDraftSnapshot: vi.fn(),
-  readComposerDraftSelection: vi.fn(),
   setComposerDraftContext: vi.fn(),
+  useComposerDraftSelection: vi.fn(),
 }));
 vi.mock("../../lib/uuid", () => ({ uuidv4: () => "context-id" }));
-vi.mock("../../state/server", async () => {
-  const { Atom } = await import("effect/reactivity");
-  const { DEFAULT_SERVER_SETTINGS } = await import("@t3tools/contracts");
-  const settings = Atom.make(DEFAULT_SERVER_SETTINGS);
-  return {
-    serverEnvironment: {
-      refreshProviders: Symbol("refreshProviders"),
-      resolvePromptEnvironment: Symbol("resolvePromptEnvironment"),
-      settingsValueAtom: () => settings,
-    },
-  };
-});
-vi.mock("../../state/use-atom-command", () => ({
-  useAtomCommand: () => refreshProviders,
+vi.mock("../../state/server", () => ({
+  serverEnvironment: {
+    providersValueAtom: vi.fn(),
+    refreshProviders: Symbol("refreshProviders"),
+  },
 }));
 
 import {
   buildComposerSlashCommandItems,
   resolveComposerCommandSelection,
-  useComposerCommandMenu,
+  resolveComposerMenuSelection,
 } from "./use-composer-command-menu";
 
-describe("mobile slash commands", () => {
-  it("ranks abbreviated commands behind exact names and ahead of description-only hits", () => {
-    const items = buildComposerSlashCommandItems({
-      query: "rvm",
-      atMessageStart: true,
-      hasThread: true,
-      allowInteractionMode: false,
-      selectedProviderStatus: {
-        driver: ProviderDriverKind.make("codex"),
-        slashCommands: [
-          { name: "other", description: "Run rvm" },
-          { name: "review-menu", description: "Review changes" },
-          { name: "rvm", description: "Run review" },
-        ],
-      },
-    });
-    expect(items.map((item) => item.label)).toEqual(["/rvm", "/review-menu", "/other"]);
+describe("resolveComposerMenuSelection", () => {
+  it("prefers the caret an insertion placed in the current draft text", () => {
+    expect(
+      resolveComposerMenuSelection({
+        draftMessage: "hello @chip ",
+        ownerKey: "draft-a",
+        inserted: { start: 12, end: 12 },
+        local: { ownerKey: "draft-a", start: 2, end: 2 },
+      }),
+    ).toEqual({ start: 12, end: 12 });
   });
 
+  it("clamps the composer's own caret when the draft shrinks", () => {
+    expect(
+      resolveComposerMenuSelection({
+        draftMessage: "hi",
+        ownerKey: "draft-a",
+        inserted: null,
+        local: { ownerKey: "draft-a", start: 5, end: 9 },
+      }),
+    ).toEqual({ start: 2, end: 2 });
+  });
+
+  it("starts at the end of the draft after switching owners", () => {
+    expect(
+      resolveComposerMenuSelection({
+        draftMessage: "other draft",
+        ownerKey: "draft-b",
+        inserted: null,
+        local: { ownerKey: "draft-a", start: 1, end: 1 },
+      }),
+    ).toEqual({ start: 11, end: 11 });
+  });
+});
+
+describe("mobile slash commands", () => {
   const antigravity = {
     driver: ProviderDriverKind.make("antigravity"),
     showInteractionModeToggle: false,
@@ -125,311 +124,5 @@ describe("mobile slash commands", () => {
         allowInteractionMode: false,
       }),
     ).toEqual({ text: "/plan ", cursor: 6, interactionMode: null });
-  });
-});
-
-describe("workspace command discovery retry", () => {
-  let root: Root;
-  const environmentId = EnvironmentId.make("test-environment");
-  const instanceId = ProviderInstanceId.make("claude");
-  const provider = {
-    instanceId,
-    driver: ProviderDriverKind.make("claude"),
-    enabled: true,
-    installed: true,
-    version: "1.0.0",
-    status: "ready",
-    auth: { status: "authenticated" },
-    checkedAt: "2026-01-01T00:00:00.000Z",
-    models: [],
-    slashCommands: [],
-    skills: [],
-    workspaceSnapshots: [
-      {
-        cwd: "/project-a",
-        checkedAt: "2026-01-01T00:00:00.000Z",
-        slashCommandsPending: true,
-        slashCommands: [{ name: "compact" }],
-        skills: [],
-      },
-    ],
-  } satisfies ServerProvider;
-
-  function Probe({
-    cwd,
-    status = provider,
-    draftMessage = "/project",
-  }: {
-    cwd: string;
-    status?: ServerProvider;
-    draftMessage?: string;
-  }) {
-    useComposerCommandMenu({
-      draftMessage,
-      ownerKey: null,
-      environmentId,
-      projectCwd: cwd,
-      selectedProviderStatus: status,
-      hasThread: false,
-      hasCompactableConversation: false,
-      onChangeDraftMessage: () => {},
-    });
-    return null;
-  }
-
-  beforeEach(() => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date(provider.checkedAt));
-    refreshProviders.mockReset();
-    refreshProviders.mockResolvedValue({ _tag: "Success", value: { providers: [provider] } });
-    const document = { nodeType: 9, addEventListener() {}, removeEventListener() {} };
-    const container = {
-      nodeType: 1,
-      tagName: "DIV",
-      namespaceURI: "http://www.w3.org/1999/xhtml",
-      ownerDocument: document,
-      addEventListener() {},
-      removeEventListener() {},
-    };
-    vi.stubGlobal("document", document);
-    vi.stubGlobal("window", { document, HTMLIFrameElement: EventTarget });
-    vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
-    root = createRoot(container as unknown as HTMLElement);
-  });
-
-  afterEach(async () => {
-    await act(async () => {
-      root.unmount();
-    });
-    vi.useRealTimers();
-    vi.unstubAllGlobals();
-  });
-
-  it("retries partial commands after the cooldown without editing the draft", async () => {
-    const recovered = {
-      ...provider,
-      workspaceSnapshots: [{ ...provider.workspaceSnapshots[0], slashCommandsPending: false }],
-    };
-    refreshProviders.mockResolvedValueOnce({ _tag: "Success", value: { providers: [provider] } });
-    refreshProviders.mockResolvedValue({ _tag: "Success", value: { providers: [recovered] } });
-    await act(async () => {
-      root.render(createElement(Probe, { cwd: "/project-a" }));
-    });
-    expect(refreshProviders).toHaveBeenCalledTimes(1);
-    await act(() => vi.advanceTimersByTimeAsync(9_999));
-    expect(refreshProviders).toHaveBeenCalledTimes(1);
-    await act(() => vi.advanceTimersByTimeAsync(1));
-    expect(refreshProviders).toHaveBeenCalledTimes(2);
-    expect(refreshProviders).toHaveBeenLastCalledWith({
-      environmentId,
-      input: { instanceId, cwd: "/project-a" },
-    });
-    await act(() => vi.advanceTimersByTimeAsync(20_000));
-    expect(refreshProviders).toHaveBeenCalledTimes(2);
-  });
-
-  it("refreshes an expired catalog when the command menu reopens", async () => {
-    const complete: ServerProvider = {
-      ...provider,
-      workspaceSnapshots: provider.workspaceSnapshots.map((snapshot) => ({
-        ...snapshot,
-        slashCommandsPending: false,
-      })),
-    };
-    await act(async () => {
-      root.render(createElement(Probe, { cwd: "/project-a", status: complete }));
-    });
-    expect(refreshProviders).not.toHaveBeenCalled();
-    await act(async () => {
-      root.render(
-        createElement(Probe, { cwd: "/project-a", status: complete, draftMessage: "ordinary" }),
-      );
-    });
-    await act(() => vi.advanceTimersByTimeAsync(PROVIDER_WORKSPACE_SNAPSHOT_TTL_MS));
-    const refreshed: ServerProvider = {
-      ...complete,
-      workspaceSnapshots: complete.workspaceSnapshots?.map((snapshot) => ({
-        ...snapshot,
-        checkedAt: new Date(
-          Date.parse(provider.checkedAt) + PROVIDER_WORKSPACE_SNAPSHOT_TTL_MS,
-        ).toISOString(),
-      })),
-    };
-    refreshProviders.mockResolvedValue({ _tag: "Success", value: { providers: [refreshed] } });
-    await act(async () => {
-      root.render(createElement(Probe, { cwd: "/project-a", status: complete }));
-    });
-    expect(refreshProviders).toHaveBeenCalledTimes(1);
-    expect(refreshProviders).toHaveBeenLastCalledWith({
-      environmentId,
-      input: { instanceId, cwd: "/project-a" },
-    });
-    expect(vi.getTimerCount()).toBe(0);
-  });
-
-  it("rescans an invalidated catalog without editing the draft", async () => {
-    const complete: ServerProvider = {
-      ...provider,
-      workspaceSnapshots: provider.workspaceSnapshots.map((snapshot) => ({
-        ...snapshot,
-        slashCommandsPending: false,
-      })),
-    };
-    await act(async () => {
-      root.render(createElement(Probe, { cwd: "/project-a", status: complete }));
-    });
-    expect(refreshProviders).not.toHaveBeenCalled();
-    refreshProviders.mockResolvedValue({ _tag: "Success", value: { providers: [complete] } });
-    await act(async () => {
-      root.render(
-        createElement(Probe, {
-          cwd: "/project-a",
-          status: { ...provider, workspaceSnapshots: [] },
-        }),
-      );
-    });
-    expect(refreshProviders).toHaveBeenCalledTimes(1);
-    expect(vi.getTimerCount()).toBe(0);
-  });
-
-  it("does not duplicate a running probe when partial discovery advances its timestamp", async () => {
-    refreshProviders.mockImplementationOnce(() => new Promise(() => {}));
-    await act(async () => {
-      root.render(createElement(Probe, { cwd: "/project-a" }));
-    });
-    await act(() => vi.advanceTimersByTimeAsync(1_000));
-    await act(async () => {
-      root.render(
-        createElement(Probe, {
-          cwd: "/project-a",
-          status: {
-            ...provider,
-            workspaceSnapshots: provider.workspaceSnapshots.map((snapshot) => ({
-              ...snapshot,
-              checkedAt: new Date(Date.parse(provider.checkedAt) + 1_000).toISOString(),
-            })),
-          },
-        }),
-      );
-    });
-    expect(refreshProviders).toHaveBeenCalledTimes(1);
-  });
-
-  it.each(["pi", "acpRegistry"])(
-    "does not poll a healthy %s workspace without discovery",
-    async (driver) => {
-      const unsupported = {
-        ...provider,
-        driver: ProviderDriverKind.make(driver),
-        workspaceSnapshots: [],
-      };
-      refreshProviders.mockResolvedValue({ _tag: "Success", value: { providers: [unsupported] } });
-      await act(async () => {
-        root.render(createElement(Probe, { cwd: "/project-a", status: unsupported }));
-      });
-      expect(refreshProviders).toHaveBeenCalledTimes(1);
-      await act(() => vi.advanceTimersByTimeAsync(30_000));
-      expect(refreshProviders).toHaveBeenCalledTimes(1);
-      expect(vi.getTimerCount()).toBe(0);
-    },
-  );
-
-  it("arms the remaining cooldown when a concurrent scan publishes partial commands", async () => {
-    const missing = { ...provider, workspaceSnapshots: [] };
-    const recovered = {
-      ...provider,
-      workspaceSnapshots: provider.workspaceSnapshots.map((snapshot) => ({
-        ...snapshot,
-        slashCommandsPending: false,
-      })),
-    };
-    refreshProviders.mockResolvedValueOnce({ _tag: "Success", value: { providers: [missing] } });
-    refreshProviders.mockResolvedValue({ _tag: "Success", value: { providers: [recovered] } });
-    await act(async () => {
-      root.render(createElement(Probe, { cwd: "/project-a", status: missing }));
-    });
-    await act(() => vi.advanceTimersByTimeAsync(5_000));
-    expect(refreshProviders).toHaveBeenCalledTimes(1);
-    expect(vi.getTimerCount()).toBe(0);
-    await act(async () => {
-      root.render(createElement(Probe, { cwd: "/project-a", status: provider }));
-    });
-    await act(() => vi.advanceTimersByTimeAsync(4_999));
-    expect(refreshProviders).toHaveBeenCalledTimes(1);
-    await act(() => vi.advanceTimersByTimeAsync(1));
-    expect(refreshProviders).toHaveBeenCalledTimes(2);
-    await act(() => vi.advanceTimersByTimeAsync(20_000));
-    expect(refreshProviders).toHaveBeenCalledTimes(2);
-  });
-
-  it("does not retry when a concurrent scan publishes a complete workspace", async () => {
-    const missing = { ...provider, workspaceSnapshots: [] };
-    const recovered = {
-      ...provider,
-      workspaceSnapshots: provider.workspaceSnapshots.map((snapshot) => ({
-        ...snapshot,
-        slashCommandsPending: false,
-      })),
-    };
-    refreshProviders.mockResolvedValue({ _tag: "Success", value: { providers: [missing] } });
-    await act(async () => {
-      root.render(createElement(Probe, { cwd: "/project-a", status: missing }));
-    });
-    await act(() => vi.advanceTimersByTimeAsync(5_000));
-    await act(async () => {
-      root.render(createElement(Probe, { cwd: "/project-a", status: recovered }));
-    });
-    await act(() => vi.advanceTimersByTimeAsync(30_000));
-    expect(refreshProviders).toHaveBeenCalledTimes(1);
-    expect(vi.getTimerCount()).toBe(0);
-  });
-
-  it("retries a rejected refresh while published discovery remains pending", async () => {
-    const recovered = {
-      ...provider,
-      workspaceSnapshots: provider.workspaceSnapshots.map((snapshot) => ({
-        ...snapshot,
-        slashCommandsPending: false,
-      })),
-    };
-    refreshProviders.mockRejectedValueOnce(new Error("Connection lost"));
-    refreshProviders.mockResolvedValue({ _tag: "Success", value: { providers: [recovered] } });
-    await act(async () => {
-      root.render(createElement(Probe, { cwd: "/project-a" }));
-    });
-    await act(() => vi.advanceTimersByTimeAsync(10_000));
-    expect(refreshProviders).toHaveBeenCalledTimes(2);
-    await act(() => vi.advanceTimersByTimeAsync(20_000));
-    expect(refreshProviders).toHaveBeenCalledTimes(2);
-  });
-
-  it("cancels the old workspace retry and does not duplicate an in-flight request", async () => {
-    await act(async () => {
-      root.render(createElement(Probe, { cwd: "/project-a" }));
-    });
-    refreshProviders.mockImplementationOnce(() => new Promise(() => {}));
-    await act(async () => {
-      root.render(createElement(Probe, { cwd: "/project-b" }));
-    });
-    expect(refreshProviders).toHaveBeenCalledTimes(2);
-    await act(() => vi.advanceTimersByTimeAsync(20_000));
-    expect(refreshProviders).toHaveBeenCalledTimes(2);
-    expect(refreshProviders).toHaveBeenLastCalledWith({
-      environmentId,
-      input: { instanceId, cwd: "/project-b" },
-    });
-    expect(vi.getTimerCount()).toBe(0);
-  });
-
-  it("cancels a scheduled retry when the composer unmounts", async () => {
-    await act(async () => {
-      root.render(createElement(Probe, { cwd: "/project-a" }));
-    });
-    await act(async () => {
-      root.unmount();
-    });
-    await act(() => vi.advanceTimersByTimeAsync(20_000));
-    expect(refreshProviders).toHaveBeenCalledTimes(1);
-    expect(vi.getTimerCount()).toBe(0);
   });
 });

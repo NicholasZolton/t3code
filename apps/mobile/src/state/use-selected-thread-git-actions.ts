@@ -1,9 +1,11 @@
-import { useCallback, useEffect, useEffectEvent, useMemo, useState } from "react";
-import { Alert } from "react-native";
+import { useAtomMount } from "@effect/atom-react";
+import { useState } from "react";
+import * as Dialog from "../components/ui/Dialog";
 
 import { EnvironmentProject, EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
 import type { AtomCommandResult } from "@t3tools/client-runtime/state/runtime";
 import {
+  createVcsStatusRevalidationAtomFamily,
   type GitActionRequestInput,
   type VcsActionOperation,
   type VcsRef,
@@ -27,24 +29,43 @@ import { useVcsTerminology, vcsActionManager, vcsEnvironment } from "../state/vc
 import { uuidv4 } from "../lib/uuid";
 import { appAtomRegistry } from "./atom-registry";
 import { readEnvironmentScope, useEnvironmentScope } from "./session";
-import { setPendingConnectionError } from "./use-remote-environment-registry";
+import {
+  environmentConnectedAtom,
+  setPendingConnectionError,
+} from "./use-remote-environment-registry";
 import { useAtomCommand } from "./use-atom-command";
 import { showGitActionResult } from "./use-vcs-action-state";
 import { useThreadSelection } from "./use-thread-selection";
 import { useSelectedThreadWorktree } from "./use-selected-thread-worktree";
 
+function refreshFailureMessage(cause: Cause.Cause<unknown>): string {
+  const error = Cause.squash(cause);
+  return error instanceof Error ? error.message : "Failed to refresh git status.";
+}
+
+// Selecting a thread or reconnecting its environment refreshes the checkout's
+// status once, shared by every sheet that shows it.
+const selectedThreadStatusRevalidation = createVcsStatusRevalidationAtomFamily({
+  refreshStatus: vcsEnvironment.refreshStatus,
+  connected: environmentConnectedAtom,
+  onRefreshed: (result) =>
+    setPendingConnectionError(
+      AsyncResult.isFailure(result) ? refreshFailureMessage(result.cause) : null,
+    ),
+});
+
 export function useSelectedThreadGitActions() {
   const updateThreadMetadata = useAtomCommand(threadEnvironment.updateMetadata, {
     reportFailure: false,
   });
+  const readRefs = useAtomCommand(vcsEnvironment.readRefs, { reportFailure: false });
   const refreshStatus = useAtomCommand(vcsEnvironment.refreshStatus, { reportFailure: false });
   const switchRef = useAtomCommand(vcsEnvironment.switchRef, { reportFailure: false });
   const createRef = useAtomCommand(vcsEnvironment.createRef, { reportFailure: false });
   const createWorktree = useAtomCommand(vcsEnvironment.createWorktree, { reportFailure: false });
   const removeWorktree = useAtomCommand(vcsEnvironment.removeWorktree, { reportFailure: false });
   const pull = useAtomCommand(vcsEnvironment.pull, { reportFailure: false });
-  const { selectedThread, selectedThreadProject, selectedEnvironmentRuntime } =
-    useThreadSelection();
+  const { selectedThread, selectedThreadProject } = useThreadSelection();
   const canWriteSourceControl = useEnvironmentScope(
     selectedThread?.environmentId ?? null,
     AuthSourceControlWriteScope,
@@ -55,6 +76,10 @@ export function useSelectedThreadGitActions() {
   );
   const canChangeThreadBranch = canWriteSourceControl && canOperateThread;
   const { selectedThreadCwd, selectedThreadWorktreePath } = useSelectedThreadWorktree();
+  const vcsTerminology = useVcsTerminology(
+    selectedThread?.environmentId ?? null,
+    selectedThreadCwd,
+  );
   const [pendingWorkspaceMetadataCleanup, setPendingWorkspaceMetadataCleanup] = useState<
     string | null
   >(null);
@@ -66,318 +91,264 @@ export function useSelectedThreadGitActions() {
     { reportFailure: false },
   );
 
-  const vcsTerminology = useVcsTerminology(
-    selectedThread?.environmentId ?? null,
-    selectedThreadCwd,
-  );
-
   const selectedThreadGitRootCwd = selectedThreadProject?.workspaceRoot ?? null;
-  const branchTarget = useMemo(
-    () => ({
-      environmentId: selectedThread?.environmentId ?? null,
-      cwd: selectedThreadGitRootCwd,
-      query: null,
-    }),
-    [selectedThread?.environmentId, selectedThreadGitRootCwd],
-  );
+  const branchTarget = {
+    environmentId: selectedThread?.environmentId ?? null,
+    cwd: selectedThreadGitRootCwd,
+    query: null,
+  };
   const branchState = useBranches(branchTarget);
-  const updateThreadGitContext = useCallback(
-    async (
-      thread: NonNullable<typeof selectedThread>,
-      nextState: {
-        readonly branch?: string | null;
-        readonly worktreePath?: string | null;
-      },
-    ) => {
-      if (!readEnvironmentScope(thread.environmentId, AuthOrchestrationOperateScope)) {
-        return AsyncResult.failure<never, EnvironmentAuthorizationError>(
-          Cause.fail(
-            new EnvironmentAuthorizationError({
-              requiredScope: AuthOrchestrationOperateScope,
-              message: "This connection cannot update the thread's branch.",
-            }),
-          ),
-        );
-      }
-      return updateThreadMetadata({
-        environmentId: thread.environmentId,
-        input: {
-          threadId: thread.id,
-          ...(nextState.branch !== undefined ? { branch: nextState.branch } : {}),
-          ...(nextState.worktreePath !== undefined ? { worktreePath: nextState.worktreePath } : {}),
-        },
-      });
+  const updateThreadGitContext = async (
+    thread: NonNullable<typeof selectedThread>,
+    nextState: {
+      readonly branch?: string | null;
+      readonly worktreePath?: string | null;
     },
-    [updateThreadMetadata],
-  );
-
-  const refreshSelectedThreadGitStatus = useCallback(
-    async (options?: { readonly quiet?: boolean; readonly cwd?: string | null }) => {
-      if (!selectedThread || !selectedThreadProject) {
-        return null;
-      }
-
-      const cwd = options?.cwd ?? selectedThreadCwd;
-      if (!cwd) {
-        return null;
-      }
-
-      const target = { environmentId: selectedThread.environmentId, cwd };
-      const execute = () =>
-        refreshStatus({
-          environmentId: selectedThread.environmentId,
-          input: { cwd },
-        });
-      const result = options?.quiet
-        ? await execute()
-        : await vcsActionManager.track(
-            appAtomRegistry,
-            target,
-            {
-              operation: "refresh_status",
-              label: "Refreshing source control status",
-            },
-            execute,
-          );
-      if (AsyncResult.isFailure(result)) {
-        const error = Cause.squash(result.cause);
-        const message =
-          error instanceof Error
-            ? error.message
-            : `Failed to refresh ${vcsTerminology.systemName} status.`;
-        setPendingConnectionError(message);
-        return null;
-      }
-      setPendingConnectionError(null);
-      return result.value;
-    },
-    [refreshStatus, selectedThread, selectedThreadCwd, selectedThreadProject, vcsTerminology],
-  );
-
-  // Shell updates replace the selected thread object many times per second while a
-  // turn streams, so key the refresh on primitives.
-  const selectedEnvironmentId = selectedThread?.environmentId ?? null;
-  const selectedThreadId = selectedThread?.id ?? null;
-  const hasSelectedThreadProject = selectedThreadProject !== null;
-  const isEnvironmentConnected = selectedEnvironmentRuntime?.connectionState === "connected";
-  const refreshOnSelection = useEffectEvent(() => {
-    void refreshSelectedThreadGitStatus({ quiet: true });
-  });
-  useEffect(() => {
-    if (
-      selectedEnvironmentId === null ||
-      selectedThreadId === null ||
-      !hasSelectedThreadProject ||
-      selectedThreadCwd === null ||
-      !isEnvironmentConnected
-    ) {
-      return;
+  ) => {
+    if (!readEnvironmentScope(thread.environmentId, AuthOrchestrationOperateScope)) {
+      return AsyncResult.failure<never, EnvironmentAuthorizationError>(
+        Cause.fail(
+          new EnvironmentAuthorizationError({
+            requiredScope: AuthOrchestrationOperateScope,
+            message: "This connection cannot update the thread's branch.",
+          }),
+        ),
+      );
     }
-    refreshOnSelection();
-  }, [
-    selectedEnvironmentId,
-    selectedThreadId,
-    hasSelectedThreadProject,
-    selectedThreadCwd,
-    isEnvironmentConnected,
-  ]);
+    return updateThreadMetadata({
+      environmentId: thread.environmentId,
+      input: {
+        threadId: thread.id,
+        ...(nextState.branch !== undefined ? { branch: nextState.branch } : {}),
+        ...(nextState.worktreePath !== undefined ? { worktreePath: nextState.worktreePath } : {}),
+      },
+    });
+  };
 
-  const runSelectedThreadGitMutation = useCallback(
-    async <T, E>(
-      operation: VcsActionOperation,
-      label: string,
-      execute: (input: {
-        readonly thread: EnvironmentThreadShell;
-        readonly project: EnvironmentProject;
-        readonly cwd: string;
-      }) => Promise<AtomCommandResult<T, E>>,
-      options?: { readonly managedExternally?: boolean; readonly changesThreadBranch?: boolean },
-    ): Promise<T | null> => {
-      if (
-        !selectedThread ||
-        !selectedThreadProject ||
-        !selectedThreadCwd ||
-        !readEnvironmentScope(selectedThread.environmentId, AuthSourceControlWriteScope) ||
-        (options?.changesThreadBranch === true &&
-          !readEnvironmentScope(selectedThread.environmentId, AuthOrchestrationOperateScope))
-      ) {
-        return null;
-      }
+  const refreshSelectedThreadGitStatus = async (options?: {
+    readonly quiet?: boolean;
+    readonly cwd?: string | null;
+  }) => {
+    if (!selectedThread || !selectedThreadProject) {
+      return null;
+    }
 
-      const target = {
+    const cwd = options?.cwd ?? selectedThreadCwd;
+    if (!cwd) {
+      return null;
+    }
+
+    const target = { environmentId: selectedThread.environmentId, cwd };
+    const execute = () =>
+      refreshStatus({
         environmentId: selectedThread.environmentId,
-        cwd: selectedThreadCwd,
-      };
-      setPendingConnectionError(null);
-      const run = () =>
-        execute({
-          thread: selectedThread,
-          project: selectedThreadProject,
-          cwd: selectedThreadCwd,
-        });
-      const result =
-        options?.managedExternally === true
-          ? await run()
-          : await vcsActionManager.track(appAtomRegistry, target, { operation, label }, run);
-      if (AsyncResult.isFailure(result)) {
-        const error = Cause.squash(result.cause);
-        const message = error instanceof Error ? error.message : "Git action failed.";
-        setPendingConnectionError(message);
-        showGitActionResult({ type: "error", title: "Git action failed", description: message });
-        return null;
-      }
-      return result.value;
-    },
-    [selectedThread, selectedThreadCwd, selectedThreadProject],
+        input: { cwd },
+      });
+    const result = options?.quiet
+      ? await execute()
+      : await vcsActionManager.track(
+          appAtomRegistry,
+          target,
+          {
+            operation: "refresh_status",
+            label: "Refreshing source control status",
+          },
+          execute,
+        );
+    if (AsyncResult.isFailure(result)) {
+      setPendingConnectionError(refreshFailureMessage(result.cause));
+      return null;
+    }
+    setPendingConnectionError(null);
+    return result.value;
+  };
+
+  useAtomMount(
+    selectedThreadStatusRevalidation(
+      selectedThread && selectedThreadProject && selectedThreadCwd
+        ? { environmentId: selectedThread.environmentId, cwd: selectedThreadCwd }
+        : null,
+    ),
   );
 
-  const refreshSelectedThreadBranches = useCallback(async (): Promise<ReadonlyArray<VcsRef>> => {
-    branchState.refresh();
-    return dedupeRemoteBranchesWithLocalMatches(branchState.data?.refs ?? []).filter(
+  const runSelectedThreadGitMutation = async <T, E>(
+    operation: VcsActionOperation,
+    label: string,
+    execute: (input: {
+      readonly thread: EnvironmentThreadShell;
+      readonly project: EnvironmentProject;
+      readonly cwd: string;
+    }) => Promise<AtomCommandResult<T, E>>,
+    options?: { readonly managedExternally?: boolean; readonly changesThreadBranch?: boolean },
+  ): Promise<T | null> => {
+    if (
+      !selectedThread ||
+      !selectedThreadProject ||
+      !selectedThreadCwd ||
+      !readEnvironmentScope(selectedThread.environmentId, AuthSourceControlWriteScope) ||
+      (options?.changesThreadBranch === true &&
+        !readEnvironmentScope(selectedThread.environmentId, AuthOrchestrationOperateScope))
+    ) {
+      return null;
+    }
+
+    const target = {
+      environmentId: selectedThread.environmentId,
+      cwd: selectedThreadCwd,
+    };
+    setPendingConnectionError(null);
+    const run = () =>
+      execute({
+        thread: selectedThread,
+        project: selectedThreadProject,
+        cwd: selectedThreadCwd,
+      });
+    const result =
+      options?.managedExternally === true
+        ? await run()
+        : await vcsActionManager.track(appAtomRegistry, target, { operation, label }, run);
+    if (AsyncResult.isFailure(result)) {
+      const error = Cause.squash(result.cause);
+      const message = error instanceof Error ? error.message : "Git action failed.";
+      setPendingConnectionError(message);
+      showGitActionResult({ type: "error", title: "Git action failed", description: message });
+      return null;
+    }
+    return result.value;
+  };
+
+  const refreshSelectedThreadBranches = async (): Promise<ReadonlyArray<VcsRef> | null> => {
+    if (branchTarget.environmentId === null || branchTarget.cwd === null) return null;
+    const result = await readRefs({
+      environmentId: branchTarget.environmentId,
+      input: { cwd: branchTarget.cwd, limit: 100, refresh: true },
+    });
+    if (AsyncResult.isFailure(result)) {
+      const error = Cause.squash(result.cause);
+      const message = error instanceof Error ? error.message : "Failed to refresh branches.";
+      setPendingConnectionError(message);
+      showGitActionResult({ type: "error", title: "Git action failed", description: message });
+      return null;
+    }
+    setPendingConnectionError(null);
+    return dedupeRemoteBranchesWithLocalMatches(result.value.refs).filter(
       (branch) => !branch.isRemote,
     );
-  }, [branchState]);
+  };
 
-  const syncSelectedThreadBranchState = useCallback(
-    async (input: {
-      readonly thread: EnvironmentThreadShell;
-      readonly cwd: string;
-      readonly nextThreadState?: {
-        readonly branch?: string | null;
-        readonly worktreePath?: string | null;
-      };
-    }): Promise<AtomCommandResult<void, unknown>> => {
-      // The Git mutation already landed; refresh what the worktree shows even
-      // when the thread metadata update is denied, so the sheet does not keep
-      // displaying the previous branch.
-      const updateResult = input.nextThreadState
-        ? await updateThreadGitContext(input.thread, input.nextThreadState)
-        : AsyncResult.success(undefined);
-      branchState.refresh();
-      await refreshSelectedThreadGitStatus({ quiet: true, cwd: input.cwd });
-      return AsyncResult.isFailure(updateResult)
-        ? AsyncResult.failure(updateResult.cause)
-        : AsyncResult.success(undefined);
-    },
-    [branchState, refreshSelectedThreadGitStatus, updateThreadGitContext],
-  );
+  const syncSelectedThreadBranchState = async (input: {
+    readonly thread: EnvironmentThreadShell;
+    readonly cwd: string;
+    readonly nextThreadState?: {
+      readonly branch?: string | null;
+      readonly worktreePath?: string | null;
+    };
+  }): Promise<AtomCommandResult<void, unknown>> => {
+    // Git already changed; refresh even if metadata updates fail so the sheet shows the current branch.
+    const updateResult = input.nextThreadState
+      ? await updateThreadGitContext(input.thread, input.nextThreadState)
+      : AsyncResult.success(undefined);
+    branchState.refresh();
+    await refreshSelectedThreadGitStatus({ quiet: true, cwd: input.cwd });
+    return AsyncResult.isFailure(updateResult)
+      ? AsyncResult.failure(updateResult.cause)
+      : AsyncResult.success(undefined);
+  };
 
-  const onCheckoutSelectedThreadBranch = useCallback(
-    async (branch: string) => {
-      return runSelectedThreadGitMutation(
-        "switch_ref",
-        `Switching ${vcsTerminology.refNoun}`,
-        async ({ thread, cwd }) => {
-          const result = await switchRef({
-            environmentId: thread.environmentId,
-            input: { cwd, refName: branch },
-          });
-          if (AsyncResult.isFailure(result)) {
-            return result;
-          }
-          const syncResult = await syncSelectedThreadBranchState({
-            thread,
-            cwd,
-            nextThreadState: {
-              branch: result.value.refName ?? thread.branch,
-              worktreePath: selectedThreadWorktreePath,
-            },
-          });
-          return AsyncResult.isFailure(syncResult) ? AsyncResult.failure(syncResult.cause) : result;
-        },
-        { changesThreadBranch: true },
-      );
-    },
-    [
-      runSelectedThreadGitMutation,
-      selectedThreadWorktreePath,
-      syncSelectedThreadBranchState,
-      switchRef,
-      vcsTerminology,
-    ],
-  );
+  const onCheckoutSelectedThreadBranch = async (branch: string) => {
+    return runSelectedThreadGitMutation(
+      "switch_ref",
+      `Switching ${vcsTerminology.refNoun}`,
+      async ({ thread, cwd }) => {
+        const result = await switchRef({
+          environmentId: thread.environmentId,
+          input: { cwd, refName: branch },
+        });
+        if (AsyncResult.isFailure(result)) {
+          return result;
+        }
+        const syncResult = await syncSelectedThreadBranchState({
+          thread,
+          cwd,
+          nextThreadState: {
+            branch: result.value.refName ?? thread.branch,
+            worktreePath: selectedThreadWorktreePath,
+          },
+        });
+        return AsyncResult.isFailure(syncResult) ? AsyncResult.failure(syncResult.cause) : result;
+      },
+      { changesThreadBranch: true },
+    );
+  };
 
-  const onCreateSelectedThreadBranch = useCallback(
-    async (branch: string) => {
-      return runSelectedThreadGitMutation(
-        "create_ref",
-        `Creating ${vcsTerminology.refNoun}`,
-        async ({ thread, cwd }) => {
-          const result = await createRef({
-            environmentId: thread.environmentId,
-            input: { cwd, refName: branch, switchRef: true },
-          });
-          if (AsyncResult.isFailure(result)) {
-            return result;
-          }
-          const syncResult = await syncSelectedThreadBranchState({
-            thread,
-            cwd,
-            nextThreadState: {
-              branch: result.value.refName ?? thread.branch,
-              worktreePath: selectedThreadWorktreePath,
-            },
-          });
-          return AsyncResult.isFailure(syncResult) ? AsyncResult.failure(syncResult.cause) : result;
-        },
-        { changesThreadBranch: true },
-      );
-    },
-    [
-      runSelectedThreadGitMutation,
-      selectedThreadWorktreePath,
-      syncSelectedThreadBranchState,
-      createRef,
-      vcsTerminology,
-    ],
-  );
+  const onCreateSelectedThreadBranch = async (branch: string) => {
+    return runSelectedThreadGitMutation(
+      "create_ref",
+      `Creating ${vcsTerminology.refNoun}`,
+      async ({ thread, cwd }) => {
+        const result = await createRef({
+          environmentId: thread.environmentId,
+          input: { cwd, refName: branch, switchRef: true },
+        });
+        if (AsyncResult.isFailure(result)) {
+          return result;
+        }
+        const syncResult = await syncSelectedThreadBranchState({
+          thread,
+          cwd,
+          nextThreadState: {
+            branch: result.value.refName ?? thread.branch,
+            worktreePath: selectedThreadWorktreePath,
+          },
+        });
+        return AsyncResult.isFailure(syncResult) ? AsyncResult.failure(syncResult.cause) : result;
+      },
+      { changesThreadBranch: true },
+    );
+  };
 
-  const onCreateSelectedThreadWorktree = useCallback(
-    async (nextWorktree: { readonly baseBranch: string; readonly newBranch: string }) => {
-      return runSelectedThreadGitMutation(
-        "create_worktree",
-        `Creating ${vcsTerminology.workspaceNoun}`,
-        async ({ thread, project }) => {
-          const result = await createWorktree({
-            environmentId: thread.environmentId,
-            input: {
-              cwd: project.workspaceRoot,
-              refName: nextWorktree.baseBranch,
-              newRefName: sanitizeFeatureBranchName(nextWorktree.newBranch),
-              path: null,
-            },
-          });
-          if (AsyncResult.isFailure(result)) {
-            return result;
-          }
-          const syncResult = await syncSelectedThreadBranchState({
-            thread,
-            cwd: result.value.worktree.path,
-            nextThreadState: {
-              branch: result.value.worktree.refName,
-              worktreePath: result.value.worktree.path,
-            },
-          });
-          return AsyncResult.isFailure(syncResult) ? AsyncResult.failure(syncResult.cause) : result;
-        },
-        { changesThreadBranch: true },
-      );
-    },
-    [createWorktree, runSelectedThreadGitMutation, syncSelectedThreadBranchState, vcsTerminology],
-  );
+  const onCreateSelectedThreadWorktree = async (nextWorktree: {
+    readonly baseBranch: string;
+    readonly newBranch: string;
+  }) => {
+    return runSelectedThreadGitMutation(
+      "create_worktree",
+      `Creating ${vcsTerminology.workspaceNoun}`,
+      async ({ thread, project }) => {
+        const result = await createWorktree({
+          environmentId: thread.environmentId,
+          input: {
+            cwd: project.workspaceRoot,
+            refName: nextWorktree.baseBranch,
+            newRefName: sanitizeFeatureBranchName(nextWorktree.newBranch),
+            path: null,
+          },
+        });
+        if (AsyncResult.isFailure(result)) {
+          return result;
+        }
+        const syncResult = await syncSelectedThreadBranchState({
+          thread,
+          cwd: result.value.worktree.path,
+          nextThreadState: {
+            branch: result.value.worktree.refName,
+            worktreePath: result.value.worktree.path,
+          },
+        });
+        return AsyncResult.isFailure(syncResult) ? AsyncResult.failure(syncResult.cause) : result;
+      },
+      { changesThreadBranch: true },
+    );
+  };
 
-  // Creating a workspace on a phone must have a way back out, or one made here
-  // could only be cleaned up from the web client.
-  const onRemoveSelectedThreadWorkspace = useCallback(async () => {
+  const onRemoveSelectedThreadWorkspace = async (): Promise<boolean> => {
     const thread = selectedThread;
     const project = selectedThreadProject;
     const worktreePath = selectedThreadWorktreePath;
-    if (!thread || !project || !worktreePath) {
-      return false;
-    }
+    if (!thread || !project || !worktreePath || !canChangeThreadBranch) return false;
     if (pendingWorkspaceMetadataCleanup !== worktreePath) {
       const confirmed = await new Promise<boolean>((resolve) => {
-        Alert.alert(
+        Dialog.alert(
           `Remove this ${vcsTerminology.workspaceNoun}?`,
           `${worktreePath}\n\nThe thread stays; only the ${vcsTerminology.workspaceNoun} is deleted.`,
           [
@@ -387,7 +358,6 @@ export function useSelectedThreadGitActions() {
         );
       });
       if (!confirmed) return false;
-
       let result = await removeWorktree({
         environmentId: thread.environmentId,
         input: { cwd: project.workspaceRoot, path: worktreePath, force: false },
@@ -397,7 +367,7 @@ export function useSelectedThreadGitActions() {
         const message = error instanceof Error ? error.message : "An error occurred.";
         if (message.includes("uncommitted or unbookmarked changes")) {
           const discard = await new Promise<boolean>((resolve) => {
-            Alert.alert(
+            Dialog.alert(
               `Discard changes and remove ${vcsTerminology.workspaceNoun}?`,
               `Uncommitted or unbookmarked changes in ${worktreePath} will be lost.`,
               [
@@ -440,22 +410,11 @@ export function useSelectedThreadGitActions() {
       return false;
     }
     setPendingWorkspaceMetadataCleanup(null);
-    showGitActionResult({
-      type: "success",
-      title: `${vcsTerminology.workspaceNounTitle} removed`,
-    });
+    showGitActionResult({ type: "success", title: `${vcsTerminology.workspaceNounTitle} removed` });
     return true;
-  }, [
-    pendingWorkspaceMetadataCleanup,
-    removeWorktree,
-    selectedThread,
-    selectedThreadProject,
-    selectedThreadWorktreePath,
-    syncSelectedThreadBranchState,
-    vcsTerminology,
-  ]);
+  };
 
-  const onPullSelectedThreadBranch = useCallback(async () => {
+  const onPullSelectedThreadBranch = async () => {
     await runSelectedThreadGitMutation(
       "pull",
       "Pulling latest changes",
@@ -478,73 +437,65 @@ export function useSelectedThreadGitActions() {
         return result;
       },
     );
-  }, [pull, refreshSelectedThreadGitStatus, runSelectedThreadGitMutation]);
+  };
 
-  const onRunSelectedThreadGitAction = useCallback(
-    async (input: GitActionRequestInput): Promise<GitRunStackedActionResult | null> => {
-      const actionId = uuidv4();
-      return await runSelectedThreadGitMutation(
-        "run_change_request",
-        "Running source control action",
-        async ({ thread, cwd }) => {
-          const result = await runStackedAction({
-            actionId,
-            action: input.action,
-            ...(input.commitMessage ? { commitMessage: input.commitMessage } : {}),
-            ...(input.featureBranch ? { featureBranch: input.featureBranch } : {}),
-            ...(input.filePaths?.length ? { filePaths: [...input.filePaths] } : {}),
-            threadId: thread.id,
-          });
-          if (AsyncResult.isFailure(result)) {
-            return result;
-          }
-
-          if (result.value.branch.status === "created" && result.value.branch.name) {
-            const syncResult = await syncSelectedThreadBranchState({
-              thread,
-              cwd,
-              nextThreadState: {
-                branch: result.value.branch.name,
-                worktreePath: selectedThreadWorktreePath,
-              },
-            });
-            if (AsyncResult.isFailure(syncResult)) {
-              return AsyncResult.failure(syncResult.cause);
-            }
-          } else {
-            await refreshSelectedThreadGitStatus({ quiet: true, cwd });
-          }
-          showGitActionResult({
-            type: "success",
-            title: result.value.toast.title,
-            description: result.value.toast.description,
-            prUrl:
-              result.value.toast.cta.kind === "open_pr" ? result.value.toast.cta.url : undefined,
-          });
+  const onRunSelectedThreadGitAction = async (
+    input: GitActionRequestInput,
+  ): Promise<GitRunStackedActionResult | null> => {
+    const actionId = uuidv4();
+    return await runSelectedThreadGitMutation(
+      "run_change_request",
+      "Running source control action",
+      async ({ thread, cwd }) => {
+        const result = await runStackedAction({
+          actionId,
+          action: input.action,
+          ...(input.commitMessage ? { commitMessage: input.commitMessage } : {}),
+          ...(input.featureBranch ? { featureBranch: input.featureBranch } : {}),
+          ...(input.filePaths?.length ? { filePaths: [...input.filePaths] } : {}),
+          threadId: thread.id,
+        });
+        if (AsyncResult.isFailure(result)) {
           return result;
-        },
-        { managedExternally: true, changesThreadBranch: input.featureBranch === true },
-      );
-    },
-    [
-      runStackedAction,
-      refreshSelectedThreadGitStatus,
-      runSelectedThreadGitMutation,
-      selectedThreadWorktreePath,
-      syncSelectedThreadBranchState,
-    ],
-  );
+        }
+
+        if (result.value.branch.status === "created" && result.value.branch.name) {
+          const syncResult = await syncSelectedThreadBranchState({
+            thread,
+            cwd,
+            nextThreadState: {
+              branch: result.value.branch.name,
+              worktreePath: selectedThreadWorktreePath,
+            },
+          });
+          if (AsyncResult.isFailure(syncResult)) {
+            return AsyncResult.failure(syncResult.cause);
+          }
+        } else {
+          await refreshSelectedThreadGitStatus({ quiet: true, cwd });
+        }
+        showGitActionResult({
+          type: "success",
+          title: result.value.toast.title,
+          description: result.value.toast.description,
+          prUrl: result.value.toast.cta.kind === "open_pr" ? result.value.toast.cta.url : undefined,
+        });
+        return result;
+      },
+      { managedExternally: true, changesThreadBranch: input.featureBranch === true },
+    );
+  };
 
   return {
     canWriteSourceControl,
     canChangeThreadBranch,
+    pendingWorkspaceMetadataCleanup,
     refreshSelectedThreadGitStatus,
     refreshSelectedThreadBranches,
     onCheckoutSelectedThreadBranch,
     onCreateSelectedThreadBranch,
     onCreateSelectedThreadWorktree,
     onRemoveSelectedThreadWorkspace,
-    pendingWorkspaceMetadataCleanup: pendingWorkspaceMetadataCleanup === selectedThreadWorktreePath,
     onPullSelectedThreadBranch,
     onRunSelectedThreadGitAction,
   };

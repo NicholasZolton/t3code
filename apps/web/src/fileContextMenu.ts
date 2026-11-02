@@ -1,10 +1,3 @@
-/**
- * Right-click actions for a workspace file: copy its path, reveal it in the
- * environment's file manager, and open it in an editor. Reuse the chat file-chip menu's
- * machinery: reveal rides `shell.openInEditor` with `reveal: true`, which the
- * server only honors when its `shellRevealInFileManager` config flag is set,
- * so both actions work for every client and connection mode.
- */
 import {
   EDITORS,
   type ContextMenuItem,
@@ -140,8 +133,7 @@ export function useFileContextMenu(environmentId: EnvironmentId | null) {
 
   const availableEditors = serverConfig?.availableEditors ?? [];
   const capabilities: FileContextMenuCapabilities = {
-    // The reveal wording comes from the server because on WSL the reveal can
-    // run through Windows File Explorer even though the host reports Linux.
+    // WSL can reveal in Windows Explorer despite reporting Linux; use server wording.
     revealLabel:
       environmentId !== null &&
       serverConfig?.shellRevealInFileManager === true &&

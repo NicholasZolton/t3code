@@ -11,10 +11,19 @@ import {
 } from "@t3tools/shared/vcs";
 import { sourceControlClients } from "@t3tools/client-runtime/source-control-clients";
 import type { ChangeRequestTerminology } from "@t3tools/client-runtime/source-control-clients";
+import {
+  changeRequestTerminologyFor,
+  type DefaultBranchActionDialogCopy,
+  type DefaultBranchConfirmableAction,
+  type GitActionIconName,
+  type GitDialogAction,
+} from "@t3tools/client-runtime/state/vcs";
 
-export type GitActionIconName = "commit" | "push" | "pr";
-
-export type GitDialogAction = "commit" | "push" | "create_pr";
+export {
+  requiresDefaultBranchConfirmation,
+  type DefaultBranchConfirmableAction,
+  type GitActionIconName,
+} from "@t3tools/client-runtime/state/vcs";
 
 export interface GitActionMenuItem {
   id: "commit" | "push" | "pr";
@@ -33,12 +42,6 @@ export interface GitQuickAction {
   hint?: string;
 }
 
-export interface DefaultBranchActionDialogCopy {
-  title: string;
-  description: string;
-  continueLabel: string;
-}
-
 export interface GitActionProgressPresentation {
   readonly status: string;
   readonly output: string | null;
@@ -50,12 +53,6 @@ export interface GitActionResultToastTiming {
   readonly dismissAfterVisibleMs: number | null;
 }
 
-export type DefaultBranchConfirmableAction =
-  | "push"
-  | "create_pr"
-  | "commit_push"
-  | "commit_push_pr";
-
 export const GIT_ACTION_SUCCESS_VISIBLE_MS = 10_000;
 
 export function resolveGitActionResultToastTiming(
@@ -65,12 +62,6 @@ export function resolveGitActionResultToastTiming(
     timeout: 0,
     dismissAfterVisibleMs: type === "success" ? GIT_ACTION_SUCCESS_VISIBLE_MS : null,
   };
-}
-
-function resolveChangeRequestTerminology(
-  gitStatus: VcsStatusResult | null,
-): ChangeRequestTerminology {
-  return sourceControlClients.get(gitStatus?.sourceControlProvider?.kind).changeRequest;
 }
 
 export function resolveGitActionProgressPresentation(input: {
@@ -168,7 +159,7 @@ export function buildMenuItems(
   hasPrimaryRemote = true,
 ): GitActionMenuItem[] {
   if (!gitStatus) return [];
-  const terminology = resolveChangeRequestTerminology(gitStatus);
+  const terminology = changeRequestTerminologyFor(gitStatus);
 
   const hasBranch = gitStatus.refName !== null;
   const hasChanges = gitStatus.hasWorkingTreeChanges;
@@ -258,7 +249,7 @@ export function resolveQuickAction(
   const hasDefaultBranchDelta = (gitStatus.aheadOfDefaultCount ?? gitStatus.aheadCount) > 0;
   const isBehind = gitStatus.behindCount > 0;
   const isDiverged = isAhead && isBehind;
-  const terminology = resolveChangeRequestTerminology(gitStatus);
+  const terminology = changeRequestTerminologyFor(gitStatus);
   const vcs = resolveVcsTerminology(gitStatus);
 
   if (!hasBranch) {
@@ -271,7 +262,7 @@ export function resolveQuickAction(
   }
 
   if (hasChanges) {
-    if (!gitStatus.hasUpstream && !hasPrimaryRemote) {
+    if (isBehind || (!gitStatus.hasUpstream && !hasPrimaryRemote)) {
       return { label: "Commit", disabled: false, kind: "run_action", action: "commit" };
     }
     if (hasOpenPr || isDefaultRef) {
@@ -391,19 +382,6 @@ export function resolveQuickAction(
   };
 }
 
-export function requiresDefaultBranchConfirmation(
-  action: GitStackedAction,
-  isDefaultRef: boolean,
-): boolean {
-  if (!isDefaultRef) return false;
-  return (
-    action === "push" ||
-    action === "create_pr" ||
-    action === "commit_push" ||
-    action === "commit_push_pr"
-  );
-}
-
 export function resolveDefaultBranchActionDialogCopy(input: {
   action: DefaultBranchConfirmableAction;
   branchName: string;
@@ -445,10 +423,7 @@ export function resolveDefaultBranchActionDialogCopy(input: {
   };
 }
 
-/**
- * Why the default-ref dialog cannot check out a feature branch, or null when it can.
- * The server names that branch from the uncommitted changes, so a clean tree cannot use it.
- */
+/** Clean trees cannot create feature branches because the server derives names from uncommitted changes. */
 export function resolveFeatureBranchUnavailableReason(input: {
   branchName: string;
   hasWorkingTreeChanges: boolean;
@@ -510,4 +485,27 @@ export function resolveLiveThreadBranchUpdate(input: {
   };
 }
 
-export { resolveAutoFeatureBranchName } from "@t3tools/shared/git";
+export type ChangesLineTotals = {
+  readonly insertions: number;
+  readonly deletions: number;
+};
+
+// `branchChanges ?? workingTree` treats `{0,0}` as present, so a zero branch total hid a dirty
+// working tree and the Changes row read +0 while Diff still showed the work.
+export function resolveChangesTotals(
+  status: VcsStatusResult | null | undefined,
+): ChangesLineTotals | null {
+  if (!status) return null;
+  const branch = status.branchChanges;
+  const tree = status.workingTree;
+  if (branch && (branch.insertions > 0 || branch.deletions > 0)) {
+    return { insertions: branch.insertions, deletions: branch.deletions };
+  }
+  if (tree.insertions > 0 || tree.deletions > 0) {
+    return { insertions: tree.insertions, deletions: tree.deletions };
+  }
+  if (branch) {
+    return { insertions: branch.insertions, deletions: branch.deletions };
+  }
+  return { insertions: tree.insertions, deletions: tree.deletions };
+}

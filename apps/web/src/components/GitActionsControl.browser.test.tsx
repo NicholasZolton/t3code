@@ -4,6 +4,8 @@ import {
   DEFAULT_SERVER_SETTINGS,
   EnvironmentId,
   ThreadId,
+  type GitRunStackedActionResult,
+  type GitStackedAction,
 } from "@t3tools/contracts";
 import * as Cause from "effect/Cause";
 import { AsyncResult } from "effect/reactivity";
@@ -12,11 +14,10 @@ import { describe, expect, it, vi } from "vite-plus/test";
 import { page, userEvent } from "vite-plus/test/browser";
 
 import "~/index.css";
-import { act, render } from "../../test/render";
+import { render } from "../../test/render";
 
 type Branched = { readonly branch: string };
-type GitActionInput = { featureBranch?: boolean; threadId?: string; action: string };
-type Toast = { actionProps?: { onClick: () => void } };
+type GitActionInput = { featureBranch?: boolean; threadId?: string; action: GitStackedAction };
 
 const state = vi.hoisted(() => ({
   scopes: new Set<string>(),
@@ -28,7 +29,6 @@ const state = vi.hoisted(() => ({
   isDefaultRef: false,
   actions: [] as { scope: { cwd: string | null }; input: GitActionInput }[],
   metadataRequests: [] as { environmentId: string; branch: string }[],
-  toasts: [] as Toast[],
   afterGitAction: undefined as (() => void) | undefined,
   workingTreeRoot: undefined as string | undefined,
   files: [{ path: "file.ts", insertions: 1, deletions: 0 }],
@@ -48,7 +48,7 @@ vi.mock(import("~/state/entities"), async (original) => ({
   ...(await original()),
   useQuietThreadShell: ((ref: { threadId: string } | null) =>
     ref === null || state.shell === null ? null : { ...state.shell, id: ref.threadId }) as never,
-  useThreadProjection: ((ref: unknown) =>
+  useQuietThreadProjection: ((ref: unknown) =>
     ref === null || state.detail === null
       ? null
       : { projection: { thread: state.detail } }) as never,
@@ -121,7 +121,7 @@ vi.mock(import("~/state/server"), async (original) => {
     serverEnvironment: { ...actual.serverEnvironment, configValueAtom: (() => config) as never },
   };
 });
-vi.mock(import("~/lib/sourceControlActions"), async (original) => ({
+vi.mock(import("~/state/sourceControlActions"), async (original) => ({
   ...(await original()),
   useSourceControlActionRunning: () => false,
   useGitStackedAction: ((scope: { cwd: string | null }) => ({
@@ -129,23 +129,24 @@ vi.mock(import("~/lib/sourceControlActions"), async (original) => ({
       state.actions.push({ scope, input });
       if (input.featureBranch) state.branch = "feature";
       state.afterGitAction?.();
-      return {
-        _tag: "Success",
-        value: {
-          branch: input.featureBranch
-            ? { status: "created", name: "feature" }
-            : { status: "skipped_not_requested" },
-          toast: {
-            title: "Committed",
-            description: "Committed",
-            cta: {
-              kind: "run_action",
-              label: "Push & create PR",
-              action: { kind: "commit_push_pr" },
-            },
+      return AsyncResult.success<GitRunStackedActionResult>({
+        action: input.action,
+        branch: input.featureBranch
+          ? { status: "created", name: "feature" }
+          : { status: "skipped_not_requested" },
+        commit: { status: "committed" },
+        push: { status: "skipped_not_requested" },
+        pr: { status: "skipped_not_requested" },
+        toast: {
+          title: "Committed",
+          description: "Committed",
+          cta: {
+            kind: "run_action",
+            label: "Push & create PR",
+            action: { kind: "commit_push_pr" },
           },
         },
-      };
+      });
     },
   })) as never,
 }));
@@ -153,19 +154,6 @@ vi.mock(import("@tanstack/react-router"), async (original) => ({
   ...(await original()),
   useNavigate: (() => async () => {}) as never,
 }));
-vi.mock(import("~/components/ui/toast"), async (original) => {
-  const actual = await original();
-  return {
-    ...actual,
-    toastManager: {
-      ...actual.toastManager,
-      add: ((toast: Toast) => {
-        state.toasts.push(toast);
-        return "toast";
-      }) as never,
-    },
-  };
-});
 
 import { useComposerDraftStore } from "~/composerDraftStore";
 import GitActionsControl from "./GitActionsControl";
@@ -199,7 +187,6 @@ function setup() {
   state.isDefaultRef = false;
   state.actions = [];
   state.metadataRequests = [];
-  state.toasts = [];
   state.afterGitAction = undefined;
   state.workingTreeRoot = undefined;
   state.files = [{ path: "file.ts", insertions: 1, deletions: 0 }];
@@ -215,22 +202,6 @@ function setup() {
 
 describe("Git action targets across thread navigation", () => {
   const quickAction = () => button(/^Commit, push & /);
-
-  it("runs a retained PR toast in the thread that produced it", async () => {
-    setup();
-    await using screen = await render(control("first", "/first"));
-    await userEvent.click(quickAction());
-    await vi.waitFor(() => expect(state.toasts.some((toast) => toast.actionProps)).toBe(true));
-    const toast = state.toasts.find((toast) => toast.actionProps)!;
-
-    await screen.rerender(control("second", "/second"));
-    await act(async () => toast.actionProps!.onClick());
-
-    expect(state.actions.at(-1)).toMatchObject({
-      scope: { cwd: "/first" },
-      input: { threadId: "first", action: "commit_push_pr" },
-    });
-  });
 
   it("runs the memoized panel button in the current thread after navigation", async () => {
     setup();

@@ -62,10 +62,9 @@ export class JjWorkflow extends Context.Service<
   }
 >()("t3/jj/JjWorkflow") {}
 
-/** @public Service construction is part of the canonical Effect module API. */
+/** @public */
 export const make = Effect.gen(function* () {
   const withWorkspaceQueries = yield* makeWorkspaceQueries;
-  const environment = yield* HostProcess.Environment;
   const config = yield* ServerConfig;
   const crypto = yield* Crypto.Crypto;
   const driver = yield* JjVcsDriver.JjVcsDriver;
@@ -110,12 +109,10 @@ export const make = Effect.gen(function* () {
       );
     const gitDir = paths.gitDir;
     if (gitDir === null) {
-      return yield* Effect.fail(
-        jjFailure(
-          input.operation,
-          input.cwd,
-          "This Jujutsu repository has no colocated Git store.",
-        ),
+      return yield* jjFailure(
+        input.operation,
+        input.cwd,
+        "This Jujutsu repository has no colocated Git store.",
       );
     }
     // `colocatedGitCommand` picks the options it passes through; only the nullable timeout, which
@@ -391,14 +388,10 @@ export const make = Effect.gen(function* () {
         return bookmark?.target ? { baseBranch: bookmark.name, baseRef: bookmark.target } : null;
       }),
       headContext: (configCwd, name, upstreamRef) =>
-        GitManager.resolveBranchHeadContext(
-          { readConfigValue, executeGit, environment },
-          configCwd,
-          {
-            branch: name,
-            upstreamRef,
-          },
-        ),
+        GitManager.resolveBranchHeadContext({ readConfigValue, executeGit }, configCwd, {
+          branch: name,
+          upstreamRef,
+        }),
       resolvePrimaryRemoteName: (remoteCwd) =>
         remotes.requirePrimaryRemoteName("JjWorkflow.resolvePrimaryRemoteName", remoteCwd),
       resolveDefaultRefName: (defaultCwd) =>
@@ -445,7 +438,9 @@ export const make = Effect.gen(function* () {
   });
 
   return JjWorkflow.of({
-    deleteLocalBranch: (input) => refs.deleteLocalBranch(input),
+    deleteLocalBranch: Effect.fn("JjWorkflow.deleteLocalBranch")((input) =>
+      refs.deleteLocalBranch(input),
+    ),
     branchPullRequest: Effect.fn("JjWorkflow.branchPullRequest")(function* (
       ...[input, options]: Parameters<GitManager.GitManager["Service"]["branchPullRequest"]>
     ) {
@@ -476,7 +471,7 @@ export const make = Effect.gen(function* () {
         options,
       );
     }),
-    registeredWorkspaces: (cwd) =>
+    registeredWorkspaces: Effect.fn("JjWorkflow.registeredWorkspaces")((cwd) =>
       driver
         .listWorkspaces(cwd)
         .pipe(
@@ -489,6 +484,7 @@ export const make = Effect.gen(function* () {
             ),
           ),
         ),
+    ),
     hasCommit,
     status: status.status,
     localStatus: status.localStatus,
@@ -497,10 +493,11 @@ export const make = Effect.gen(function* () {
     invalidateRemoteStatus: invalidateStatus,
     invalidateStatus,
     pullCurrentBranch: remotes.pullCurrentBranch,
-    runStackedAction: (input, options) =>
+    runStackedAction: Effect.fn("JjWorkflow.runStackedAction")((input, options) =>
       withChangeRequestServices(stackedAction.runStackedAction(input, options)),
+    ),
     resolvePullRequest: pullRequestThread.resolvePullRequest,
-    preparePullRequestThread: (input) =>
+    preparePullRequestThread: Effect.fn("JjWorkflow.preparePullRequestThread")((input) =>
       workspaceSettings(input).pipe(
         withWorkspaceQueries,
         Effect.provideService(ServerSettings.ServerSettingsService, serverSettingsService),
@@ -520,6 +517,7 @@ export const make = Effect.gen(function* () {
           }),
         ),
       ),
+    ),
     listRefs: refs.listRefs,
     createWorktree: workspaces.createWorktree,
     removeWorktree: workspaces.removeWorktree,

@@ -28,6 +28,7 @@ export const makeWorkspaceQueries = Effect.gen(function* () {
 export const workspaceSettings = Effect.fnUntraced(function* (input: {
   readonly cwd: string;
   readonly threadId?: ThreadId | undefined;
+  readonly projectId?: ProjectId | undefined;
 }) {
   const service = yield* ServerSettingsService;
   const settings = yield* service.getSettings;
@@ -36,8 +37,10 @@ export const workspaceSettings = Effect.fnUntraced(function* (input: {
   const projects = yield* Effect.serviceOption(ProjectStore.ProjectStoreV2);
   const projectId: ProjectId | null = yield* Effect.gen(function* () {
     if (input.threadId !== undefined && Option.isSome(threads)) {
-      return (yield* threads.value.getThreadShell(input.threadId))?.projectId ?? null;
+      const thread = yield* threads.value.getThreadShell(input.threadId);
+      if (thread !== null) return thread.projectId;
     }
+    if (input.projectId !== undefined) return input.projectId;
     if (Option.isSome(projects)) {
       return (
         Option.getOrNull(yield* projects.value.findActiveByWorkspaceRoot(input.cwd))?.projectId ??

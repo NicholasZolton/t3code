@@ -82,7 +82,6 @@ function readsFor(providerCwd: string): ChangeRequestVcsReads {
         {
           readConfigValue: () => Effect.succeed(null),
           executeGit: () => Effect.die("No remote lookup expected"),
-          environment: {},
         },
         cwd,
         { branch: refName, upstreamRef },

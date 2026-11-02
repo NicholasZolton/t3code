@@ -34,7 +34,7 @@ export interface VcsTerminology {
   readonly currentRefFallback: string;
 }
 
-export const GIT_VCS_TERMINOLOGY: VcsTerminology = {
+export const DEFAULT_VCS_TERMINOLOGY: VcsTerminology = {
   systemName: "Git",
   refNoun: "branch",
   refNounPlural: "branches",
@@ -64,11 +64,9 @@ export const JJ_VCS_TERMINOLOGY: VcsTerminology = {
   currentRefFallback: "working copy",
 };
 
-export const DEFAULT_VCS_TERMINOLOGY = GIT_VCS_TERMINOLOGY;
-
 /** `null`/`undefined`/`"unknown"` resolve to Git terms so a transient status never flips copy. */
 export function getVcsTerminology(kind: VcsDriverKind | null | undefined): VcsTerminology {
-  return kind === "jj" ? JJ_VCS_TERMINOLOGY : GIT_VCS_TERMINOLOGY;
+  return kind === "jj" ? JJ_VCS_TERMINOLOGY : DEFAULT_VCS_TERMINOLOGY;
 }
 
 /** The accessor every client surface uses; mirrors `resolveChangeRequestTerminology`. */

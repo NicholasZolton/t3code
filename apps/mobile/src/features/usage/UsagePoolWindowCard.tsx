@@ -80,18 +80,12 @@ export function PoolWindowCard({
   const nextRefill = pool.resets.find((reset) => reset.restoresPercent > 0);
   const openAccount = (account: LimitAccount) => {
     if (onOpenAccount) return onOpenAccount(account);
-    navigation.navigate("SettingsSheet", {
-      screen: "SettingsContent",
-      params: {
-        screen: "SettingsUsageAccount",
-        params: {
-          accountKey: account.key,
-          windowId: pool.id,
-          windowKind: pool.kind,
-          environmentIds,
-          now,
-        },
-      },
+    navigation.navigate("SettingsUsageAccount", {
+      accountKey: account.key,
+      windowId: pool.id,
+      windowKind: pool.kind,
+      environmentIds,
+      now,
     });
   };
   return (

@@ -14,12 +14,8 @@ import {
   JJ_WORKING_COPY_REVISION,
   type VcsTerminology,
 } from "@t3tools/shared/vcs";
-import { toSortableTimestamp } from "../lib/threadSort";
-export {
-  dedupeRemoteBranchesWithLocalMatches,
-  deriveLocalBranchNameFromRemoteRef,
-  sanitizeNewRefName,
-} from "@t3tools/shared/git";
+import { toSortableTimestamp } from "@t3tools/client-runtime/state/thread-sort";
+export { deriveLocalBranchNameFromRemoteRef, sanitizeNewRefName } from "@t3tools/shared/git";
 
 export interface EnvironmentOption {
   environmentId: EnvironmentId;
@@ -77,17 +73,16 @@ export function shouldShowComposerContextStrip(input: {
   hasActiveProject: boolean;
   isGitRepo: boolean;
   showEnvironmentIndicator: boolean;
-  hostsRestingComposerControls: boolean;
 }): boolean {
+  // A new thread always shows the strip, since it names the permissions the first send uses.
   return (
     input.hasActiveProject &&
-    (input.isDraftHeroState || input.persistInActiveThreads) &&
-    (input.isGitRepo || input.showEnvironmentIndicator || input.hostsRestingComposerControls)
+    (input.isDraftHeroState ||
+      (input.persistInActiveThreads && (input.isGitRepo || input.showEnvironmentIndicator)))
   );
 }
 
-// Labels collapse to icons when the strip's content no longer fits. A small
-// hysteresis on the way back out keeps the boundary from flapping.
+// Hysteresis prevents labels and icons from flapping at the width boundary.
 const CONTEXT_STRIP_COMPACT_EXPAND_HYSTERESIS_PX = 16;
 
 export function resolveContextStripLabelsCompact(input: {

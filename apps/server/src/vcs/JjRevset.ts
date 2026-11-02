@@ -11,7 +11,7 @@ const COMMIT_ID_PATTERN = /^[0-9a-f]{40}$/;
 const CHANGE_ID_PATTERN = /^[k-z]{32}$/;
 
 /** Escapes `\` and `"` for a jj string literal. */
-export function escapeRevsetString(value: string): string {
+function escapeRevsetString(value: string): string {
   return value.replaceAll("\\", "\\\\").replaceAll('"', '\\"');
 }
 

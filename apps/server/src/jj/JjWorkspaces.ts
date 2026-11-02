@@ -82,15 +82,16 @@ export const makeJjWorkspaces = (deps: JjWorkspaceOpsDeps): JjWorkspaceOps => {
       timeoutMs: 30_000,
     });
 
-  const removeIfOnlyJjMetadata = (directory: string) =>
-    Effect.gen(function* () {
-      const entries = yield* fileSystem
-        .readDirectory(directory)
-        .pipe(Effect.orElseSucceed(() => [] as ReadonlyArray<string>));
-      if (entries.length === 0 || (entries.length === 1 && entries[0] === ".jj")) {
-        yield* fileSystem.remove(directory, { recursive: true }).pipe(Effect.ignore);
-      }
-    });
+  const removeIfOnlyJjMetadata = Effect.fn("JjWorkspaces.removeIfOnlyJjMetadata")(function* (
+    directory: string,
+  ) {
+    const entries = yield* fileSystem
+      .readDirectory(directory)
+      .pipe(Effect.orElseSucceed(() => [] as ReadonlyArray<string>));
+    if (entries.length === 0 || (entries.length === 1 && entries[0] === ".jj")) {
+      yield* fileSystem.remove(directory, { recursive: true }).pipe(Effect.ignore);
+    }
+  });
 
   const preserveRegisteredWorkspace = Effect.fn("JjWorkspaces.preserveRegisteredWorkspace")(
     function* (operation: string, cwd: string, name: string, bookmark: string) {
@@ -230,12 +231,10 @@ export const makeJjWorkspaces = (deps: JjWorkspaceOpsDeps): JjWorkspaceOps => {
           .readDirectory(worktreePath)
           .pipe(Effect.orElseSucceed(() => [] as ReadonlyArray<string>));
         if (entries.length > 0) {
-          return yield* Effect.fail(
-            jjFailure(
-              operation,
-              input.cwd,
-              `${worktreePath} already exists and is not a Jujutsu workspace.`,
-            ),
+          return yield* jjFailure(
+            operation,
+            input.cwd,
+            `${worktreePath} already exists and is not a Jujutsu workspace.`,
           );
         }
       }
@@ -394,19 +393,19 @@ export const makeJjWorkspaces = (deps: JjWorkspaceOpsDeps): JjWorkspaceOps => {
       );
 
       if (matched === undefined) {
-        return yield* Effect.fail(
-          jjFailure(operation, input.cwd, `No Jujutsu workspace is registered at ${input.path}.`),
+        return yield* jjFailure(
+          operation,
+          input.cwd,
+          `No Jujutsu workspace is registered at ${input.path}.`,
         );
       }
       if (matched.name === "default" || matched.root === paths.mainWorkspaceRoot) {
         // `jj workspace forget default` is permitted by jj and leaves the main root without a
         // working copy; `git worktree remove` refuses the main worktree, and so does this.
-        return yield* Effect.fail(
-          jjFailure(
-            operation,
-            input.cwd,
-            `${input.path} is the main Jujutsu workspace and cannot be removed.`,
-          ),
+        return yield* jjFailure(
+          operation,
+          input.cwd,
+          `${input.path} is the main Jujutsu workspace and cannot be removed.`,
         );
       }
 
@@ -476,12 +475,10 @@ export const makeJjWorkspaces = (deps: JjWorkspaceOpsDeps): JjWorkspaceOps => {
         input.force !== true &&
         !(Option.isSome(change) && change.value.empty && stranded)
       ) {
-        return yield* Effect.fail(
-          jjFailure(
-            operation,
-            input.cwd,
-            "Workspace has uncommitted or unbookmarked changes. Remove it with force to discard them.",
-          ),
+        return yield* jjFailure(
+          operation,
+          input.cwd,
+          "Workspace has uncommitted or unbookmarked changes. Remove it with force to discard them.",
         );
       }
 

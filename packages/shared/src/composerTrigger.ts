@@ -47,13 +47,7 @@ function isWhitespace(char: string): boolean {
   return char === " " || char === "\n" || char === "\t" || char === "\r";
 }
 
-/**
- * Detect an active trigger (@path, $skill, /command, >prompt) at the cursor position.
- *
- * Accepts an optional `isWhitespaceChar` override so callers with inline
- * placeholder characters (e.g. terminal context chips on web) can treat
- * those as token boundaries.
- */
+/** A second slash makes the whole word a path, even when the caret precedes that slash. */
 export function isPathWord(
   text: string,
   wordStart: number,
@@ -108,7 +102,7 @@ export function detectComposerTrigger(
       };
     }
 
-    const modelMatch = /^\/model(?:\s+(.*))?$/.exec(linePrefix);
+    const modelMatch = /^\/model(?:\s+(.*))?$/i.exec(linePrefix);
     if (modelMatch) {
       return {
         kind: "slash-model",

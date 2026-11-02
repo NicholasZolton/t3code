@@ -1,25 +1,4 @@
-import {
-  WORKTREE_SETUP_ACTIVITY_KIND,
-  WorktreeSetupSnapshot,
-  type ThreadId,
-} from "@t3tools/contracts";
-import * as Option from "effect/Option";
-import * as Schema from "effect/Schema";
-
-const decodeWorktreeSetupSnapshot = Schema.decodeUnknownOption(WorktreeSetupSnapshot);
-
-export function findRecordedWorktreeSetup(
-  activities: ReadonlyArray<{ readonly kind: string; readonly payload: unknown }>,
-  threadId: ThreadId,
-): WorktreeSetupSnapshot | null {
-  for (let index = activities.length - 1; index >= 0; index -= 1) {
-    const activity = activities[index]!;
-    if (activity.kind !== WORKTREE_SETUP_ACTIVITY_KIND) continue;
-    const decoded = decodeWorktreeSetupSnapshot(activity.payload);
-    if (Option.isSome(decoded) && decoded.value.threadId === threadId) return decoded.value;
-  }
-  return null;
-}
+import type { WorktreeSetupSnapshot } from "@t3tools/contracts";
 
 export function resolveVisibleWorktreeSetup(input: {
   live: WorktreeSetupSnapshot | null;
@@ -39,31 +18,6 @@ export function resolveVisibleWorktreeSetup(input: {
   return snapshot.stages.some((stage) => stage.status === "failed") ? snapshot : null;
 }
 
-/** Reattach to an in-flight setup after a reload, even if its turn already started. */
-export function shouldSubscribeToWorktreeSetup(input: {
-  live: WorktreeSetupSnapshot | null;
-  recorded: WorktreeSetupSnapshot | null;
-  preparing: boolean;
-}): boolean {
-  const latest = resolveVisibleWorktreeSetup({
-    live: input.live,
-    recorded: input.recorded,
-    turnStarted: false,
-    followUpSent: false,
-  });
-  return latest?.phase === "running" || (!latest && input.preparing);
-}
-
 export function worktreeSetupAgentStarted(snapshot: WorktreeSetupSnapshot): boolean {
   return snapshot.stages.some((stage) => stage.id === "agent" && stage.status === "done");
-}
-
-// The persisted setup snapshot can lag behind the agent handoff while an async
-// setup script keeps running. A started turn is definitive evidence that sends
-// no longer need to wait for worktree preparation.
-export function worktreeSetupBlocksSend(
-  snapshot: WorktreeSetupSnapshot | null,
-  turnStarted: boolean,
-): boolean {
-  return snapshot?.phase === "running" && !turnStarted && !worktreeSetupAgentStarted(snapshot);
 }

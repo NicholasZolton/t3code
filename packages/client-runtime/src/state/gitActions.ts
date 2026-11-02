@@ -49,14 +49,14 @@ export type GitActionRequestInput = Pick<
   "action" | "commitMessage" | "featureBranch" | "filePaths"
 >;
 
-function resolveChangeRequestTerminology(
+export function changeRequestTerminologyFor(
   gitStatus: VcsStatusResult | null,
 ): ChangeRequestTerminology {
   return sourceControlClients.get(gitStatus?.sourceControlProvider?.kind).changeRequest;
 }
 
 /** jj has no detached HEAD, so the "you are not on a ref" hint is phrased per system. */
-export function noRefHint(gitStatus: VcsStatusResult, vcs: VcsTerminology, tail: string): string {
+function noRefHint(gitStatus: VcsStatusResult, vcs: VcsTerminology, tail: string): string {
   return gitStatus.vcs?.kind === "jj"
     ? `No ${vcs.refNoun} here: create one before ${tail}.`
     : `Detached HEAD: check out a ${vcs.refNoun} before ${tail}.`;
@@ -68,7 +68,7 @@ export function buildMenuItems(
   hasPrimaryRemote = true,
 ): GitActionMenuItem[] {
   if (!gitStatus) return [];
-  const terminology = resolveChangeRequestTerminology(gitStatus);
+  const terminology = changeRequestTerminologyFor(gitStatus);
   // An unusable VCS blocks every action, the same way a run in flight does.
   const blocked = isBusy || resolveVcsUnsupportedReason(gitStatus) !== null;
 
@@ -174,7 +174,7 @@ export function resolveQuickAction(
   const hasDefaultBranchDelta = (gitStatus.aheadOfDefaultCount ?? gitStatus.aheadCount) > 0;
   const isBehind = gitStatus.behindCount > 0;
   const isDiverged = isAhead && isBehind;
-  const terminology = resolveChangeRequestTerminology(gitStatus);
+  const terminology = changeRequestTerminologyFor(gitStatus);
 
   if (!hasBranch) {
     return {
@@ -189,7 +189,7 @@ export function resolveQuickAction(
   }
 
   if (hasChanges) {
-    if (!gitStatus.hasUpstream && !hasPrimaryRemote) {
+    if (isBehind || (!gitStatus.hasUpstream && !hasPrimaryRemote)) {
       return { label: "Commit", disabled: false, kind: "run_action", action: "commit" };
     }
     if (hasOpenPr || isDefaultRef) {
@@ -216,7 +216,7 @@ export function resolveQuickAction(
         label: "Push",
         disabled: true,
         kind: "show_hint",
-        hint: `Add an "origin" remote before pushing or creating a ${terminology.singular}.`,
+        hint: `Add an "origin" remote before pushing or creating ${terminology.shortLabelWithArticle}.`,
       };
     }
     if (!isAhead) {
@@ -328,12 +328,12 @@ export function getGitActionDisabledReason(input: {
   const unsupportedReason = resolveVcsUnsupportedReason(gitStatus);
   if (unsupportedReason !== null) return unsupportedReason;
 
-  const terminology = resolveChangeRequestTerminology(gitStatus);
   const hasBranch = gitStatus.refName !== null;
   const hasChanges = gitStatus.hasWorkingTreeChanges;
   const isAhead = gitStatus.aheadCount > 0;
   const hasDefaultBranchDelta = (gitStatus.aheadOfDefaultCount ?? gitStatus.aheadCount) > 0;
   const isBehind = gitStatus.behindCount > 0;
+  const terminology = changeRequestTerminologyFor(gitStatus);
 
   if (item.id === "commit") {
     if (!hasChanges) {
@@ -368,7 +368,7 @@ export function getGitActionDisabledReason(input: {
     return `Add an "origin" remote before creating a ${terminology.singular}.`;
   }
   if (!hasDefaultBranchDelta) {
-    return `No local commits to include in a ${terminology.shortLabel}.`;
+    return `No local commits to include in ${terminology.shortLabelWithArticle}.`;
   }
   if (isBehind) {
     return `${vcs.refNounTitle} is behind upstream. Pull/rebase before creating a ${terminology.singular}.`;
@@ -419,13 +419,13 @@ export function resolveDefaultBranchActionDialogCopy(input: {
   if (input.includesCommit) {
     return {
       title: `Commit, push & create ${terminology.shortLabel} from default ${vcs.refNoun}?`,
-      description: `This action will commit, push, and create a ${terminology.singular}${suffix}`,
+      description: `This action will commit, push, and create ${terminology.shortLabelWithArticle}${suffix}`,
       continueLabel: `Commit, push & create ${terminology.shortLabel}`,
     };
   }
   return {
     title: `Push & create ${terminology.shortLabel} from default ${vcs.refNoun}?`,
-    description: `This action will push local commits and create a ${terminology.singular}${suffix}`,
+    description: `This action will push local commits and create ${terminology.shortLabelWithArticle}${suffix}`,
     continueLabel: `Push & create ${terminology.shortLabel}`,
   };
 }

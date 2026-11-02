@@ -12,7 +12,6 @@ import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
-import { checkpointRefForThreadTurn } from "../checkpointing/Utils.ts";
 
 const execFile = NodeUtil.promisify(NodeChildProcess.execFile);
 const READY =
@@ -199,14 +198,17 @@ async function critArgs(input: CritOpenInput): Promise<string[]> {
         ? ["--pr", input.scope.url]
         : ["--mr", input.scope.url, "--remote"];
     }
-    case "turn":
-      if (input.scope.fromTurnCount !== 0 && !input.scope.fromRef) {
+    case "turn": {
+      const fromRef =
+        input.scope.fromRef ??
+        (input.scope.fromTurnCount === 0 && /\/(?:ordinal|turn)\/\d+$/.test(input.scope.toRef)
+          ? input.scope.toRef.replace(/\d+$/, "0")
+          : null);
+      if (fromRef === null) {
         throw new Error("The previous turn checkpoint is unavailable.");
       }
-      return [
-        "--range",
-        `${input.scope.fromRef ?? checkpointRefForThreadTurn(input.scope.threadId, 0)}..${input.scope.toRef}`,
-      ];
+      return ["--range", `${fromRef}..${input.scope.toRef}`];
+    }
   }
 }
 

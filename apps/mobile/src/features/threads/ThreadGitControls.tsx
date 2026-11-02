@@ -17,6 +17,7 @@ import {
 } from "@t3tools/client-runtime/state/vcs";
 import { resolveVcsTerminology, resolveVcsUnsupportedReason } from "@t3tools/shared/vcs";
 import { useNavigation } from "@react-navigation/native";
+import { sourceControlClients } from "@t3tools/client-runtime/source-control-clients";
 
 import { useEnvironmentScope } from "../../state/session";
 import { PullRequestGlyph } from "../pull-requests/pullRequestGlyphs";
@@ -63,7 +64,10 @@ function compactMenuStatus(gitStatus: VcsStatusResult | null): string {
     parts.push(`${gitStatus.behindCount} behind`);
   }
   if (gitStatus.pr?.state === "open") {
-    parts.push(`PR #${gitStatus.pr.number}`);
+    const { shortLabel } = sourceControlClients.get(
+      gitStatus.sourceControlProvider?.kind,
+    ).changeRequest;
+    parts.push(`${shortLabel} #${gitStatus.pr.number}`);
   }
 
   return parts.join(" · ");
@@ -496,11 +500,6 @@ export function ThreadGitControls(props: ThreadGitControlsProps) {
   );
 }
 
-/**
- * The standalone git actions menu (branch status, quick commit/push action,
- * review, more). Rendered inside a Toolbar by both the thread
- * chat header and the review screen's toolbar.
- */
 export function ThreadGitMenu(props: ThreadGitMenuProps) {
   const menu = useThreadGitMenuDefinition(props);
   return menu ? createNativeHeaderMenu(menu) : null;

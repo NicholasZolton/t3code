@@ -1,7 +1,7 @@
 import type { GitStatusEntry } from "@pierre/trees";
 import { FileTree, useFileTree, useFileTreeSelector } from "@pierre/trees/react";
 import { ChevronsDownUp, ChevronsUpDown } from "lucide";
-import { useEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
 
 import { useStableCallback } from "~/hooks/useStableCallback";
 import { useTheme } from "~/hooks/useTheme";
@@ -101,10 +101,12 @@ export function DiffFileTree({
     areAllDirectoriesExpanded(currentModel, directoryPaths),
   );
 
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- pushes the icon set into the imperative Pierre file tree model
   useEffect(() => {
     model.setIcons(icons);
   }, [icons, model]);
 
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- applies path updates, ordering and git status to the imperative Pierre file tree model
   useEffect(() => {
     ordering.update(positions);
     const mounted = mountedPresentationRef.current;
@@ -150,6 +152,7 @@ export function DiffFileTree({
     model.setGitStatus(gitStatus);
   }, [directoryPaths, gitStatus, model, modelPaths, ordering, positions, presented]);
 
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- expands ancestors, selects and scrolls to the requested file in the Pierre tree model
   useEffect(() => {
     if (selectedPath === null) {
       handledRevealRef.current = null;
@@ -248,8 +251,7 @@ export function DiffFileTree({
           ) {
             return;
           }
-          // Pierre does not emit a selection change for its sole selected row.
-          // Read selection before the row handles the click so new selections reveal only once.
+          // Pierre emits no change for its sole selected row; read before the click to avoid double reveals.
           const selected = model.getSelectedPaths();
           const path = selected.length === 1 ? selected[0] : undefined;
           if (!path || !modelPaths.includes(path)) return;

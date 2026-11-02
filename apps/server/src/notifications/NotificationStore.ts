@@ -127,7 +127,7 @@ const make = Effect.gen(function* () {
         };
   return NotificationStore.of({
     read: Effect.sync(() => state),
-    update: (transform) =>
+    update: Effect.fn("NotificationStore.update")((transform) =>
       lock.withPermit(
         Effect.gen(function* () {
           const next = transform(state);
@@ -137,6 +137,7 @@ const make = Effect.gen(function* () {
           state = next;
         }).pipe(Effect.mapError((cause) => new NotificationStoreError({ cause }))),
       ),
+    ),
   });
 });
 

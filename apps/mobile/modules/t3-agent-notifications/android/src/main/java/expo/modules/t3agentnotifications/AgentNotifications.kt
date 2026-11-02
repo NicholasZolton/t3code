@@ -246,7 +246,6 @@ object AgentNotifications {
     refreshActivity(context)
   }
 
-  /** Records the thread route the app is showing, or null when none is open. */
   @Volatile private var threadOnScreen: String? = null
 
   fun setThreadOnScreen(path: String?) {
@@ -454,8 +453,6 @@ object AgentNotifications {
         .setContentIntent(openThread)
         .setDeleteIntent(dismissIntent)
     presentation.applyTo(builder, context)
-    // A finished card is no longer ongoing, so it swipes away and a tap opens
-    // the thread; buttons would only repeat that.
     val action = presentation.action
     if (action != null) {
       if (openThread != null) builder.addAction(0, action, openThread)

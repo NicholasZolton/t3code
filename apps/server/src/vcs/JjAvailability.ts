@@ -12,7 +12,7 @@ import * as VcsProcess from "./VcsProcess.ts";
  * (`.github/actions/setup-jj` takes a `version` input), not a guess about which release first
  * shipped `json()`, `stringify()` or `bookmark track --remote=`.
  */
-export const JJ_MINIMUM_VERSION = "0.42.0";
+const JJ_MINIMUM_VERSION = "0.42.0";
 
 export type JjAvailability =
   | { readonly _tag: "available"; readonly version: string }

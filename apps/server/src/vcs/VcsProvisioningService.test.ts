@@ -13,6 +13,14 @@ const TEST_EPOCH = DateTime.makeUnsafe("1970-01-01T00:00:00.000Z");
 
 function makeDriver(calls: string[]): VcsDriver.VcsDriver["Service"] {
   return {
+    checkpoints: {
+      captureCheckpoint: () => Effect.die("unexpected checkpoint capture"),
+      hasCheckpointRef: () => Effect.die("unexpected checkpoint lookup"),
+      restoreCheckpoint: () => Effect.die("unexpected checkpoint restore"),
+      diffCheckpoints: () => Effect.die("unexpected checkpoint diff"),
+      listAuthoredPaths: () => Effect.die("unexpected checkpoint paths"),
+      deleteCheckpointRefs: () => Effect.die("unexpected checkpoint deletion"),
+    },
     capabilities: {
       kind: "git",
       supportsWorktrees: true,

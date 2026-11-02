@@ -296,15 +296,13 @@ export const makeJjReviewDiff = (deps: JjReviewDiffDeps): JjReviewDiffOps => {
       { maxOutputBytes: REVIEW_DIFF_FILE_MAX_OUTPUT_BYTES },
     );
     if (result.stdout.includes("\0")) {
-      return yield* Effect.fail(
-        new VcsProcessExitError({
-          operation,
-          command: "git show",
-          cwd,
-          exitCode: 0,
-          detail: `Cannot expand binary file '${relativePath}'.`,
-        }),
-      );
+      return yield* new VcsProcessExitError({
+        operation,
+        command: "git show",
+        cwd,
+        exitCode: 0,
+        detail: `Cannot expand binary file '${relativePath}'.`,
+      });
     }
     return result.stdout;
   });
@@ -318,15 +316,13 @@ export const makeJjReviewDiff = (deps: JjReviewDiffDeps): JjReviewDiffOps => {
     const baseRef = input.baseRef ?? (input.sourceKind === "working-tree" ? "@-" : null);
     const headRef = input.headRef ?? (input.sourceKind === "working-tree" ? "@" : null);
     if (baseRef === null || headRef === null) {
-      return yield* Effect.fail(
-        new VcsProcessExitError({
-          operation,
-          command: "git show",
-          cwd: input.cwd,
-          exitCode: 1,
-          detail: "Diff file expansion requires both base and head refs.",
-        }),
-      );
+      return yield* new VcsProcessExitError({
+        operation,
+        command: "git show",
+        cwd: input.cwd,
+        exitCode: 1,
+        detail: "Diff file expansion requires both base and head refs.",
+      });
     }
 
     // `@` and `@-` both read the working copy, and every read snapshots it, so share one.
@@ -380,15 +376,13 @@ export const makeJjReviewDiff = (deps: JjReviewDiffDeps): JjReviewDiffOps => {
       resolveFileRevision(input.cwd, headRef, workingCopy),
     ]);
     if (baseOid === null || headOid === null) {
-      return yield* Effect.fail(
-        new VcsProcessExitError({
-          operation,
-          command: "git show",
-          cwd: input.cwd,
-          exitCode: 1,
-          detail: "Diff file expansion could not resolve the comparison revisions.",
-        }),
-      );
+      return yield* new VcsProcessExitError({
+        operation,
+        command: "git show",
+        cwd: input.cwd,
+        exitCode: 1,
+        detail: "Diff file expansion could not resolve the comparison revisions.",
+      });
     }
 
     const [oldContents, newContents] = yield* Effect.all(
