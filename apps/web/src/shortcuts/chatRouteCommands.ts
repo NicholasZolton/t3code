@@ -24,7 +24,7 @@ import { selectThreadTerminalUiState, useTerminalUiStateStore } from "../termina
 import { useThreadSelectionStore } from "../threadSelectionStore";
 import { resolveThreadRouteTarget } from "../threadRoutes";
 import { useUiStateStore } from "../uiStateStore";
-import { type CommandHandler, registerCommands } from "./dispatcher";
+import { type CommandHandler, type CommandScopeOptions, registerCommands } from "./dispatcher";
 
 const CHAT_ROUTE_ID = "/_chat";
 
@@ -110,7 +110,26 @@ export function installChatRouteCommands(router: AnyRouter): () => void {
       if (threadRef && canOperatePreview(threadRef.environmentId)) dispatchPreviewAction(action);
     };
 
-  return registerCommands(
+  const scopeOptions: CommandScopeOptions = {
+    when: () =>
+      router.state.matches.some((match) => match.routeId === CHAT_ROUTE_ID) &&
+      !router.state.matches.some((match) => isAppModalPage(match.pathname)) &&
+      !isCommandPaletteOpen(),
+    context: () => {
+      const threadRef = readRouteThreadRef();
+      return {
+        terminalOpen: threadRef
+          ? selectThreadTerminalUiState(
+              useTerminalUiStateStore.getState().terminalUiStateByThreadKey,
+              threadRef,
+            ).terminalOpen
+          : false,
+        previewOpen: readPreviewOpen(),
+      };
+    },
+  };
+
+  const unregisterNewThreadCommands = registerCommands(
     {
       "chat.newLocal": startNewLocal,
       "chat.newWithoutProject": (event) => {
@@ -142,6 +161,12 @@ export function installChatRouteCommands(router: AnyRouter): () => void {
         }
         startNewLocal(event);
       },
+    },
+    // Vim consumes Ctrl+N in Normal mode before bubbling shortcuts can see it.
+    { ...scopeOptions, capture: true },
+  );
+  const unregisterPreviewCommands = registerCommands(
+    {
       "preview.toggle": (event) => {
         claim(event);
         const threadRef = readRouteThreadRef();
@@ -167,22 +192,7 @@ export function installChatRouteCommands(router: AnyRouter): () => void {
       "preview.resetZoom": previewCommand("reset-zoom"),
     },
     {
-      when: () =>
-        router.state.matches.some((match) => match.routeId === CHAT_ROUTE_ID) &&
-        !router.state.matches.some((match) => isAppModalPage(match.pathname)) &&
-        !isCommandPaletteOpen(),
-      context: () => {
-        const threadRef = readRouteThreadRef();
-        return {
-          terminalOpen: threadRef
-            ? selectThreadTerminalUiState(
-                useTerminalUiStateStore.getState().terminalUiStateByThreadKey,
-                threadRef,
-              ).terminalOpen
-            : false,
-          previewOpen: readPreviewOpen(),
-        };
-      },
+      ...scopeOptions,
       onKeyDown: (event) => {
         if (event.key !== "Escape") return false;
         const selection = useThreadSelectionStore.getState();
@@ -192,4 +202,8 @@ export function installChatRouteCommands(router: AnyRouter): () => void {
       },
     },
   );
+  return () => {
+    unregisterNewThreadCommands();
+    unregisterPreviewCommands();
+  };
 }
