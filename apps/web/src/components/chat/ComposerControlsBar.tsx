@@ -87,6 +87,7 @@ export function ComposerControlsBar(props: {
   modelPickerOpen: boolean;
   onModelPickerOpenChange: (open: boolean) => void;
   modelPickerIconClassName: string | undefined;
+  vimMode: string | null;
   getModelDisabledReason: ChatComposerProps["getModelDisabledReason"];
 }) {
   const {
@@ -268,6 +269,14 @@ export function ComposerControlsBar(props: {
     </ComposerControl>
   ) : (
     <>
+      {props.vimMode !== null && (
+        <span
+          data-composer-vim-mode={props.vimMode}
+          className="pointer-events-none invisible shrink-0 rounded bg-muted px-1 text-3xs font-medium text-muted-foreground uppercase group-focus-within/vim:visible"
+        >
+          {props.vimMode}
+        </span>
+      )}
       {composerModelPicker}
 
       <>

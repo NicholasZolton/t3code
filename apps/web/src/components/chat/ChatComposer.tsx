@@ -1039,6 +1039,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   const [isDragOverComposer, setIsDragOverComposer] = useState(false);
   const [isComposerPrimaryActionsCompact, setIsComposerPrimaryActionsCompact] = useState(false);
   const [isComposerModelPickerOpen, setIsComposerModelPickerOpen] = useState(false);
+  const [composerVimMode, setComposerVimMode] = useState("normal");
   const isMobileViewport = useMediaQuery("max-sm");
   const isSoftwareKeyboardOpen = useSoftwareKeyboardOpen();
   const [isComposerFocused, setIsComposerFocused] = useState(false);
@@ -2440,6 +2441,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       modelPickerOpen={isComposerModelPickerOpen}
       onModelPickerOpenChange={setIsComposerModelPickerOpen}
       modelPickerIconClassName={composerProviderState.modelPickerIconClassName}
+      vimMode={settings.composerVimEnabled && !isLiteralPendingAnswer ? composerVimMode : null}
       getModelDisabledReason={getModelDisabledReason}
     />
   );
@@ -3269,7 +3271,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
         if (isInsideRestingComposerControlScope(event.target)) return;
         composerMentionDragHandlers.onDrop(event);
       }}
-      className="mx-auto w-full min-w-0 max-w-(--chat-content-max-width)"
+      className="group/vim mx-auto w-full min-w-0 max-w-(--chat-content-max-width)"
       data-chat-composer-form="true"
       {...threadContextDropTargetProps()}
     >
@@ -3470,6 +3472,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                     vimEnabled={settings.composerVimEnabled}
                     vimSystemClipboard={settings.composerVimSystemClipboard}
                     vimMenuOpen={composerMenuOpen && composerMenuItems.length > 0}
+                    onVimModeChange={setComposerVimMode}
                     draftKey={composerDraftTargetKey}
                     // Switching threads lands focus here, so the label names the thread.
                     ariaLabel={activeThread ? `Message ${activeThread.title}` : "Message"}

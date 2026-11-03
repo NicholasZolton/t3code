@@ -165,6 +165,7 @@ export interface ComposerPromptEditorProps {
   vimEnabled?: boolean;
   vimSystemClipboard?: boolean;
   vimMenuOpen?: boolean;
+  onVimModeChange?: (mode: string) => void;
   /** Preserve editor answers verbatim, without Markdown or context chips. */
   literalText?: boolean;
   contextRecords: ComposerDraftContextRecords;
@@ -955,6 +956,7 @@ function ComposerPromptEditorTiptapInner(
     vimEnabled: requestedVimEnabled,
     vimSystemClipboard,
     vimMenuOpen,
+    onVimModeChange,
     literalText = false,
     contextRecords,
     buildContextClipboardFragment,
@@ -987,7 +989,6 @@ function ComposerPromptEditorTiptapInner(
   const richText = !literalText && (richTextEnabled ?? false) && !vimEnabled;
   const vimEnabledRef = useRef(vimEnabled ?? false);
   const vimMenuOpenRef = useRef(vimMenuOpen ?? false);
-  const [vimMode, setVimMode] = useState("normal");
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- updates the imperative ProseMirror keymap without rebuilding the editor
   useLayoutEffect(() => {
     vimEnabledRef.current = vimEnabled ?? false;
@@ -1009,6 +1010,7 @@ function ComposerPromptEditorTiptapInner(
     onChange,
     onVisibleSelectionChange,
     onCommandKeyDown,
+    onVimModeChange,
     isPathQueryActive,
     importContextFragment,
     keybindings,
@@ -1148,7 +1150,13 @@ function ComposerPromptEditorTiptapInner(
     {
       extensions: [
         ...(richText ? RICH_TEXT_EXTENSIONS : PLAIN_TEXT_EXTENSIONS),
-        ...(vimEnabled ? [ComposerVimExtension.configure({ onModeChange: setVimMode })] : []),
+        ...(vimEnabled
+          ? [
+              ComposerVimExtension.configure({
+                onModeChange: (mode: string): void => readCallbacks().onVimModeChange?.(mode),
+              }),
+            ]
+          : []),
       ],
       content: vimEnabled
         ? buildVimDocJson(value)
@@ -1528,6 +1536,9 @@ function ComposerPromptEditorTiptapInner(
           return true;
         },
       },
+      onCreate: () => {
+        if (vimEnabledRef.current) readCallbacks().onVimModeChange?.("normal");
+      },
       onUpdate: ({ editor: updated, transaction }) => {
         // Undo can restore a chip for a skill the current provider no longer offers.
         if (!literalText && isHistoryTransaction(transaction)) {
@@ -1881,7 +1892,7 @@ function ComposerPromptEditorTiptapInner(
         <ComposerCitationCommentContext value={citationCommentActions}>
           <div
             className={cn(
-              "group/vim relative flow-root font-(family-name:--font-composer,var(--font-sans)) text-(length:--font-size-prompt,var(--text-sm)) max-sm:pointer-coarse:text-(length:--font-size-prompt-touch)",
+              "relative flow-root font-(family-name:--font-composer,var(--font-sans)) text-(length:--font-size-prompt,var(--text-sm)) max-sm:pointer-coarse:text-(length:--font-size-prompt-touch)",
               containerClassName,
             )}
           >
@@ -1928,11 +1939,6 @@ function ComposerPromptEditorTiptapInner(
               onCopyCapture={(event) => handleCopyCut(event, false)}
               onCutCapture={(event) => handleCopyCut(event, true)}
             />
-            {vimEnabled && (
-              <span className="pointer-events-none absolute right-1 bottom-0 hidden rounded bg-muted px-1 text-3xs font-medium text-muted-foreground group-focus-within/vim:block">
-                {vimMode.toUpperCase()}
-              </span>
-            )}
             {isEmpty && contextRecords.size === 0 && placeholder ? (
               <div
                 className={cn(
