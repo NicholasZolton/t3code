@@ -1,9 +1,11 @@
 // @effect-diagnostics nodeBuiltinImport:off - Exercise the SSH launch shell against an owned HTTP process.
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, it } from "@effect/vitest";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
+import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
@@ -122,7 +124,10 @@ server.listen(0, "127.0.0.1", () => process.stdout.write(JSON.stringify({ pid: p
           } else {
             assert.isFalse(yield* fs.exists(path.join(stateDir, "pid")));
           }
-        }).pipe(Effect.provide(NodeServices.layer), Effect.scoped),
+        }).pipe(
+          Effect.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)),
+          Effect.scoped,
+        ),
     );
   },
 );
