@@ -1,5 +1,9 @@
 # Wiki update log
 
+## 2026-11-04
+
+- **Compatibility boundary**: [Paired Android notifications](paired-notifications.md) must remain reachable from mobile Settings without T3 Connect configuration. Recorded the local-only menu entry lost during the November upstream integration and its regression coverage.
+
 ## 2026-11-02
 
 - **Integration**: [PR #52](https://github.com/NicholasZolton/t3code/pull/52) reached fork `main` at `9a73f5dd04`. Refreshed [upstream integration](upstream-integration.md#completed-november-2-sync): all 3,337 incoming commits through `dd6c05ec31` are incorporated with ancestry preserved and zero main gap. The main local checkout is fast-forwarded; remote deployment remains separate.
