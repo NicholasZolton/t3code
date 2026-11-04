@@ -127,13 +127,7 @@ function ConfiguredSettingsRouteScreen() {
           disabled: !isLoaded,
           onPress: () => navigation.navigate("SettingsAuth"),
         },
-        environmentsRow(Object.keys(savedConnectionsById).length),
-        {
-          id: "SettingsNotifications",
-          icon: "bell.badge",
-          label: "Notifications",
-          target: "SettingsNotifications",
-        },
+        ...connectionRows(Object.keys(savedConnectionsById).length),
       ]}
     />
   );
@@ -141,18 +135,26 @@ function ConfiguredSettingsRouteScreen() {
 
 function LocalSettingsRouteScreen() {
   const { savedConnectionsById } = useSavedRemoteConnections();
-  return <SettingsList connections={[environmentsRow(Object.keys(savedConnectionsById).length)]} />;
+  return <SettingsList connections={connectionRows(Object.keys(savedConnectionsById).length)} />;
 }
 
-function environmentsRow(count: number): SettingsListRow {
-  return {
-    id: "SettingsEnvironments",
-    icon: "desktopcomputer",
-    label: "Environments",
-    value: `${count}`,
-    valuePosition: "trailing",
-    target: "SettingsEnvironments",
-  };
+function connectionRows(count: number): SettingsListRow[] {
+  return [
+    {
+      id: "SettingsEnvironments",
+      icon: "desktopcomputer",
+      label: "Environments",
+      value: `${count}`,
+      valuePosition: "trailing",
+      target: "SettingsEnvironments",
+    },
+    {
+      id: "SettingsNotifications",
+      icon: "bell.badge",
+      label: "Notifications",
+      target: "SettingsNotifications",
+    },
+  ];
 }
 
 function SettingsList(props: { readonly connections: readonly SettingsListRow[] }) {
