@@ -1,4 +1,5 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import { describe, expect, it } from "@effect/vitest";
 import {
   AuthOrchestrationReadScope,
@@ -243,7 +244,7 @@ describe("encrypted paired agent activity", () => {
         "registration_id",
         "t3_kind",
       ]);
-    }).pipe(Effect.provide(NodeServices.layer)),
+    }).pipe(Effect.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))),
   );
 
   it.effect("uses Connect's completion copy, finished card and replay deduplication", () =>
@@ -272,7 +273,7 @@ describe("encrypted paired agent activity", () => {
         activity_line_0: "Done\tSensitive thread title\tPrivate project",
         activity_expires_at: String(NOW.epochMilliseconds + 900_000),
       });
-    }).pipe(Effect.provide(NodeServices.layer)),
+    }).pipe(Effect.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))),
   );
 
   it.effect("tracks all threads and gives approval/input priority over running work", () =>
@@ -309,7 +310,7 @@ describe("encrypted paired agent activity", () => {
       yield* notifications.publishThread(THREAD);
       yield* notifications.drain;
       expect(payloads().at(-1)?.alert_body).toBe("Input: Private project");
-    }).pipe(Effect.provide(NodeServices.layer)),
+    }).pipe(Effect.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))),
   );
 
   it.effect("honors event preferences and the ongoing activity toggle", () =>
@@ -337,7 +338,7 @@ describe("encrypted paired agent activity", () => {
       yield* notifications.publishThread(THREAD);
       yield* notifications.drain;
       expect(payloads().at(-1)?.alert_body).toBe("Failed: Private project");
-    }).pipe(Effect.provide(NodeServices.layer)),
+    }).pipe(Effect.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))),
   );
 
   it.effect("keeps registrations session-owned and allows the same keyed phone to pair again", () =>
@@ -360,7 +361,7 @@ describe("encrypted paired agent activity", () => {
         REGISTRATION.registrationId,
       );
       expect((yield* notifications.status(SESSION)).registrationId).toBeNull();
-    }).pipe(Effect.provide(NodeServices.layer)),
+    }).pipe(Effect.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))),
   );
 
   it.effect("replaces rotated tokens, removes invalid tokens and permits only owner opt-out", () =>
@@ -384,7 +385,7 @@ describe("encrypted paired agent activity", () => {
       );
       yield* notifications.unregister(SESSION, REGISTRATION.registrationId);
       expect((yield* notifications.status(SESSION)).registrationId).toBeNull();
-    }).pipe(Effect.provide(NodeServices.layer)),
+    }).pipe(Effect.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))),
   );
 
   it.effect("retries persisted encrypted deliveries without repeating delivered alerts", () =>
@@ -406,7 +407,7 @@ describe("encrypted paired agent activity", () => {
       yield* resumed.notifications.publishThread(THREAD);
       yield* resumed.notifications.drain;
       expect(state.sent).toHaveLength(2);
-    }).pipe(Effect.provide(NodeServices.layer)),
+    }).pipe(Effect.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))),
   );
 
   it.effect("drops stale queued alert content while updating the card to current work", () =>
@@ -441,7 +442,7 @@ describe("encrypted paired agent activity", () => {
       yield* expired.notifications.start();
       yield* expired.notifications.drain;
       expect(state.sent).toHaveLength(sentCount);
-    }).pipe(Effect.provide(NodeServices.layer)),
+    }).pipe(Effect.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))),
   );
 
   it.effect("revocation and session expiry prevent queued delivery", () =>
@@ -461,7 +462,7 @@ describe("encrypted paired agent activity", () => {
       state.revoked = false;
       state.expiresAt = NOW;
       expect((yield* notifications.register(SESSION, REGISTRATION)).registrationId).toBeNull();
-    }).pipe(Effect.provide(NodeServices.layer)),
+    }).pipe(Effect.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))),
   );
 
   it.effect(
@@ -492,7 +493,7 @@ describe("encrypted paired agent activity", () => {
         yield* notifications.publishThread(THREAD);
         yield* notifications.drain;
         expect(state.sent).toHaveLength(count);
-      }).pipe(Effect.provide(NodeServices.layer)),
+      }).pipe(Effect.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))),
   );
 
   it.effect("requires an encryption-capable client and never falls back to rich plaintext", () =>
@@ -509,7 +510,7 @@ describe("encrypted paired agent activity", () => {
           notifications.register(SESSION, { ...REGISTRATION, encryptionPublicKey: "invalid-key" }),
         ))._tag,
       ).toBe("Failure");
-    }).pipe(Effect.provide(NodeServices.layer)),
+    }).pipe(Effect.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))),
   );
 
   it.effect("remains an optional capability without Firebase credentials", () =>
@@ -523,7 +524,7 @@ describe("encrypted paired agent activity", () => {
       yield* notifications.publishThread(THREAD);
       yield* notifications.drain;
       expect(state.sent).toEqual([]);
-    }).pipe(Effect.provide(NodeServices.layer)),
+    }).pipe(Effect.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))),
   );
 
   it.effect("upgrades persisted generic registrations and keeps old taps authenticated", () =>
@@ -565,6 +566,6 @@ describe("encrypted paired agent activity", () => {
       ).toBe(true);
       state.thread = threadShell({ archivedAt: NOW });
       expect(yield* restored.notifications.resolve(SESSION, reference)).toBeNull();
-    }).pipe(Effect.provide(NodeServices.layer)),
+    }).pipe(Effect.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))),
   );
 });

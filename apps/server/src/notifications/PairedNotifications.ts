@@ -30,7 +30,8 @@ import { makeDrainableWorker } from "@t3tools/shared/DrainableWorker";
 import { stableStringify } from "@t3tools/shared/relaySigning";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
-import * as Crypto from "effect/Crypto";
+import * as Digest from "effect/crypto/Digest";
+import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as DateTime from "effect/DateTime";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
@@ -101,7 +102,8 @@ const make = Effect.gen(function* () {
   const environment = yield* ServerEnvironment.ServerEnvironment;
   const sender = yield* FcmClient.FcmClient;
   const encryption = yield* NotificationEncryption.NotificationEncryption;
-  const crypto = yield* Crypto.Crypto;
+  const digest = yield* Digest.Digest;
+  const random = yield* SecureRandom.SecureRandom;
   const configured = sender.configured;
   const observationLock = yield* Semaphore.make(1);
   const catchUpFinished = yield* Deferred.make<void>();
@@ -198,8 +200,8 @@ const make = Effect.gen(function* () {
       ...alert,
     };
     if (alert) {
-      const digest = yield* crypto.digest("SHA-256", new TextEncoder().encode(alert.alert_id));
-      data.alert_id = Array.from(digest, (byte) => byte.toString(16).padStart(2, "0")).join("");
+      const hash = yield* digest.digest(Digest.sha256, new TextEncoder().encode(alert.alert_id));
+      data.alert_id = Array.from(hash, (byte) => byte.toString(16).padStart(2, "0")).join("");
     }
     const sealed = yield* encryption.seal({
       publicKey: registration.encryptionPublicKey,
@@ -321,7 +323,7 @@ const make = Effect.gen(function* () {
         thread?.latestRunCompletedAt
           ? { ...projected, updatedAt: DateTime.formatIso(thread.latestRunCompletedAt) }
           : projected;
-      const id = yield* crypto.randomUUIDv4();
+      const id = yield* random.uuidV4();
       yield* store.update((current) => ({
         ...current,
         observations: [
@@ -373,7 +375,7 @@ const make = Effect.gen(function* () {
       if (!configured || !input.encryptionPublicKey || !(yield* authorized(sessionId)))
         return { configured, encryptedActivitySupported: true, registrationId: null };
       yield* encryption.validatePublicKey(input.encryptionPublicKey);
-      const id = yield* crypto.randomUUIDv4();
+      const id = yield* random.uuidV4();
       const now = yield* Clock.currentTimeMillis;
       let changed = false;
       yield* store.update((state) => {

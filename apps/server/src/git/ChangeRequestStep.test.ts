@@ -1,5 +1,6 @@
 import { assert, it } from "@effect/vitest";
 import * as NodeServices from "@effect/platform-node/NodeServices";
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 
@@ -63,6 +64,7 @@ function makeLayer(created: Array<{ readonly baseRefName: string; readonly cwd: 
         SourceControlProvider.SourceControlProvider.pipe(Effect.provide(providerLayer)),
     }),
     NodeServices.layer,
+    NodeCrypto.layer,
   );
 }
 
