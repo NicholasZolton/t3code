@@ -5,7 +5,6 @@ import {
   ProviderInstanceId,
   type ProviderInstallState,
   type ProviderSetupInput,
-  type OpenCodeCodexAccount,
   ServerObservability,
   EnvironmentThemeId,
   UsageLimitSourceId,
@@ -36,11 +35,8 @@ import * as Socket from "effect/socket/Socket";
 import {
   AVAILABLE_CONNECTION_STATE,
   PrimaryConnectionTarget,
-  type NetworkStatus,
   type PreparedConnection,
-  type SupervisorConnectionState,
 } from "../connection/model.ts";
-import type { ConnectionCatalogEntry } from "../connection/catalog.ts";
 import * as EnvironmentRegistry from "../connection/registry.ts";
 import * as EnvironmentSupervisor from "../connection/supervisor.ts";
 import { RpcPermissionGuard } from "../rpc/client.ts";
@@ -1318,95 +1314,6 @@ describe("server state projection", () => {
 });
 
 describe("provider setup commands", () => {
-  it.effect("refreshes the mounted account list after activating an OpenCode account", () =>
-    Effect.gen(function* () {
-      const activeId = yield* Ref.make("first");
-      const client = {
-        [WS_METHODS.subscribeServerConfig]: () => Stream.never,
-        [WS_METHODS.providerOpenCodeAccounts]: () =>
-          Ref.get(activeId).pipe(
-            Effect.map((active): ReadonlyArray<OpenCodeCodexAccount> =>
-              ["first", "second"].map((id) => ({
-                id,
-                label: id,
-                active: id === active,
-                limits: { checkedAt: "2026-11-01T00:00:00.000Z", windows: [] },
-              })),
-            ),
-          ),
-        [WS_METHODS.providerActivateOpenCodeAccount]: ({
-          credentialId,
-        }: {
-          credentialId: string;
-        }) => Ref.set(activeId, credentialId).pipe(Effect.as({})),
-      } as unknown as WsRpcProtocolClient;
-      const supervisor = EnvironmentSupervisor.EnvironmentSupervisor.of({
-        target: TARGET,
-        state: yield* SubscriptionRef.make<SupervisorConnectionState>({
-          ...AVAILABLE_CONNECTION_STATE,
-          phase: "connected",
-        }),
-        session: yield* SubscriptionRef.make(Option.some(session(client))),
-        prepared: yield* SubscriptionRef.make(Option.none<PreparedConnection>()),
-        connect: Effect.void,
-        disconnect: Effect.void,
-        retryNow: Effect.void,
-      });
-      const runtime = Atom.runtime(
-        Layer.mergeAll(
-          Layer.mock(EnvironmentRegistry.EnvironmentRegistry)({
-            entries: yield* SubscriptionRef.make<
-              ReadonlyMap<EnvironmentId, ConnectionCatalogEntry>
-            >(new Map()),
-            networkStatus: yield* SubscriptionRef.make<NetworkStatus>("online"),
-            run: (_environmentId, effect) =>
-              Effect.provideService(
-                effect,
-                EnvironmentSupervisor.EnvironmentSupervisor,
-                supervisor,
-              ),
-            followStream: (_environmentId, stream) =>
-              Stream.provideService(
-                stream,
-                EnvironmentSupervisor.EnvironmentSupervisor,
-                supervisor,
-              ),
-          }),
-          Layer.mock(Persistence.EnvironmentCacheStore)({
-            loadServerConfig: () => Effect.succeedNone,
-          }),
-          Layer.succeed(RpcPermissionGuard, { authorize: () => Effect.void }),
-        ),
-      );
-      const initialConfig = Atom.make(CONFIG);
-      const atoms = createServerEnvironmentAtoms(runtime, {
-        initialConfigValueAtom: () => initialConfig,
-      });
-      const registry = yield* Effect.acquireRelease(Effect.sync(AtomRegistry.make), (value) =>
-        Effect.sync(() => value.dispose()),
-      );
-      const target = {
-        environmentId: TARGET.environmentId,
-        input: { instanceId: ProviderInstanceId.make("opencode") },
-      };
-      const accounts = atoms.openCodeAccounts(target);
-      registry.mount(accounts);
-      const readAccounts = () =>
-        AtomRegistry.getResult(registry, accounts, { suspendOnWaiting: true });
-      expect((yield* readAccounts()).find((account) => account.active)?.id).toBe("first");
-
-      const switched = yield* Effect.promise(() =>
-        atoms.activateOpenCodeAccount.run(registry, {
-          ...target,
-          input: { ...target.input, credentialId: "second" },
-        }),
-      );
-
-      expect(AsyncResult.isSuccess(switched)).toBe(true);
-      expect((yield* readAccounts()).find((account) => account.active)?.id).toBe("second");
-    }).pipe(Effect.scoped),
-  );
-
   it.effect("starts installs for two instances in one environment separately", () =>
     Effect.gen(function* () {
       const requested = yield* Queue.unbounded<ProviderInstanceId>();

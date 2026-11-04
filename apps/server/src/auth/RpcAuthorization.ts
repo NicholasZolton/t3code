@@ -62,8 +62,6 @@ export const RPC_REQUIRED_SCOPES = {
   [WS_METHODS.projectsMutate]: AuthOrchestrationOperateScope,
   [WS_METHODS.serverProbe]: AuthOrchestrationReadScope,
   [WS_METHODS.serverGetConfig]: AuthOrchestrationReadScope,
-  [WS_METHODS.providerOpenCodeAccounts]: AuthOrchestrationReadScope,
-  [WS_METHODS.providerActivateOpenCodeAccount]: AuthProvidersManageScope,
   [WS_METHODS.serverResolvePromptEnvironment]: AuthOrchestrationReadScope,
   [WS_METHODS.shellOpenInCrit]: AuthFilesystemReadScope,
   [WS_METHODS.serverGetNpmRelease]: AuthOrchestrationReadScope,

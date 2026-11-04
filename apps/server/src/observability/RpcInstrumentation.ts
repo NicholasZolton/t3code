@@ -166,8 +166,6 @@ const RPC_AGGREGATES = {
   [WS_METHODS.attachmentsCreateUploadUrl]: "workspace",
   [WS_METHODS.attachmentsDelete]: "workspace",
   [WS_METHODS.providerUploadFeedback]: "provider",
-  [WS_METHODS.providerOpenCodeAccounts]: "provider",
-  [WS_METHODS.providerActivateOpenCodeAccount]: "provider",
   [WS_METHODS.serverResolvePromptEnvironment]: "server",
   [WS_METHODS.shellOpenInCrit]: "workspace",
   [WS_METHODS.mcpAppsCallTool]: "provider",

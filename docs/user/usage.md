@@ -166,11 +166,6 @@ login. On macOS, this includes the default Keychain login after you enable Curso
 and Keychain login report limits only with Cursor's default API endpoint. If you configure a custom
 Cursor endpoint, use an explicit token or file-based CLI login for limits.
 
-For local OpenCode V2, **Usage → Limits** also shows each saved Codex login's quota and which
-login is active. Choose **Switch to account** to change the Codex login OpenCode uses for
-subsequent work on that environment. An expired login needs to be refreshed in OpenCode before
-its usage can be read.
-
 Grok reports the remaining subscription allowance and reset time for its current billing period
 after signing in with `grok login`. Explicit `XAI_API_KEY` connections and custom authentication
 or endpoint configurations do not report subscription limits.

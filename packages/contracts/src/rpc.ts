@@ -166,7 +166,6 @@ import {
   ProviderUploadFeedbackResult,
 } from "./provider.ts";
 import { ProviderInstanceId, ProviderInstanceMutation } from "./providerInstance.ts";
-import { OpenCodeCodexAccount } from "./openCodeAccounts.ts";
 import {
   GuestShareCreateError,
   GuestShareCreateInput,
@@ -439,8 +438,6 @@ export const WS_METHODS = {
   providerUploadFeedback: "provider.uploadFeedback",
   providerAuthStart: "provider.auth.start",
   providerConsumeResetCredit: "provider.consumeResetCredit",
-  providerOpenCodeAccounts: "provider.openCodeAccounts",
-  providerActivateOpenCodeAccount: "provider.activateOpenCodeAccount",
   providerAuthComplete: "provider.auth.complete",
   chatGptReconnectProfile: "provider.chatgpt.reconnect-profile",
   chatGptImportProfile: "provider.chatgpt.import-profile",
@@ -678,18 +675,6 @@ const WsProviderConsumeResetCreditRpc = Rpc.make(WS_METHODS.providerConsumeReset
   payload: ProviderConsumeResetCreditInput,
   success: ProviderConsumeResetCreditResult,
   error: Schema.Union([ProviderSetupError, UsageLimitSourceError, EnvironmentAuthorizationError]),
-});
-
-const WsProviderOpenCodeAccountsRpc = Rpc.make(WS_METHODS.providerOpenCodeAccounts, {
-  payload: Schema.Struct({ instanceId: ProviderInstanceId }),
-  success: Schema.Array(OpenCodeCodexAccount),
-  error: ProviderSetupRpcError,
-});
-
-const WsProviderActivateOpenCodeAccountRpc = Rpc.make(WS_METHODS.providerActivateOpenCodeAccount, {
-  payload: Schema.Struct({ instanceId: ProviderInstanceId, credentialId: Schema.String }),
-  success: Schema.Struct({}),
-  error: ProviderSetupRpcError,
 });
 
 const WsProviderAuthStartRpc = Rpc.make(WS_METHODS.providerAuthStart, {
@@ -2024,8 +2009,6 @@ export const WsRpcGroup = RpcGroup.make(
   WsServerRefreshProvidersRpc,
   WsServerUpdateProviderRpc,
   WsProviderConsumeResetCreditRpc,
-  WsProviderOpenCodeAccountsRpc,
-  WsProviderActivateOpenCodeAccountRpc,
   WsProviderAuthStartRpc,
   WsProviderAuthCompleteRpc,
   WsChatGptReconnectProfileRpc,

@@ -6,10 +6,10 @@ tags: [upstream, fork, integration]
 status: stable
 generated:
   by: opencode/gpt-6.1-sol
-  at: 2026-11-04T06:18:54+00:00
+  at: 2026-11-04T06:36:12+00:00
 verified:
   - by: opencode/gpt-6.1-sol
-    at: 2026-11-04T06:18:54+00:00
+    at: 2026-11-04T06:36:12+00:00
 snapshot:
   at: 2026-11-04T06:18:54+00:00
   fork_main: 470e518f7760790cae1e2fbb1e40fb1c30d4791a
@@ -24,6 +24,9 @@ snapshot:
   branch_code_tip: 9b7bee668b6fd6d210c57fef622daac4c28293dd
   missing_upstream_on_branch: 0
 sources:
+  - id: november-4-opencode-usage-removal
+    resource: "Local source inspection at 2026-11-04T06:36:12+00:00 on NicholasZolton/sync-upstream-changes, based on c57988003871c82f282ba3c809604889dc219ba0: the maintainer requested removal of the fork's OpenCode account/quota view in favor of upstream Usage and native Codex workflows. Web and mobile account views, account read/switch RPCs, and credential-file integration are removed. UsageLimits.tsx and the provider-core interface match pinned upstream 3368dd70f20cb192b68895494a4a73455524fb76; shared Codex/Claude plan weighting and unrelated OpenCode provider safeguards remain."
+    title: Deliberate retirement of the fork-only OpenCode usage integration
   - id: november-4-local-integration
     resource: "Local Git object 865f3f977091580bc9e72236d7b042d617b2d1c1 on NicholasZolton/sync-upstream-changes; parents fork 470e518f7760790cae1e2fbb1e40fb1c30d4791a and upstream 3368dd70f20cb192b68895494a4a73455524fb76. Follow-up 42faa17d53171bc537bdcd6855ec561995ce7005 adapts fork mobile prompts to upstream's settings menu, and code tip 9b7bee668b6fd6d210c57fef622daac4c28293dd adapts fork test fixtures to the new settings and crypto APIs. These commits are local-only, not incorporated into main."
     title: Ancestry-preserving local integration and compatibility adaptations
@@ -614,6 +617,13 @@ the new call; observed execution can settle it without a result. Preserve this
 safeguard until upstream can attribute reports to individual runs.
 [^november-4-local-integration][^opencode-child-tracking]
 
+The fork-only OpenCode account/quota views and account switching are intentionally
+removed from web, desktop, and mobile. Use upstream's provider-limits view and native
+Codex account workflow instead; do not restore the separate credential-file reader
+or its RPCs during a sync. General Codex/Claude plan weighting remains, as do
+OpenCode's configured permissions, model defaults, and reused-child safeguards.
+[^november-4-opencode-usage-removal]
+
 ## Jujutsu migration boundary
 
 The fork selectively ports [upstream #13816](https://github.com/pingdotgg/t3code/pull/13816)
@@ -868,3 +878,5 @@ git log --reverse --oneline origin/main..upstream/main
 [^november-4-review-git]: Exact revisions, ancestry, separate main and branch gaps, and upstream-first source comparison.
 
 [^november-4-upstream]: Exact upstream revision incorporated into the local November 4 branch.
+
+[^november-4-opencode-usage-removal]: Maintainer-requested removal of fork-only OpenCode account usage and switching, preserving unrelated provider behavior.

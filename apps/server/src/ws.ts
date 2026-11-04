@@ -1999,51 +1999,6 @@ export const layerWsRpc = (
       });
 
       const handlers = ServerWsRpcGroup.of({
-        [WS_METHODS.providerOpenCodeAccounts]: Effect.fn("ws.providers.openCodeAccounts")(
-          function* (input) {
-            const instance = yield* providerInstances.getInstance(input.instanceId);
-            if (!instance || !instance.enabled || !instance.readOpenCodeAccounts) {
-              return yield* new ProviderSetupError({
-                instanceId: input.instanceId,
-                operation: "read-opencode-accounts",
-                detail: "OpenCode provider instance is unavailable.",
-              });
-            }
-            return yield* instance.readOpenCodeAccounts().pipe(
-              Effect.mapError(
-                (error) =>
-                  new ProviderSetupError({
-                    instanceId: input.instanceId,
-                    operation: "read-opencode-accounts",
-                    detail: error.detail,
-                  }),
-              ),
-            );
-          },
-        ),
-        [WS_METHODS.providerActivateOpenCodeAccount]: Effect.fn(
-          "ws.providers.activateOpenCodeAccount",
-        )(function* (input) {
-          const instance = yield* providerInstances.getInstance(input.instanceId);
-          if (!instance || !instance.enabled || !instance.activateOpenCodeAccount) {
-            return yield* new ProviderSetupError({
-              instanceId: input.instanceId,
-              operation: "activate-opencode-account",
-              detail: "OpenCode provider instance is unavailable.",
-            });
-          }
-          yield* instance.activateOpenCodeAccount(input.credentialId).pipe(
-            Effect.mapError(
-              (error) =>
-                new ProviderSetupError({
-                  instanceId: input.instanceId,
-                  operation: "activate-opencode-account",
-                  detail: error.detail,
-                }),
-            ),
-          );
-          return {};
-        }),
         [WS_METHODS.serverResolvePromptEnvironment]: Effect.fn(
           "ws.server.resolvePromptEnvironment",
         )(function* ({ name }) {

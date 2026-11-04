@@ -1,7 +1,6 @@
 // Context tags are runtime singletons; drivers need multiple instances.
 import type {
   ProviderConsumeResetCreditOutcome,
-  OpenCodeCodexAccount,
   AcpRegistryListSessionsResult,
   AcpRegistryListProvidersResult,
   AcpRegistryOperationError,
@@ -50,13 +49,6 @@ export interface ProviderInstance {
     ProviderConsumeResetCreditOutcome,
     ProviderDriverError
   >;
-  readonly readOpenCodeAccounts?: () => Effect.Effect<
-    readonly OpenCodeCodexAccount[],
-    ProviderDriverError
-  >;
-  readonly activateOpenCodeAccount?: (
-    credentialId: string,
-  ) => Effect.Effect<void, ProviderDriverError>;
   readonly orchestrationAdapter: ProviderAdapter.ProviderAdapterV2["Service"];
   readonly textGeneration: ProviderTextGeneration;
   readonly auth?: ProviderAuthController;

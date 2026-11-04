@@ -1,5 +1,3 @@
-import * as NodeOS from "node:os";
-import { activateOpenCodeCredential, readOpenCodeCodexAccounts } from "./openCodeCodexAccounts.ts";
 import { ProviderDriverKind } from "@t3tools/contracts";
 import { OpenCodeSettings } from "../settings.ts";
 import * as Digest from "effect/crypto/Digest";
@@ -336,42 +334,6 @@ export const OpenCodeDriver: ProviderDriver<
       ...(effectiveConfig.serverPassword ? { serverPassword: effectiveConfig.serverPassword } : {}),
       environment: processEnv,
     });
-    const dataHome =
-      processEnv.XDG_DATA_HOME ||
-      pathService.join(
-        processEnv.HOME || processEnv.USERPROFILE || NodeOS.homedir(),
-        ".local",
-        "share",
-      );
-    const accountError = (detail: string, cause?: unknown): ProviderDriverError =>
-      new ProviderDriverError({
-        driver: DRIVER_KIND,
-        instanceId,
-        detail,
-        ...(cause === undefined ? {} : { cause }),
-      });
-    const readOpenCodeAccounts: NonNullable<ProviderInstance["readOpenCodeAccounts"]> = () =>
-      !enabled || effectiveConfig.serverUrl.trim()
-        ? Effect.succeed([])
-        : Effect.tryPromise({
-            try: () => readOpenCodeCodexAccounts(dataHome),
-            catch: (cause) => accountError("Could not read local OpenCode accounts.", cause),
-          });
-    const activateOpenCodeAccount: NonNullable<ProviderInstance["activateOpenCodeAccount"]> =
-      Effect.fn("OpenCodeDriver.activateOpenCodeAccount")(function* (credentialId) {
-        if (!enabled || effectiveConfig.serverUrl.trim()) {
-          return yield* accountError(
-            "Account switching requires a local, enabled OpenCode instance.",
-          );
-        }
-        yield* openCode2Server
-          .withConnection(({ client }) =>
-            activateOpenCodeCredential({ dataHome, credentialId, client }).pipe(
-              Effect.timeout("10 seconds"),
-            ),
-          )
-          .pipe(Effect.mapError(() => accountError("Could not activate this OpenCode account.")));
-      });
     const textGeneration = selectOpenCodeRuntimeTextGeneration(
       runtimeProbe,
       yield* makeOpenCodeTextGeneration(effectiveConfig).pipe(
@@ -577,8 +539,6 @@ export const OpenCodeDriver: ProviderDriver<
             }),
       orchestrationAdapter,
       textGeneration,
-      readOpenCodeAccounts,
-      activateOpenCodeAccount,
     } satisfies ProviderInstance;
   }),
 };

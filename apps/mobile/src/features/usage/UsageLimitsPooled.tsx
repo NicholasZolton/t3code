@@ -4,7 +4,6 @@ import { EnvironmentId } from "@t3tools/contracts";
 import { normalizeProviderAccentColor } from "@t3tools/client-runtime/state/provider-instance-display";
 import {
   collectLimitAccounts,
-  collectOpenCodeAccountTargets,
   collectExternalUsageLinks,
   collectLimitNotices,
   collectLimitPools,
@@ -29,7 +28,6 @@ import { ProviderIcon } from "../../components/ProviderIcon";
 import { SettingsScreen } from "../settings/components/SettingsScreen";
 import { environmentPresentations } from "../../state/presentation";
 import { ResetCredits } from "./UsageLimitsSection";
-import { OpenCodeAccounts } from "./OpenCodeAccounts";
 import { usageProviderKind, useProviderColors } from "./usageProviders";
 
 const DRIVER_LABEL: Partial<Record<string, string>> = {
@@ -442,8 +440,7 @@ export function UsageLimitsSection({
       notices.length === 0 &&
       failedLabels.length === 0 &&
       !cursorPrompt &&
-      externalLinks.length === 0 &&
-      collectOpenCodeAccountTargets(selected).length === 0 ? (
+      externalLinks.length === 0 ? (
         <Text className="py-12 text-center text-base text-foreground-muted">
           {selected.size === 0
             ? "Select an environment to see limits."
@@ -485,7 +482,6 @@ export function UsageLimitsSection({
         );
       })}
       {cursorPromptAt === pools.length ? cursorPrompt : null}
-      <OpenCodeAccounts presentations={selected} now={now} />
       {externalLinks.map((link) => (
         <View key={link.url} className="gap-3 rounded-xl border border-border-subtle p-4">
           <Text className="text-base font-t3-medium text-foreground">{link.label}</Text>

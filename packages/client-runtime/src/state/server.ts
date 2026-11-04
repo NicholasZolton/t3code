@@ -1199,11 +1199,6 @@ export function createServerEnvironmentAtoms<R, E>(
     scheduler: configScheduler,
     concurrency: configConcurrency,
   });
-  const openCodeAccounts = createEnvironmentRpcQueryAtomFamily(runtime, {
-    label: "environment-data:server:opencode-accounts",
-    tag: WS_METHODS.providerOpenCodeAccounts,
-    refreshTrigger: ({ environmentId }) => configValueAtom(environmentId),
-  });
 
   return {
     configValueAtom,
@@ -1396,24 +1391,6 @@ export function createServerEnvironmentAtoms<R, E>(
         mode: "singleFlight",
         // Both ids are free-form strings; a delimiter could collide.
         key: ({ environmentId, input }) => JSON.stringify([environmentId, input]),
-      },
-    }),
-    openCodeAccounts,
-    activateOpenCodeAccount: createEnvironmentRpcCommand(runtime, {
-      label: "environment-data:server:activate-opencode-account",
-      tag: WS_METHODS.providerActivateOpenCodeAccount,
-      onSuccess: (target, registry) =>
-        Effect.sync(() =>
-          registry.refresh(
-            openCodeAccounts({
-              environmentId: target.environmentId,
-              input: { instanceId: target.input.instanceId },
-            }),
-          ),
-        ),
-      concurrency: {
-        mode: "singleFlight",
-        key: ({ environmentId, input }) => JSON.stringify([environmentId, input.instanceId]),
       },
     }),
     refreshProviders: createEnvironmentRpcCommand(runtime, {
