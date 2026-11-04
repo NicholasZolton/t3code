@@ -6,36 +6,42 @@ tags: [upstream, fork, integration]
 status: stable
 generated:
   by: opencode/gpt-6.1-sol
-  at: 2026-11-04T06:36:12+00:00
+  at: 2026-11-04T07:32:33+00:00
 verified:
   - by: opencode/gpt-6.1-sol
-    at: 2026-11-04T06:36:12+00:00
+    at: 2026-11-04T07:32:33+00:00
 snapshot:
-  at: 2026-11-04T06:18:54+00:00
-  fork_main: 470e518f7760790cae1e2fbb1e40fb1c30d4791a
+  at: 2026-11-04T07:32:33+00:00
+  fork_main: 0406c1c1be2fe50e8ea78df42febd3919481d750
   upstream_main: 3368dd70f20cb192b68895494a4a73455524fb76
-  shared_baseline: dd6c05ec313c6c870c7a7688e87143da5084031d
-  last_main_integration: ed52b86b6a9ffb6afad94980cc3d7d8cb5c851aa
-  last_main_upstream: dd6c05ec313c6c870c7a7688e87143da5084031d
-  missing_upstream_on_main: 351
+  shared_baseline: 3368dd70f20cb192b68895494a4a73455524fb76
+  last_main_integration: 865f3f977091580bc9e72236d7b042d617b2d1c1
+  last_main_upstream: 3368dd70f20cb192b68895494a4a73455524fb76
+  missing_upstream_on_main: 0
   missing_upstream_at_integrated_tip: 0
   branch_integration: 865f3f977091580bc9e72236d7b042d617b2d1c1
   branch_parent: 470e518f7760790cae1e2fbb1e40fb1c30d4791a
-  branch_code_tip: 9b7bee668b6fd6d210c57fef622daac4c28293dd
+  branch_code_tip: e530c7f948b2c88ba0dd04f930b9e72ade3aa3aa
   missing_upstream_on_branch: 0
 sources:
+  - id: november-4-main-integration
+    resource: https://github.com/NicholasZolton/t3code/pull/55
+    title: Completed November 4 upstream integration and OpenCode usage retirement
+  - id: november-4-main-review-git
+    resource: "Local Git verification at 2026-11-04T07:32:33+00:00: local main and fetched origin/main equal 0406c1c1be2fe50e8ea78df42febd3919481d750, with parents 470e518f7760790cae1e2fbb1e40fb1c30d4791a and e530c7f948b2c88ba0dd04f930b9e72ade3aa3aa. Integration 865f3f977091580bc9e72236d7b042d617b2d1c1, final code tip e530c7f948b2c88ba0dd04f930b9e72ade3aa3aa, and pinned upstream 3368dd70f20cb192b68895494a4a73455524fb76 are ancestors of main. The shared baseline equals the pinned upstream tip; all 351 incoming commits are incorporated and zero are missing on main. PR 55 merged at 2026-11-04T07:28:58Z. Remote deployment remains separate."
+    title: Completed main ancestry checks against the pinned upstream tip
   - id: november-4-opencode-usage-removal
-    resource: "Local source inspection at 2026-11-04T06:36:12+00:00 on NicholasZolton/sync-upstream-changes, based on c57988003871c82f282ba3c809604889dc219ba0: the maintainer requested removal of the fork's OpenCode account/quota view in favor of upstream Usage and native Codex workflows. Web and mobile account views, account read/switch RPCs, and credential-file integration are removed. UsageLimits.tsx and the provider-core interface match pinned upstream 3368dd70f20cb192b68895494a4a73455524fb76; shared Codex/Claude plan weighting and unrelated OpenCode provider safeguards remain."
+    resource: https://github.com/NicholasZolton/t3code/commit/e530c7f948b2c88ba0dd04f930b9e72ade3aa3aa
     title: Deliberate retirement of the fork-only OpenCode usage integration
   - id: november-4-local-integration
-    resource: "Local Git object 865f3f977091580bc9e72236d7b042d617b2d1c1 on NicholasZolton/sync-upstream-changes; parents fork 470e518f7760790cae1e2fbb1e40fb1c30d4791a and upstream 3368dd70f20cb192b68895494a4a73455524fb76. Follow-up 42faa17d53171bc537bdcd6855ec561995ce7005 adapts fork mobile prompts to upstream's settings menu, and code tip 9b7bee668b6fd6d210c57fef622daac4c28293dd adapts fork test fixtures to the new settings and crypto APIs. These commits are local-only, not incorporated into main."
-    title: Ancestry-preserving local integration and compatibility adaptations
+    resource: "Git object 865f3f977091580bc9e72236d7b042d617b2d1c1; parents fork 470e518f7760790cae1e2fbb1e40fb1c30d4791a and upstream 3368dd70f20cb192b68895494a4a73455524fb76. Follow-up 42faa17d53171bc537bdcd6855ec561995ce7005 adapts fork mobile prompts to upstream's settings menu, and 9b7bee668b6fd6d210c57fef622daac4c28293dd adapts fork test fixtures to the new settings and crypto APIs. Final code tip e530c7f948b2c88ba0dd04f930b9e72ade3aa3aa removes the fork-only OpenCode account/quota integration. These commits reached main through PR 55."
+    title: Ancestry-preserving integration and compatibility adaptations
   - id: november-4-review-git
     resource: "Local Git verification at 2026-11-04T06:18:54+00:00: local main and origin/main equal 470e518f7760790cae1e2fbb1e40fb1c30d4791a. Shared baseline with upstream/main 3368dd70f20cb192b68895494a4a73455524fb76 is dd6c05ec313c6c870c7a7688e87143da5084031d, leaving 351 upstream commits missing on main. Both merge parents and merge 865f3f977091580bc9e72236d7b042d617b2d1c1 are ancestors of code tip 9b7bee668b6fd6d210c57fef622daac4c28293dd; its upstream gap is zero. The merge is not an ancestor of main. Of 1156 incoming paths without prior fork changes, 1155 match upstream exactly; only AgentSessionScanner.test.ts adds fork integration coverage. All .repos content matches upstream. No push, PR, packaging, deployment, or live-server restart has occurred."
     title: Separate local-branch and unchanged-main boundaries with upstream-first source audit
   - id: november-4-upstream
     resource: https://github.com/pingdotgg/t3code/commit/3368dd70f20cb192b68895494a4a73455524fb76
-    title: Pinned upstream tip incorporated into the local November 4 branch
+    title: Pinned upstream tip incorporated into the completed November 4 sync
   - id: november-2-main-integration
     resource: https://github.com/NicholasZolton/t3code/pull/52
     title: Completed November 2 upstream integration into fork main
@@ -268,26 +274,33 @@ sources:
 
 # Upstream integration
 
-Local branch `NicholasZolton/sync-upstream-changes` incorporates all 351 newer
-upstream commits through `3368dd70f2`, with ancestry preserved and zero branch gap.
-Local `main` and `origin/main` remain at `470e518f77`, sharing baseline
-`dd6c05ec31` and still missing those 351 commits. The newest completed sync on
-fork `main` remains [PR #52](https://github.com/NicholasZolton/t3code/pull/52).
+Fork `main` incorporates all 351 newer upstream commits through `3368dd70f2`,
+with ancestry preserved and zero gap against that pinned tip.
+[PR #55](https://github.com/NicholasZolton/t3code/pull/55) landed at `0406c1c1be`;
+the local main checkout is fast-forwarded to the same revision.
 Main integration and remote deployment are separate operations.
-[^november-4-review-git][^november-2-main-integration]
+[^november-4-main-integration][^november-4-main-review-git]
 
 This is a revision-pinned snapshot, not a claim about newer upstream work.
 Refresh it after the next review or integration using the
 [maintenance guidance](maintenance.md).
 
-## Local November 4 sync
+## Completed November 4 sync
+
+[PR #55](https://github.com/NicholasZolton/t3code/pull/55) merged on November 4,
+2026, at 07:28:58 UTC. Its landing commit
+`0406c1c1be2fe50e8ea78df42febd3919481d750` preserves previous fork `main`
+`470e518f7760790cae1e2fbb1e40fb1c30d4791a` and final code tip
+`e530c7f948b2c88ba0dd04f930b9e72ade3aa3aa` as parents.
+[^november-4-main-integration][^november-4-main-review-git]
 
 Merge `865f3f977091580bc9e72236d7b042d617b2d1c1` preserves fork parent
 `470e518f7760790cae1e2fbb1e40fb1c30d4791a` and pinned upstream parent
 `3368dd70f20cb192b68895494a4a73455524fb76`. Follow-up adaptations through
-`9b7bee668b6fd6d210c57fef622daac4c28293dd` retain the merge unchanged.
-Neither the merge nor those adaptations has reached `main`; nothing has been
-pushed, packaged, deployed, or restarted on the live installation.
+`9b7bee668b6fd6d210c57fef622daac4c28293dd` and the OpenCode usage retirement in
+`e530c7f948b2c88ba0dd04f930b9e72ade3aa3aa` retain the merge unchanged.
+The initial branch snapshot had zero upstream gap while fork `main` still lacked
+those 351 commits; PR #55 subsequently closed that gap on `main`.
 [^november-4-local-integration][^november-4-review-git][^november-4-upstream]
 
 Use upstream's Effect 4.1.2 crypto services and mobile AppBar settings menus for
@@ -547,16 +560,16 @@ migrates to upstream branch naming while preserving temporary branch names. The 
 | -------------------------------------------------- | ---------------------------------------- |
 | Fork                                               | `NicholasZolton/t3code`, remote `origin` |
 | Upstream                                           | `pingdotgg/t3code`, remote `upstream`    |
-| Main landing commit                                | `9a73f5dd04`: merge of PR #52            |
-| Upstream integration commit                        | `ed52b86b6a`: merge through `dd6c05ec31` |
-| Fork-side parent                                   | `e7d7a393d9`                             |
-| Upstream-side parent / shared baseline             | `dd6c05ec31`                             |
+| Main landing commit                                | `0406c1c1be`: merge of PR #55            |
+| Upstream integration commit                        | `865f3f9770`: merge through `3368dd70f2` |
+| Fork-side parent                                   | `470e518f77`                             |
+| Upstream-side parent / shared baseline             | `3368dd70f2`                             |
 | Missing commits at that integration's upstream tip | **0**                                    |
 
 Default to upstream implementations. Retain fork code for explicit features
 or fixes upstream does not provide. Native OpenCode 2 and thread management now
 use upstream services; fork configuration and UI improvements remain layered on
-those paths.[^november-2-local-integration][^november-2-main-review-git]
+those paths.[^november-4-local-integration][^november-4-main-review-git]
 
 ## Earlier integration boundaries
 
@@ -610,7 +623,7 @@ for upstream's 0.0.46 threshold. Remote compatibility metadata still cannot repl
 the bundled OpenCode policy. Older 2.x versions are outside the supported baseline.
 [^upstream-current-manifest][^reviewed-upstream-main]
 
-The local integration through `3368dd70f2` retains fork admission, execution,
+The completed integration through `3368dd70f2` retains fork admission, execution,
 and persisted input-delivery tracking for reused OpenCode child sessions. Once a
 child is reused, ambiguous parent reports must not attach stale results or settle
 the new call; observed execution can settle it without a result. Preserve this
@@ -873,10 +886,14 @@ git log --reverse --oneline origin/main..upstream/main
 
 [^opencode-child-tracking]: Native OpenCode lifecycle with reused-child admission, execution attribution, and delivery tracking.
 
-[^november-4-local-integration]: Local-only upstream merge and follow-up API adaptations, not a main integration.
+[^november-4-local-integration]: Upstream merge and follow-up API adaptations, now incorporated into main through PR #55.
 
 [^november-4-review-git]: Exact revisions, ancestry, separate main and branch gaps, and upstream-first source comparison.
 
-[^november-4-upstream]: Exact upstream revision incorporated into the local November 4 branch.
+[^november-4-upstream]: Exact upstream revision incorporated into the completed November 4 sync.
 
 [^november-4-opencode-usage-removal]: Maintainer-requested removal of fork-only OpenCode account usage and switching, preserving unrelated provider behavior.
+
+[^november-4-main-integration]: PR #55 and its recorded merge time.
+
+[^november-4-main-review-git]: Completed main integration, exact parents, and zero ancestry gap against the pinned upstream tip.
