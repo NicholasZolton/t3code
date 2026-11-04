@@ -1,5 +1,6 @@
 // @effect-diagnostics-next-line nodeBuiltinImport:off -- Independent crypto primitives verify interoperability, not a copy of the sender.
 import * as NodeCrypto from "node:crypto";
+import * as PlatformCrypto from "@effect/platform-node/NodeCrypto";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
 import * as NotificationEncryption from "./NotificationEncryption.ts";
@@ -45,6 +46,7 @@ export function openNotification(
 }
 
 export const encryptionLayer = NotificationEncryption.layer.pipe(
+  Layer.provide(PlatformCrypto.layer),
   Layer.provide(
     Layer.succeed(NotificationEncryption.NotificationWebCrypto, {
       subtle: globalThis.crypto.subtle,

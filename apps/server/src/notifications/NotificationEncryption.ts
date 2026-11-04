@@ -1,6 +1,6 @@
 import { fitFcmData } from "@t3tools/shared/agentActivityAndroid";
 import * as Context from "effect/Context";
-import * as Crypto from "effect/Crypto";
+import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
@@ -44,7 +44,7 @@ const encodeData = Schema.encodeSync(
 
 const make = Effect.gen(function* () {
   const { subtle } = yield* NotificationWebCrypto;
-  const crypto = yield* Crypto.Crypto;
+  const random = yield* SecureRandom.SecureRandom;
   const importPublicKey = (publicKey: string): ReturnType<typeof subtle.importKey> =>
     subtle.importKey(
       "spki",
@@ -65,9 +65,7 @@ const make = Effect.gen(function* () {
     ),
     // Only the envelope reaches FCM. The matching private key never leaves Android.
     seal: Effect.fn("NotificationEncryption.seal")(function* (input) {
-      const nonce = yield* crypto
-        .randomBytes(12)
-        .pipe(Effect.mapError((cause) => new NotificationEncryptionError({ cause })));
+      const nonce = yield* random.randomBytes(12);
       return yield* Effect.tryPromise({
         try: async () => {
           const encoder = new TextEncoder();

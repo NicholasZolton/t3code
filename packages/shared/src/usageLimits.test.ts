@@ -17,7 +17,6 @@ import {
   collectExternalUsageLinks,
   collectLimitNotices,
   collectLimitPools,
-  openCodeLimitAccounts,
   elapsedShare,
   limitAccountWeight,
   exhaustedUsageWindow,
@@ -163,92 +162,6 @@ describe("pace", () => {
     expect(paceOf({ ...window, usedPercent: 62 }, now)).toBe("on");
     expect(paceOf({ ...window, usedPercent: 80 }, now)).toBe("ahead");
   });
-});
-
-it("weights OpenCode logins by their plan while leaving an expired account out of the pool", () => {
-  const accounts = openCodeLimitAccounts(
-    [
-      {
-        id: "first",
-        label: "Work",
-        active: true,
-        plan: "pro",
-        limits: { checkedAt: "2026-09-03T11:00:00.000Z", windows: [window] },
-      },
-      {
-        id: "second",
-        label: "Personal",
-        active: false,
-        plan: "prolite",
-        limits: {
-          checkedAt: "2026-09-03T11:00:00.000Z",
-          windows: [{ ...window, usedPercent: 80 }],
-        },
-      },
-      {
-        id: "expired",
-        label: "Old",
-        active: false,
-        limits: {
-          checkedAt: "2026-09-03T11:00:00.000Z",
-          windows: [],
-          unavailable: { reason: "probeFailed", message: "Expired login" },
-        },
-      },
-    ],
-    EnvironmentId.make("local"),
-    ProviderInstanceId.make("opencode"),
-    "My Mac",
-  );
-  const pool = collectLimitPools(accounts, now)[0];
-  expect(pool?.driver).toBe(ProviderDriverKind.make("opencode"));
-  expect(accounts.map(limitAccountWeight)).toEqual([20, 5]);
-  expect(pool?.windows[0]?.remainingPercent).toBe(52);
-  expect(pool?.windows[0]?.resets.map((reset) => reset.restoresPercent)).toEqual([16, 32]);
-  expect(pool?.windows[0]?.members).toHaveLength(2);
-  expect(pool?.windows[0]?.columns).toHaveLength(2);
-  expect(accounts.map((account) => account.key)).toEqual([
-    "local:opencode:first",
-    "local:opencode:second",
-  ]);
-});
-
-it("gives an OpenCode Business Premium account the same weekly pool share as Pro 5x", () => {
-  const weekly = {
-    ...window,
-    id: "seven_day",
-    kind: "weekly" as const,
-    label: "Weekly",
-    windowDurationMins: 7 * 24 * 60,
-  };
-  const accounts = openCodeLimitAccounts(
-    [
-      {
-        id: "personal",
-        label: "Personal",
-        active: false,
-        plan: "prolite",
-        limits: {
-          checkedAt: "2026-09-03T11:00:00.000Z",
-          windows: [{ ...weekly, usedPercent: 100 }],
-        },
-      },
-      {
-        id: "business",
-        label: "Work",
-        active: true,
-        plan: "self_serve_business_prolite",
-        limits: { checkedAt: "2026-09-03T11:00:00.000Z", windows: [{ ...weekly, usedPercent: 0 }] },
-      },
-    ],
-    EnvironmentId.make("local"),
-    ProviderInstanceId.make("opencode"),
-    "My Mac",
-  );
-  const [pool] = collectLimitPools(accounts, now);
-  expect(accounts.map(limitAccountWeight)).toEqual([5, 5]);
-  expect(pool?.windows[0]?.remainingPercent).toBe(50);
-  expect(pool?.windows[0]?.resets.map((reset) => reset.restoresPercent)).toEqual([50, 0]);
 });
 
 describe("pools", () => {
@@ -764,6 +677,57 @@ describe("pools", () => {
     expect(accounts[0]?.displayName).toBe("claude-team-seat");
   });
 
+  it("labels a default-named instance merged with a hub account by e-mail, keeping a chosen name", () => {
+    const native = provider({
+      driver: claude,
+      instanceId: ProviderInstanceId.make("claudeAgent"),
+      displayName: "Claude",
+      auth: { status: "authenticated", email: "a@example.com" },
+      usageLimits: { checkedAt, windows: [window] },
+    });
+    const named = provider({
+      driver: claude,
+      instanceId: ProviderInstanceId.make("claude-work"),
+      displayName: "Work",
+      auth: { status: "authenticated", email: "b@example.com" },
+      usageLimits: { checkedAt, windows: [window] },
+    });
+    const hubAccount = (email: string) => ({
+      id: `claude-${email}.json`,
+      driver: claude,
+      email,
+      usageLimits: { checkedAt, windows: [window] },
+    });
+    const input = new Map([
+      [
+        EnvironmentId.make("env-a"),
+        {
+          ...laptop,
+          serverConfig: {
+            providers: [native, named],
+            usageLimitSources: [
+              {
+                ...source,
+                accounts: [
+                  hubAccount("a@example.com"),
+                  hubAccount("b@example.com"),
+                  hubAccount("c@example.com"),
+                ],
+              },
+            ],
+          },
+        },
+      ],
+    ]);
+    expect(
+      collectLimitAccounts(input).map(({ displayName, email }) => ({ displayName, email })),
+    ).toEqual([
+      { displayName: null, email: "a@example.com" },
+      { displayName: "Work", email: "b@example.com" },
+      { displayName: null, email: "c@example.com" },
+    ]);
+  });
+
   it("pools Codex windows by kind, whichever slot reported them", () => {
     const codexAccount = (id: string, slots: readonly string[]) => ({
       id,
@@ -1194,6 +1158,28 @@ describe("/usage-limits", () => {
       creditId: "hub-credit",
     });
     expect(report?.accounts[0]?.limits.resetCredits?.availableCount).toBe(3);
+  });
+
+  it("labels hub rows by account id without .json", () => {
+    const hub = [
+      {
+        ...sources[0]!,
+        label: "CLIProxyAPI",
+        accounts: [
+          {
+            id: "claude-b@example.com.json",
+            driver: selected.driver,
+            email: "b@example.com",
+            usageLimits: limits,
+          },
+          { id: "team-seat.json", driver: selected.driver, usageLimits: limits },
+        ],
+      },
+    ];
+    const report = collectProviderUsageLimits(selected.instanceId, [selected], hub, now);
+    expect(
+      report?.accounts.filter((account) => account.sourceLabel).map((account) => account.label),
+    ).toEqual(["CLIProxyAPI · claude-b@example.com", "CLIProxyAPI · team-seat"]);
   });
 
   it("keeps unidentified custom instances separate, filtering by driver", () => {

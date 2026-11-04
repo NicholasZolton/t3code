@@ -3,6 +3,8 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { expect, it, vi } from "vite-plus/test";
 
+import type { AppBarMenu } from "../../components/ui/AppBar.types";
+
 const { Children, harness } = vi.hoisted(
   (): {
     Children: (props: { children?: ReactNode }) => ReactNode;
@@ -60,7 +62,11 @@ vi.mock("./components/SettingsSection", async () => {
 });
 vi.mock("./components/SettingsEnvironmentFilterHeader", () => ({
   SettingsEnvironmentFilterHeader: () => null,
-  AndroidSettingsEnvironmentFilter: () => null,
+  useSettingsEnvironmentMenu: (): AppBarMenu => ({
+    title: "Environments",
+    icon: "line.3.horizontal.decrease.circle",
+    items: [],
+  }),
 }));
 vi.mock("./components/SettingsRow", () => ({
   SettingsRow: ({ label }: { label: string }) => <button>{label}</button>,

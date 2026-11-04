@@ -6,6 +6,7 @@ import * as NodePath from "node:path";
 import * as NodeUtil from "node:util";
 
 import * as NodeServices from "@effect/platform-node/NodeServices";
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import { describe } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -83,7 +84,7 @@ export const runGit = (
 /** The driver over a real subprocess runner, which is what every jj fixture below runs against. */
 export const JjDriverLayer = JjVcsDriver.layer.pipe(
   Layer.provideMerge(VcsProcess.layer),
-  Layer.provideMerge(NodeServices.layer),
+  Layer.provideMerge(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)),
 );
 
 export interface SeedJjRepoInput {

@@ -5,7 +5,7 @@ import { useState } from "react";
 import { Platform, Pressable, ScrollView, useWindowDimensions, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { AndroidSheetHeader } from "../../../components/ui/AndroidScreenHeader";
+import { AppBar } from "../../../components/ui/AppBar";
 import { SheetHeader } from "../../../components/ui/SheetHeader";
 import { ScreenContent } from "../../../components/ui/ScreenContent";
 import { NativeStackScreenOptions } from "../../../native/StackHeader";
@@ -80,7 +80,8 @@ export function GitBranchesSheet(_props: GitBranchesSheetProps) {
         />
       ) : null}
       {Platform.OS === "android" ? (
-        <AndroidSheetHeader
+        <AppBar
+          sheet
           title={`${vcsTerminology.refNounPlural} & ${vcsTerminology.workspaceNounPlural}`}
           onBack={() => navigation.goBack()}
           hideBottomBorder

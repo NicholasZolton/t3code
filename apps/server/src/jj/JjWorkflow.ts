@@ -1,5 +1,5 @@
 import * as Context from "effect/Context";
-import * as Crypto from "effect/Crypto";
+import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
@@ -66,7 +66,7 @@ export class JjWorkflow extends Context.Service<
 export const make = Effect.gen(function* () {
   const withWorkspaceQueries = yield* makeWorkspaceQueries;
   const config = yield* ServerConfig;
-  const crypto = yield* Crypto.Crypto;
+  const random = yield* SecureRandom.SecureRandom;
   const driver = yield* JjVcsDriver.JjVcsDriver;
   const fileSystem = yield* FileSystem.FileSystem;
   const gitManager = yield* GitManager.GitManager;
@@ -84,7 +84,7 @@ export const make = Effect.gen(function* () {
   ): Effect.Effect<A, E> =>
     effect.pipe(
       withWorkspaceQueries,
-      Effect.provideService(Crypto.Crypto, crypto),
+      Effect.provideService(SecureRandom.SecureRandom, random),
       Effect.provideService(ServerSettings.ServerSettingsService, serverSettingsService),
       Effect.provideService(FileSystem.FileSystem, fileSystem),
       Effect.provideService(Path.Path, path),

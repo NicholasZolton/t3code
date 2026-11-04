@@ -6,11 +6,10 @@ import {
   resolveProjectProviderInstanceEnabled,
   type UsageLimitsReport,
   type ProviderInstanceId,
-  ProviderDriverKind,
-  type OpenCodeCodexAccount,
   type ProviderConsumeResetCreditInput,
   type ServerProviderSlashCommand,
   isProviderAvailable,
+  PROVIDER_DISPLAY_NAMES,
   type ServerProvider,
   type ServerProviderUsageLimits,
   type ServerProviderUsageWindow,
@@ -163,25 +162,6 @@ export type LimitPresentations = ReadonlyMap<
   }
 >;
 
-/** OpenCode Codex logins live with each configured instance, not in its provider snapshot. */
-export function collectOpenCodeAccountTargets(presentations: LimitPresentations): readonly {
-  readonly environmentId: EnvironmentId;
-  readonly instanceId: ProviderInstanceId;
-  readonly label: string;
-}[] {
-  return [...presentations].flatMap(([environmentId, presentation]) =>
-    (presentation.serverConfig?.providers ?? [])
-      .filter(
-        (provider) => provider.driver === "opencode" && provider.enabled && provider.installed,
-      )
-      .map((provider) => ({
-        environmentId,
-        instanceId: provider.instanceId,
-        label: presentation.entry.target.label,
-      })),
-  );
-}
-
 /** One destination per service, even when several accounts or environments use it. */
 export function collectExternalUsageLinks(presentations: LimitPresentations) {
   const links = new Map<
@@ -254,6 +234,8 @@ function accountKeyResolver(reports: Iterable<AccountReport>) {
   };
 }
 
+const hubAccountName = (account: { readonly id: string }) => account.id.replace(/\.json$/i, "");
+
 export interface LimitAccount {
   readonly key: string;
   readonly driver: ServerProvider["driver"];
@@ -271,29 +253,6 @@ export interface LimitAccount {
     readonly input: ProviderConsumeResetCreditInput;
   } | null;
   readonly limits: ServerProviderUsageLimits;
-}
-
-/** OpenCode logins are per instance; expired accounts stay switchable but do not occupy pool segments. */
-export function openCodeLimitAccounts(
-  accounts: readonly OpenCodeCodexAccount[],
-  environmentId: EnvironmentId,
-  instanceId: ProviderInstanceId,
-  label: string,
-): readonly LimitAccount[] {
-  return accounts
-    .filter((account) => account.limits.windows.length > 0)
-    .map((account) => ({
-      key: `${environmentId}:${instanceId}:${account.id}`,
-      driver: ProviderDriverKind.make("opencode"),
-      displayName: account.label.includes("@") ? null : account.label,
-      email: account.label.includes("@") ? account.label : undefined,
-      plan: account.plan,
-      accentColor: undefined,
-      environments: [{ environmentId, label }],
-      sourceLabel: null,
-      redeem: null,
-      limits: account.limits,
-    }));
 }
 
 /**
@@ -347,9 +306,18 @@ export function collectLimitAccounts(presentations: LimitPresentations): readonl
     ];
     const winner = fresher ? next : previous;
     const creditSource = creditSources.get(key);
+    // A hub e-mail names the account better than the driver's default instance name.
+    const hubEmail = [previous, next].some(
+      (account) => account.environments.length === 0 && account.email,
+    );
+    const displayName = previous.displayName ?? next.displayName;
     accounts.set(key, {
       ...previous,
-      displayName: previous.displayName ?? next.displayName,
+      displayName:
+        hubEmail &&
+        displayName?.toLowerCase() === PROVIDER_DISPLAY_NAMES[previous.driver]?.toLowerCase()
+          ? null
+          : displayName,
       plan: planSources.get(key)?.plan ?? previous.plan ?? next.plan,
       accentColor: previous.accentColor ?? next.accentColor,
       environments,
@@ -403,7 +371,7 @@ export function collectLimitAccounts(presentations: LimitPresentations): readonl
         merge(resolveKey(account) ?? key, {
           key,
           driver: account.driver,
-          displayName: account.email ? null : account.id.replace(/\.json$/i, ""),
+          displayName: account.email ? null : hubAccountName(account),
           email: account.email,
           plan: account.plan,
           accentColor: undefined,
@@ -459,10 +427,6 @@ export interface LimitPoolMember {
 /** Plan multipliers are relative quota sizes; unknown plans retain the usual 1x share. */
 export function limitAccountWeight(account: LimitAccount): number {
   const plan = account.plan?.trim().toLowerCase();
-  if (account.driver === "opencode") {
-    if (plan === "pro") return 20;
-    if (plan === "prolite" || plan === "self_serve_business_prolite") return 5;
-  }
   const multiplier = plan?.match(/\b(\d+(?:\.\d+)?)\s*x\b/)?.[1];
   const weight = multiplier ? Number(multiplier) : 1;
   return Number.isFinite(weight) && weight > 0 ? weight : 1;
@@ -926,7 +890,7 @@ export function collectProviderUsageLimits(
       accounts.push({
         id: `${source.id}:${account.id}`,
         driver: account.driver,
-        label: `${source.label} · ${account.id}`,
+        label: `${source.label} · ${hubAccountName(account)}`,
         sourceLabel: "CLI Proxy",
         ...(account.usageLimits.resetCredits?.nextCreditId
           ? {
