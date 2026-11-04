@@ -2,6 +2,8 @@
 
 ## 2026-11-04
 
+- **Local branch integration**: [Upstream integration](upstream-integration.md#local-november-4-sync) records merge `865f3f9770` through upstream `3368dd70f2`, with all 351 newer commits incorporated and zero branch gap. Adaptations through `9b7bee668b` use upstream crypto and mobile settings-menu APIs while retaining unreplaced fork boundaries. Fork `main` remains at `470e518f77` with the same gap pending; no push, packaging, deployment, or live-server restart has occurred.
+
 - **Service configuration**: [Paired Android notifications](paired-notifications.md) now preserve the preview Google services JSON contents in fnox with a temporary-file binding, removing the main-checkout path dependency. Existing Firebase server credentials and private signing identities remain unchanged.
 
 - **Compatibility boundary**: [Paired Android notifications](paired-notifications.md) must remain reachable from mobile Settings without T3 Connect configuration. Recorded the local-only menu entry lost during the November upstream integration and its regression coverage.
