@@ -15,11 +15,12 @@ import { SettingsSection } from "./components/SettingsSection";
 import { SettingsScreen } from "./components/SettingsScreen";
 import {
   SettingsEnvironmentFilterHeader,
-  AndroidSettingsEnvironmentFilter,
+  useSettingsEnvironmentMenu,
 } from "./components/SettingsEnvironmentFilterHeader";
 import { useSettingsEnvironmentFilter } from "./settings-environment-filter";
 
 export function SettingsPromptsRouteScreen() {
+  const environmentMenu = useSettingsEnvironmentMenu();
   const insets = useSafeAreaInsets();
   const { selectedTargets, selectedProjectKey } = useSettingsEnvironmentFilter();
   const update = useAtomCommand(serverEnvironment.updateSettings, { reportFailure: false });
@@ -69,7 +70,7 @@ export function SettingsPromptsRouteScreen() {
   return (
     <>
       <SettingsEnvironmentFilterHeader />
-      <SettingsScreen title="Prompts" trailing={<AndroidSettingsEnvironmentFilter />}>
+      <SettingsScreen title="Prompts" menus={[environmentMenu]}>
         <ScreenScrollView
           contentContainerClassName="gap-5 px-5 pt-4"
           contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 18) + 18 }}
