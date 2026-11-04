@@ -6,7 +6,7 @@ tags: [fork, android, notifications, privacy]
 status: experimental
 generated:
   by: opencode/gpt-6.1-sol
-  at: 2026-10-12T00:22:28Z
+  at: 2026-11-04T00:58:07+00:00
 sources:
   - id: paired-delivery
     resource: ../apps/server/src/notifications/PairedNotifications.ts
@@ -26,6 +26,8 @@ The fork supports Google notification delivery without routing activity through 
 Reuse the shared Connect notification policy and native presentation, not a second set of alert rules. Rich titles, status and thread routes are allowed inside encrypted paired payloads; do not send them to FCM in plaintext or add conversation content. The phone retains the private key and supplies only its public key through the existing authenticated registration. Preserve registration binding, freshness, ordering, opt-out, session revocation and independent per-environment state. Connect sign-out must not clear paired keys or activity. Thread access after a notification tap still requires the environment's normal authentication.[^paired-delivery]
 
 Google still processes device identifiers and delivery metadata. This reduces transmitted content, not a compliance guarantee. Private binaries must retain their package and signing identity and use the same Firebase project as the sending server.[^paired-operations]
+
+The fnox `local` profile stores the Firebase service-account and Android Google services JSON contents encrypted, not as checkout-specific file paths. The Android file uses `as_file = true`, so prebuild and native builds must run within `fnox exec` while its temporary file exists. The stored Android configuration covers the preview package only.[^paired-operations]
 
 Finder/Dock launches cannot rely on a fnox-wrapped shell. The macOS desktop can load the existing Firebase credential from login Keychain before spawning its local server, while preserving an explicitly supplied environment variable. Keep this fallback desktop-local: it must not forward credentials to SSH hosts or require a checkout-specific secret manager.[^desktop-credentials]
 

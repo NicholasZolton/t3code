@@ -1,5 +1,9 @@
 # Wiki update log
 
+## 2026-11-04
+
+- **Service configuration**: [Paired Android notifications](paired-notifications.md) now preserve the preview Google services JSON contents in fnox with a temporary-file binding, removing the main-checkout path dependency. Existing Firebase server credentials and private signing identities remain unchanged.
+
 ## 2026-11-02
 
 - **Integration**: [PR #52](https://github.com/NicholasZolton/t3code/pull/52) reached fork `main` at `9a73f5dd04`. Refreshed [upstream integration](upstream-integration.md#completed-november-2-sync): all 3,337 incoming commits through `dd6c05ec31` are incorporated with ancestry preserved and zero main gap. The main local checkout is fast-forwarded; remote deployment remains separate.
