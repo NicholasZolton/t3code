@@ -2,6 +2,8 @@
 
 ## 2026-11-04
 
+- **Service configuration**: [Paired Android notifications](paired-notifications.md) now preserve the preview Google services JSON contents in fnox with a temporary-file binding, removing the main-checkout path dependency. Existing Firebase server credentials and private signing identities remain unchanged.
+
 - **Compatibility boundary**: [Paired Android notifications](paired-notifications.md) must remain reachable from mobile Settings without T3 Connect configuration. Recorded the local-only menu entry lost during the November upstream integration and its regression coverage.
 
 ## 2026-11-02

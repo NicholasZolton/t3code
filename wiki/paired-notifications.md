@@ -6,7 +6,7 @@ tags: [fork, android, notifications, privacy]
 status: experimental
 generated:
   by: opencode/gpt-6.1-sol
-  at: 2026-11-04T00:47:48Z
+  at: 2026-11-04T01:12:19Z
 sources:
   - id: paired-delivery
     resource: ../apps/server/src/notifications/PairedNotifications.ts
@@ -40,6 +40,8 @@ Reuse the shared Connect notification policy and native presentation, not a seco
 Keep the mobile notification settings entry available without T3 Connect configuration. The paired settings screen already handles that build mode; gating its navigation on cloud configuration makes Android opt-in unreachable. The October 10 fork added this entry, but the November upstream settings integration dropped it from the local-only list. Shared connection rows and a cloud-configuration regression test preserve this boundary.[^paired-settings-entry][^paired-settings-test][^original-settings-entry][^settings-regression-integration]
 
 Google still processes device identifiers and delivery metadata. This reduces transmitted content, not a compliance guarantee. Private binaries must retain their package and signing identity and use the same Firebase project as the sending server.[^paired-operations]
+
+The fnox `local` profile stores the Firebase service-account and Android Google services JSON contents encrypted, not as checkout-specific file paths. The Android file uses `as_file = true`, so prebuild and native builds must run within `fnox exec` while its temporary file exists. The stored Android configuration covers the preview package only.[^paired-operations]
 
 Finder/Dock launches cannot rely on a fnox-wrapped shell. The macOS desktop can load the existing Firebase credential from login Keychain before spawning its local server, while preserving an explicitly supplied environment variable. Keep this fallback desktop-local: it must not forward credentials to SSH hosts or require a checkout-specific secret manager.[^desktop-credentials]
 
