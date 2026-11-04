@@ -10,10 +10,10 @@ Add these values to the fnox `local` profile using your existing encrypted provi
 
 ```sh
 fnox set --profile local --provider <your-age-provider> T3CODE_FCM_SERVICE_ACCOUNT < /private/path/service-account.json
-fnox set --profile local --provider <your-age-provider> T3CODE_ANDROID_GOOGLE_SERVICES_FILE /absolute/path/google-services.json
+fnox set --profile local --provider <your-age-provider> T3CODE_ANDROID_GOOGLE_SERVICES_FILE < /private/path/google-services.json
 ```
 
-The first variable contains the JSON itself, not a file path. The second contains a local file path, not the JSON contents. Keep both source files outside the repository. The Google services file must contain the chosen APK package identifier; it does not contain the service-account private key.
+Both entries store the JSON contents, not a machine-specific file path. Set `as_file = true` on the `T3CODE_ANDROID_GOOGLE_SERVICES_FILE` entry in `fnox.toml` (already configured for this fork). Under `fnox exec`, the service-account variable contains JSON while the Google services variable points to a permission-restricted temporary file that fnox removes when the command exits. Keep prebuild and the native build inside that command; do not persist its temporary path for a later build. Keep any source copies outside the repository. The Google services file must contain the chosen APK package identifier; it does not contain the service-account private key.
 
 Run the server under `fnox exec --profile local --no-defaults -- <server-command>`. For SSH-managed servers, configure fnox and resolve the service-account variable **on the remote host when its launcher starts**; setting it only on the desktop does not forward it to SSH. Restart the server after changing the credentials. This capability is disabled when the variable is absent or the JSON is malformed. Existing T3 Connect credentials and delivery are unaffected.
 
