@@ -48,11 +48,16 @@ const BROWSER_CHECK_INTERVAL_MS = 2_000;
 const MAX_REVIEW_LIFETIME_MS = 60 * 60 * 1_000;
 const shellQuote = (value: string): string => `'${value.replaceAll("'", "'\\''")}'`;
 
-class TailscaleServePermissionError extends Error {
-  constructor() {
-    super("Tailscale needs permission to publish the Crit review.");
+class TailscaleServePermissionError extends Schema.TaggedError<TailscaleServePermissionError>()(
+  "TailscaleServePermissionError",
+  {},
+) {
+  override get message(): string {
+    return "Tailscale needs permission to publish the Crit review.";
   }
 }
+
+const isTailscaleServePermissionError = Schema.is(TailscaleServePermissionError);
 
 async function tailscaleTarget(command: string): Promise<{
   readonly hostname: string;
@@ -132,7 +137,7 @@ function waitForTailscaleForward(child: NodeChildProcess.ChildProcess, url: stri
     const onClose = (): void =>
       finish(
         /permission denied|access denied|must be root|operation not permitted/i.test(stderr)
-          ? new TailscaleServePermissionError()
+          ? new TailscaleServePermissionError({})
           : new Error(
               "Tailscale Serve exited before forwarding Crit. Check Tailscale permissions.",
             ),
@@ -436,7 +441,7 @@ export function createCritManager(
         try {
           await startForward(false);
         } catch (error) {
-          if (!(error instanceof TailscaleServePermissionError) || isWindows) throw error;
+          if (!isTailscaleServePermissionError(error) || isWindows) throw error;
           // Existing file shares make even an operator's proxy-only config require sudo.
           try {
             await startForward(true);

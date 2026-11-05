@@ -89,13 +89,15 @@ export class PairedNotificationSetupError extends Schema.TaggedError<PairedNotif
   }
 }
 
-const pushToken = Effect.tryPromise(() => Notifications.getDevicePushTokenAsync()).pipe(
+const pushToken = Effect.tryPromise({
+  try: () => Notifications.getDevicePushTokenAsync(),
+  catch: () => new PairedNotificationSetupError({ reason: "token" }),
+}).pipe(
   Effect.flatMap((token) =>
     token.type === "android" && typeof token.data === "string" && token.data.trim()
       ? Effect.succeed(token.data.trim())
       : Effect.fail(new PairedNotificationSetupError({ reason: "token" })),
   ),
-  Effect.catch(() => Effect.fail(new PairedNotificationSetupError({ reason: "token" }))),
 );
 
 const updateRegistration = Effect.fn("updatePairedNotificationRegistration")(function* (
