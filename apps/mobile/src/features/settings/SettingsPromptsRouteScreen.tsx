@@ -18,6 +18,7 @@ import {
   useSettingsEnvironmentMenu,
 } from "./components/SettingsEnvironmentFilterHeader";
 import { useSettingsEnvironmentFilter } from "./settings-environment-filter";
+import { SharePromptsSection } from "./SharePromptsSection";
 
 export function SettingsPromptsRouteScreen() {
   const environmentMenu = useSettingsEnvironmentMenu();
@@ -131,6 +132,7 @@ export function SettingsPromptsRouteScreen() {
               </Pressable>
             </SettingsSection>
           ) : null}
+          {selectedProjectKey === null ? <SharePromptsSection /> : null}
           {editing !== null && selectedProjectKey === null ? (
             <View className="gap-3 rounded-2xl border border-border p-4">
               <Text className="font-t3-medium">Short name</Text>
