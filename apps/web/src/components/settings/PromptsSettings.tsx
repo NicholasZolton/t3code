@@ -24,6 +24,7 @@ import { SettingsPageContainer, SettingsSection } from "./settingsLayout";
 import { SettingsScopeNotice } from "./SettingsScopeNotice";
 import { useSettingsScope } from "./SettingsScopeContext";
 import { useUpdateScopedSettings } from "./useScopedSettings";
+import { SharePromptsButton } from "./SharePromptsButton";
 
 export function PromptsSettings() {
   const { scope, targets } = useSettingsScope();
@@ -65,10 +66,13 @@ export function PromptsSettings() {
         title="Reusable prompts"
         variant="plain"
         headerAction={
-          <Button size="xs" variant="outline" onClick={() => open(null)}>
-            <PlusIcon />
-            Add prompt
-          </Button>
+          <div className="flex flex-wrap justify-end gap-2">
+            <SharePromptsButton />
+            <Button size="xs" variant="outline" onClick={() => open(null)}>
+              <PlusIcon />
+              Add prompt
+            </Button>
+          </div>
         }
       >
         <p className="px-3 pb-2 text-xs leading-relaxed text-muted-foreground sm:px-4">

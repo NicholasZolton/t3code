@@ -18,6 +18,14 @@ Add a short name and prompt in **Settings → Prompts**, then type `>name` in th
 composer and select it to insert the text. Saved prompts belong to the selected
 environment and are available from web, desktop, and mobile.
 
+To reuse prompts on another machine, connect both environments, select the
+destination in **Settings → Prompts**, and choose **Copy or sync**. Copy adds
+missing prompts; **Copy and replace** also replaces matching names. Both keep
+destination-only prompts. **Sync exactly** makes the destination match the
+source, including removing extras, after showing the changes and asking for
+confirmation. The source is unchanged. These actions run once; future edits
+are not synced automatically.
+
 Use `{{env.NAME}}` to insert an environment variable from that environment's
 host, or `{{clipboard}}` to insert text from the device on which you select the
 prompt. If a variable is missing or the clipboard cannot be read, T3 Code keeps

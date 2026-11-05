@@ -2,6 +2,51 @@ import { searchItems } from "./searchRanking.ts";
 
 const VARIABLE = /\{\{(clipboard|env\.([a-zA-Z_][a-zA-Z0-9_]*))\}\}/g;
 
+export const SAVED_PROMPT_TRANSFER_MODES = [
+  { value: "copy", label: "Copy missing prompts", description: "Keep all existing prompts." },
+  {
+    value: "replace",
+    label: "Copy and replace",
+    description: "Replace matching names, but keep destination-only prompts.",
+  },
+  {
+    value: "sync",
+    label: "Sync exactly",
+    description: "Replace matching names and remove destination-only prompts.",
+  },
+] as const;
+
+export type SavedPromptTransferMode = (typeof SAVED_PROMPT_TRANSFER_MODES)[number]["value"];
+
+export interface SavedPromptTransferPlan {
+  readonly patch: Record<string, string | null>;
+  readonly added: number;
+  readonly updated: number;
+  readonly removed: readonly string[];
+}
+
+export function planSavedPromptTransfer(
+  source: Readonly<Record<string, string>>,
+  destination: Readonly<Record<string, string>>,
+  mode: SavedPromptTransferMode,
+): SavedPromptTransferPlan {
+  const updates = Object.fromEntries(
+    Object.entries(source).filter(
+      ([name, body]) =>
+        !Object.hasOwn(destination, name) || (mode !== "copy" && destination[name] !== body),
+    ),
+  );
+  const removed =
+    mode === "sync" ? Object.keys(destination).filter((name) => !Object.hasOwn(source, name)) : [];
+  const added = Object.keys(updates).filter((name) => !Object.hasOwn(destination, name)).length;
+  return {
+    patch: { ...updates, ...Object.fromEntries(removed.map((name) => [name, null])) },
+    added,
+    updated: Object.keys(updates).length - added,
+    removed,
+  };
+}
+
 export function searchSavedPrompts(
   prompts: Readonly<Record<string, string>>,
   query: string,
