@@ -5,6 +5,8 @@ import * as Schema from "effect/Schema";
 const ConnectionTargetBase = {
   environmentId: EnvironmentId,
   label: Schema.String,
+  // Discovery may refresh the host label, but must not overwrite a name chosen on this client.
+  labelSource: Schema.optionalKey(Schema.Literal("user")),
 };
 
 export class PrimaryConnectionTarget extends Schema.TaggedClass<PrimaryConnectionTarget>()(

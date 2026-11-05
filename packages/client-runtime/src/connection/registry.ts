@@ -33,7 +33,13 @@ import type {
   PersistedConnectionTarget,
   SupervisorConnectionState,
 } from "./model.ts";
-import { ConnectionBlockedError } from "./model.ts";
+import {
+  BearerConnectionTarget,
+  ConnectionBlockedError,
+  PrimaryConnectionTarget,
+  RelayConnectionTarget,
+  SshConnectionTarget,
+} from "./model.ts";
 import * as Persistence from "../platform/persistence.ts";
 import * as EnvironmentSupervisor from "./supervisor.ts";
 import * as ConnectionDriver from "./driver.ts";
@@ -57,6 +63,20 @@ import {
 } from "./routes.ts";
 
 const isSshConnectionProfile = Schema.is(SshConnectionProfile);
+
+function withUserLabel(target: ConnectionTarget, label: string): ConnectionTarget {
+  const fields = { label, labelSource: "user" as const };
+  switch (target._tag) {
+    case "PrimaryConnectionTarget":
+      return new PrimaryConnectionTarget({ ...target, ...fields });
+    case "BearerConnectionTarget":
+      return new BearerConnectionTarget({ ...target, ...fields });
+    case "RelayConnectionTarget":
+      return new RelayConnectionTarget({ ...target, ...fields });
+    case "SshConnectionTarget":
+      return new SshConnectionTarget({ ...target, ...fields });
+  }
+}
 
 function unsupportedState(
   entry: ConnectionCatalogEntry,
@@ -144,6 +164,16 @@ export class EnvironmentRegistry extends Context.Service<
     readonly reorderRoutes: (
       environmentId: EnvironmentId,
       routeIds: ReadonlyArray<string>,
+    ) => Effect.Effect<
+      void,
+      | Persistence.ConnectionPersistenceError
+      | EnvironmentNotRegisteredError
+      | PlatformEnvironmentRemovalError
+      | ConnectionBlockedError
+    >;
+    readonly rename: (
+      environmentId: EnvironmentId,
+      label: string,
     ) => Effect.Effect<
       void,
       | Persistence.ConnectionPersistenceError
@@ -341,6 +371,21 @@ export const make = Effect.gen(function* () {
       });
     }
     return entry;
+  });
+
+  // Metadata updates retain the supervisor and its active session.
+  const publishEntryLocked = Effect.fn("EnvironmentRegistry.publishEntryLocked")(function* (
+    entry: ConnectionCatalogEntry,
+  ) {
+    const environmentId = entry.target.environmentId;
+    const lease = (yield* SubscriptionRef.get(serviceScopes)).get(environmentId);
+    if (lease !== undefined) {
+      yield* SubscriptionRef.update(serviceScopes, (current) =>
+        new Map(current).set(environmentId, { ...lease, entry }),
+      );
+    }
+    yield* SubscriptionRef.update(entries, (current) => new Map(current).set(environmentId, entry));
+    return lease;
   });
 
   const closeServiceScope = Effect.fn("EnvironmentRegistry.closeServiceScope")(function* (
@@ -577,14 +622,18 @@ export const make = Effect.gen(function* () {
         const previous = (yield* SubscriptionRef.get(entries)).get(environmentId);
         let entry = registered;
         if (previous !== undefined) {
+          const nextRoute: ConnectionRoute =
+            previous.target.labelSource === "user"
+              ? { ...route, target: withUserLabel(route.target, previous.target.label) }
+              : route;
           const existing = connectionRoutes(previous);
-          const sameAddress = findRouteToSameAddress(existing, route);
+          const sameAddress = findRouteToSameAddress(existing, nextRoute);
           const routes = existing.filter(
             (existing) =>
               existing !== sameAddress ||
               connectionRouteId(existing.target) === connectionRouteId(route.target),
           );
-          const next = withRoutes(previous, upsertRoute(routes, route));
+          const next = withRoutes(previous, upsertRoute(routes, nextRoute));
           if (next.addressesChanged) {
             yield* forgetRoutingTrust(environmentId, "register-connection");
           }
@@ -1025,6 +1074,38 @@ export const make = Effect.gen(function* () {
     );
   });
 
+  const rename = Effect.fn("EnvironmentRegistry.rename")(function* (
+    environmentId: EnvironmentId,
+    label: string,
+  ) {
+    const trimmed = label.trim();
+    if (trimmed.length === 0) {
+      return yield* new ConnectionBlockedError({
+        reason: "configuration",
+        detail: "Environment name cannot be empty.",
+      });
+    }
+    yield* withLeaseLock(
+      environmentId,
+      Effect.gen(function* () {
+        const entry = yield* userEntry(environmentId);
+        if (entry.target._tag === "PrimaryConnectionTarget") {
+          return yield* new PlatformEnvironmentRemovalError({ environmentId });
+        }
+        if (entry.target.label === trimmed && entry.target.labelSource === "user") return;
+        const next = entryWithRoutes(
+          entry,
+          connectionRoutes(entry).map((route) => ({
+            ...route,
+            target: withUserLabel(route.target, trimmed),
+          })),
+        );
+        yield* registrations.setRoutes(environmentId, persistedRoutes(next));
+        yield* publishEntryLocked(next);
+      }),
+    );
+  });
+
   const removeRelayEnvironments = Effect.fn("EnvironmentRegistry.removeRelayEnvironments")(
     function* () {
       const relayEnvironmentIds = [...(yield* SubscriptionRef.get(entries)).values()]
@@ -1077,21 +1158,7 @@ export const make = Effect.gen(function* () {
         // A cached rejection can outlive a server update.
         const { unsupportedReason: _reason, serverUpdateRequired: _update, ...rest } = entry;
         const next: ConnectionCatalogEntry = { ...(retryUnsupported ? rest : entry), enabled };
-        // Update the lease in place so the supervisor keeps its generation and
-        // durable streams; `installEntryLocked` would tear it down instead.
-        const lease = (yield* SubscriptionRef.get(serviceScopes)).get(environmentId);
-        if (lease !== undefined) {
-          yield* SubscriptionRef.update(serviceScopes, (current) => {
-            const nextScopes = new Map(current);
-            nextScopes.set(environmentId, { ...lease, entry: next });
-            return nextScopes;
-          });
-        }
-        yield* SubscriptionRef.update(entries, (current) => {
-          const nextEntries = new Map(current);
-          nextEntries.set(environmentId, next);
-          return nextEntries;
-        });
+        const lease = yield* publishEntryLocked(next);
         if (lease !== undefined) {
           yield* enabled ? lease.supervisor.connect : lease.supervisor.disconnect;
         } else if (enabled) {
@@ -1193,6 +1260,7 @@ export const make = Effect.gen(function* () {
     remove,
     removeRoute,
     reorderRoutes,
+    rename,
     removeRelayEnvironments,
     retryNow,
     setEnabled,

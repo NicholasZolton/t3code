@@ -17,6 +17,7 @@ import * as Option from "effect/Option";
 import * as Ref from "effect/Ref";
 import * as Result from "effect/Result";
 import * as Scheduler from "effect/Scheduler";
+import * as Schema from "effect/Schema";
 import * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
 import * as SubscriptionRef from "effect/SubscriptionRef";
@@ -42,7 +43,7 @@ import * as Connectivity from "./connectivity.ts";
 import * as ConnectionCredentialStore from "./credentialStore.ts";
 import * as ConnectionDriver from "./driver.ts";
 import type { RouteCheck } from "./driver.ts";
-import { connectionRouteId, connectionRouteKind } from "./routes.ts";
+import { connectionRouteId, connectionRouteKind, connectionRoutes } from "./routes.ts";
 import {
   ConnectionTransientError,
   ConnectionBlockedError,
@@ -50,7 +51,7 @@ import {
   PrimaryConnectionTarget,
   RelayConnectionTarget,
   SshConnectionTarget,
-  type ConnectionTarget,
+  ConnectionTarget,
   type PreparedConnection,
   type SupervisorConnectionState,
 } from "./model.ts";
@@ -158,6 +159,10 @@ const makeHarness = Effect.fn("TestEnvironmentRegistry.makeHarness")(function* (
     readonly beforeRegistrationRemove?: (
       environmentId: EnvironmentId,
     ) => Effect.Effect<void, Persistence.ConnectionPersistenceError>;
+    readonly beforeRegistrationSetRoutes?: Effect.Effect<
+      void,
+      Persistence.ConnectionPersistenceError
+    >;
     readonly beforeCredentialPut?: (
       connectionId: string,
     ) => Effect.Effect<void, ConnectionTransientError>;
@@ -235,7 +240,11 @@ const makeHarness = Effect.fn("TestEnvironmentRegistry.makeHarness")(function* (
         }
       }),
     setRoutes: (environmentId, routes) =>
-      Ref.update(storedTargets, (current) => replaceRoutes(current, environmentId, routes)),
+      (options?.beforeRegistrationSetRoutes ?? Effect.void).pipe(
+        Effect.andThen(
+          Ref.update(storedTargets, (current) => replaceRoutes(current, environmentId, routes)),
+        ),
+      ),
     remove: (environmentId) =>
       Effect.gen(function* () {
         yield* options?.beforeRegistrationRemove?.(environmentId) ?? Effect.void;
@@ -1186,6 +1195,105 @@ describe("EnvironmentRegistry", () => {
         expect(entry?.enabled).toBe(false);
         expect(yield* Ref.get(harness.sessions)).toHaveLength(0);
       }).pipe(Effect.provide(harness.layer));
+    }),
+  );
+
+  it.effect("renames every saved route without interrupting the connection", () =>
+    Effect.gen(function* () {
+      const environmentId = SSH_CONNECTION.environmentId;
+      const relay = new RelayConnectionTarget({ ...RELAY_TARGET, environmentId });
+      const bearer = new BearerConnectionTarget({ ...BEARER_TARGET, environmentId });
+      const profile = new BearerConnectionProfile({ ...BEARER_PROFILE, environmentId });
+      const harness = yield* makeHarness([SSH_CONNECTION, relay, bearer], [SSH_PROFILE, profile]);
+
+      const saved = yield* Effect.gen(function* () {
+        const registry = yield* EnvironmentRegistry.EnvironmentRegistry;
+        yield* registry.start;
+        const connected = yield* awaitConnectionState(
+          registry,
+          environmentId,
+          (state) => state.phase === "connected",
+        );
+        const supervisor = yield* registry.run(
+          environmentId,
+          EnvironmentSupervisor.EnvironmentSupervisor,
+        );
+
+        yield* registry.rename(environmentId, "  Dev server  ");
+        const entry = (yield* SubscriptionRef.get(registry.entries)).get(environmentId)!;
+        expect(connectionRoutes(entry).map((route) => route.target.label)).toEqual([
+          "Dev server",
+          "Dev server",
+          "Dev server",
+        ]);
+        expect(yield* registry.state(environmentId)).toEqual(connected);
+        expect(
+          yield* registry.run(environmentId, EnvironmentSupervisor.EnvironmentSupervisor),
+        ).toBe(supervisor);
+        expect(yield* Ref.get(harness.releasedSessions)).toBe(0);
+        expect(yield* Ref.get(harness.disconnectedSshTargets)).toEqual([]);
+
+        const invalid = yield* registry.rename(environmentId, "  ").pipe(Effect.flip);
+        expect(invalid._tag).toBe("ConnectionBlockedError");
+        expect((yield* SubscriptionRef.get(registry.entries)).get(environmentId)).toBe(entry);
+        const targetsJson = Schema.fromJsonString(Schema.Array(ConnectionTarget));
+        return yield* Schema.decodeEffect(targetsJson)(
+          yield* Schema.encodeEffect(targetsJson)(yield* Ref.get(harness.storedTargets)),
+        );
+      }).pipe(Effect.provide(harness.layer), Effect.scoped);
+
+      const restored = yield* makeHarness(saved, [SSH_PROFILE, profile]);
+      yield* Effect.gen(function* () {
+        const registry = yield* EnvironmentRegistry.EnvironmentRegistry;
+        expect(
+          (yield* SubscriptionRef.get(registry.entries)).get(environmentId)?.target.label,
+        ).toBe("Dev server");
+        yield* registry.register(new RelayConnectionRegistration({ target: relay }));
+        yield* registry.reorderRoutes(environmentId, [
+          "relay",
+          SSH_CONNECTION.connectionId,
+          bearer.connectionId,
+        ]);
+        const entry = (yield* SubscriptionRef.get(registry.entries)).get(environmentId)!;
+        expect(connectionRoutes(entry).map((route) => route.target.label)).toEqual([
+          "Dev server",
+          "Dev server",
+          "Dev server",
+        ]);
+        yield* registry.rename(environmentId, "Workstation");
+        expect((yield* Ref.get(restored.storedTargets)).map((target) => target.label)).toEqual([
+          "Workstation",
+          "Workstation",
+          "Workstation",
+        ]);
+      }).pipe(Effect.provide(restored.layer), Effect.scoped);
+    }),
+  );
+
+  it.effect("keeps the original name when saving a rename fails", () =>
+    Effect.gen(function* () {
+      const failure = new Persistence.ConnectionPersistenceError({
+        operation: "set-connection-routes",
+        message: "Storage unavailable",
+      });
+      const harness = yield* makeHarness([RELAY_TARGET], [], [], {
+        initialDisabled: [RELAY_TARGET.environmentId],
+        beforeRegistrationSetRoutes: Effect.fail(failure),
+      });
+      yield* Effect.gen(function* () {
+        const registry = yield* EnvironmentRegistry.EnvironmentRegistry;
+        const previous = yield* SubscriptionRef.get(registry.entries);
+        expect(
+          yield* registry.rename(RELAY_TARGET.environmentId, "Dev server").pipe(Effect.flip),
+        ).toBe(failure);
+        expect(yield* SubscriptionRef.get(registry.entries)).toBe(previous);
+        expect(yield* Ref.get(harness.storedTargets)).toEqual([RELAY_TARGET]);
+        expect(yield* Ref.get(harness.sessions)).toHaveLength(0);
+        const missing = yield* registry
+          .rename(SECOND_RELAY_TARGET.environmentId, "Other")
+          .pipe(Effect.flip);
+        expect(missing._tag).toBe("EnvironmentNotRegisteredError");
+      }).pipe(Effect.provide(harness.layer), Effect.scoped);
     }),
   );
 
