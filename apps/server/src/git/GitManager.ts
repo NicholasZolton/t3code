@@ -51,6 +51,7 @@ import {
   sanitizeFeatureBranchName,
 } from "@t3tools/shared/git";
 import { isSshRemoteUrl } from "@t3tools/shared/sourceControl";
+import * as HostProcess from "@t3tools/shared/HostProcess";
 import {
   type ChangeRequestTerminology,
   UNKNOWN_SOURCE_CONTROL_CLIENT,
@@ -690,8 +691,6 @@ type ExecuteGit = GitVcsDriver.GitVcsDriver["Service"]["execute"];
 /** A git config read that reports a missing key and a failed read alike as `null`. */
 type ReadConfigValue = (cwd: string, key: string) => Effect.Effect<string | null, never>;
 
-const tempDir = process.env.TMPDIR ?? process.env.TEMP ?? process.env.TMP ?? "/tmp";
-
 const readRepositoryInstructions = Effect.fn("GitManager.readRepositoryInstructions")(
   function* (cwd: string, fileName: string) {
     const fileSystem = yield* FileSystem.FileSystem;
@@ -1267,6 +1266,8 @@ export const runChangeRequestStep = Effect.fn("runChangeRequestStep")(function* 
         }),
     ),
   );
+  const environment = yield* HostProcess.Environment;
+  const tempDir = environment.TMPDIR ?? environment.TEMP ?? environment.TMP ?? "/tmp";
   const bodyFile = path.join(tempDir, `t3code-pr-body-${process.pid}-${uuid}.md`);
   yield* fileSystem.writeFileString(bodyFile, generated.body).pipe(
     Effect.mapError(

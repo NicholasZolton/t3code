@@ -524,13 +524,19 @@ const installPosixEnvironment = Effect.fn("desktop.shellEnvironment.installPosix
   },
 );
 
+class MacNotificationCredentialError extends Schema.TaggedError<MacNotificationCredentialError>()(
+  "MacNotificationCredentialError",
+  { cause: Schema.Defect() },
+) {}
+
 // Finder launches do not inherit the shell that originally configured paired delivery.
-const readMacNotificationCredential: Effect.Effect<Option.Option<string>> = Effect.tryPromise(
-  async (): Promise<string | null> => {
+const readMacNotificationCredential: Effect.Effect<Option.Option<string>> = Effect.tryPromise({
+  try: async (): Promise<string | null> => {
     const { Entry } = await import("@napi-rs/keyring");
     return new Entry(MAC_NOTIFICATION_KEYCHAIN_SERVICE, FCM_SERVICE_ACCOUNT_ENV_NAME).getPassword();
   },
-).pipe(
+  catch: (cause) => new MacNotificationCredentialError({ cause }),
+}).pipe(
   Effect.map(trimNonEmpty),
   Effect.catch(() =>
     Effect.logWarning("Could not load paired notification credentials from macOS Keychain.").pipe(

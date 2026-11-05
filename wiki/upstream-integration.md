@@ -6,24 +6,30 @@ tags: [upstream, fork, integration]
 status: stable
 generated:
   by: opencode/gpt-6.1-sol
-  at: 2026-11-04T07:32:33+00:00
+  at: 2026-11-05T05:55:29+00:00
 verified:
   - by: opencode/gpt-6.1-sol
-    at: 2026-11-04T07:32:33+00:00
+    at: 2026-11-05T05:55:29+00:00
 snapshot:
-  at: 2026-11-04T07:32:33+00:00
-  fork_main: 0406c1c1be2fe50e8ea78df42febd3919481d750
-  upstream_main: 3368dd70f20cb192b68895494a4a73455524fb76
+  at: 2026-11-05T05:55:29+00:00
+  fork_main: 9bcf77bb7083eb03de5f71cf220d5bfdf6940a45
+  upstream_main: 67eebaca23f8f7bc46e8817434087fc9c5acf8e3
   shared_baseline: 3368dd70f20cb192b68895494a4a73455524fb76
   last_main_integration: 865f3f977091580bc9e72236d7b042d617b2d1c1
   last_main_upstream: 3368dd70f20cb192b68895494a4a73455524fb76
-  missing_upstream_on_main: 0
+  missing_upstream_on_main: 49
   missing_upstream_at_integrated_tip: 0
-  branch_integration: 865f3f977091580bc9e72236d7b042d617b2d1c1
-  branch_parent: 470e518f7760790cae1e2fbb1e40fb1c30d4791a
-  branch_code_tip: e530c7f948b2c88ba0dd04f930b9e72ade3aa3aa
+  branch_integration: 1c01e0f4cab7d60cdc8ec35e41df586d6dc2a388
+  branch_parent: 9bcf77bb7083eb03de5f71cf220d5bfdf6940a45
+  branch_code_tip: cc28dd559547b93bd6c66727b60987d631aa26c9
   missing_upstream_on_branch: 0
 sources:
+  - id: november-5-local-integration
+    resource: "Local Git objects: merge 1c01e0f4cab7d60cdc8ec35e41df586d6dc2a388 has parents fork 9bcf77bb7083eb03de5f71cf220d5bfdf6940a45 and upstream 67eebaca23f8f7bc46e8817434087fc9c5acf8e3. Descendant cc28dd559547b93bd6c66727b60987d631aa26c9 preserves that merge and adapts Jujutsu workspace availability and schema-aware SSH errors. Both parents are ancestors of the code tip; zero upstream commits are missing on the branch. Fork main remains at 9bcf77bb7083eb03de5f71cf220d5bfdf6940a45 with 49 incoming commits missing and shared baseline 3368dd70f20cb192b68895494a4a73455524fb76. Of 543 incoming paths without prior fork changes, 542 match upstream exactly; relayJwt.ts only marks its relay-consumed public key importer as public for the scoped export check. No push, PR, packaging, deployment, or live-server restart has occurred."
+    title: Local-only integration, separate main gap, and upstream-first source audit
+  - id: november-5-upstream
+    resource: https://github.com/pingdotgg/t3code/commit/67eebaca23f8f7bc46e8817434087fc9c5acf8e3
+    title: Pinned upstream tip incorporated into the local November 5 sync
   - id: november-4-main-integration
     resource: https://github.com/NicholasZolton/t3code/pull/55
     title: Completed November 4 upstream integration and OpenCode usage retirement
@@ -274,16 +280,35 @@ sources:
 
 # Upstream integration
 
-Fork `main` incorporates all 351 newer upstream commits through `3368dd70f2`,
-with ancestry preserved and zero gap against that pinned tip.
-[PR #55](https://github.com/NicholasZolton/t3code/pull/55) landed at `0406c1c1be`;
-the local main checkout is fast-forwarded to the same revision.
-Main integration and remote deployment are separate operations.
-[^november-4-main-integration][^november-4-main-review-git]
+Local branch `NicholasZolton/sync-upstream-changes-1` incorporates all 49 newer
+upstream commits through `67eebaca23`, with ancestry preserved and zero branch gap.
+Fork `main` remains at `9bcf77bb70`, still missing those 49 commits. This candidate
+has not been pushed, merged into main, packaged, or deployed.
+[^november-5-local-integration][^november-5-upstream]
 
 This is a revision-pinned snapshot, not a claim about newer upstream work.
 Refresh it after the next review or integration using the
 [maintenance guidance](maintenance.md).
+
+## Local November 5 sync
+
+Merge `1c01e0f4cab7d60cdc8ec35e41df586d6dc2a388` preserves fork parent
+`9bcf77bb7083eb03de5f71cf220d5bfdf6940a45` and upstream parent
+`67eebaca23f8f7bc46e8817434087fc9c5acf8e3`. Follow-up
+`cc28dd559547b93bd6c66727b60987d631aa26c9` retains that merge unchanged.
+Of 543 incoming paths without prior fork changes, 542 match upstream exactly;
+the only exception marks the relay-consumed key importer as public for scoped
+export analysis. All reference repositories match upstream.
+[^november-5-local-integration]
+
+Adopt upstream's crypto/signing services, typed errors, Effect checker, deferred
+diff loading, editable Markdown composer, and new project-folder layout. Keep
+fork diff shortcuts, Vim, prompts, mixed Git/Jujutsu recovery, paired notifications,
+OpenCode reused-child safeguards, SSH readiness guards, Crit/Portless, and signing
+identities. Fork helpers follow the new Effect rules instead of disabling them.
+Jujutsu workspace roots must be available on disk even when newer `jj` versions
+report the historical path of a deleted workspace.
+[^november-5-local-integration][^workspace-recovery][^opencode-child-tracking]
 
 ## Completed November 4 sync
 
@@ -897,3 +922,7 @@ git log --reverse --oneline origin/main..upstream/main
 [^november-4-main-integration]: PR #55 and its recorded merge time.
 
 [^november-4-main-review-git]: Completed main integration, exact parents, and zero ancestry gap against the pinned upstream tip.
+
+[^november-5-local-integration]: Exact local merge and code-tip revisions, separate main and branch gaps, and upstream-first source comparison; main integration remains pending.
+
+[^november-5-upstream]: Exact upstream revision incorporated into the local November 5 integration branch.
