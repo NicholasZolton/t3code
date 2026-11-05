@@ -285,6 +285,9 @@ export function mergeLearnedRoutes(input: {
       target: new BearerConnectionTarget({
         environmentId: entry.target.environmentId,
         label: entry.target.label,
+        ...(entry.target.labelSource === undefined
+          ? {}
+          : { labelSource: entry.target.labelSource }),
         connectionId,
       }),
       profile: Option.some(

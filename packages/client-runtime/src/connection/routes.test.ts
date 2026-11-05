@@ -119,20 +119,32 @@ describe("learned routes", () => {
     routes?.map((route) => connectionRouteId(route.target)) ?? null;
   const profileOf = (route: ConnectionRoute) => Option.getOrThrow(route.profile);
 
-  it("learns a LAN address over T3 Connect, ahead of it, using the T3 Connect credential", () => {
-    const routes = mergeLearnedRoutes({
-      entry: relayOnly,
-      activeRoute: RELAY,
-      reported: [{ httpBaseUrl: "http://192.168.1.10:3773/" }],
-      allowInsecure: true,
-    });
-    expect(ids(routes)).toEqual([`learned:${ENVIRONMENT_ID}:http://192.168.1.10:3773`, "relay"]);
-    expect(profileOf(routes![0]!)).toMatchObject({
-      learned: true,
-      authorization: "t3-connect",
-      wsBaseUrl: "ws://192.168.1.10:3773/",
-    });
-  });
+  it.each([undefined, "user"] as const)(
+    "learns a LAN address over T3 Connect with label source %s",
+    (labelSource) => {
+      const routes = mergeLearnedRoutes({
+        entry: {
+          ...relayOnly,
+          target: new RelayConnectionTarget({
+            environmentId: RELAY.target.environmentId,
+            label: RELAY.target.label,
+            ...(labelSource === undefined ? {} : { labelSource }),
+          }),
+        },
+        activeRoute: RELAY,
+        reported: [{ httpBaseUrl: "http://192.168.1.10:3773/" }],
+        allowInsecure: true,
+      });
+      expect(ids(routes)).toEqual([`learned:${ENVIRONMENT_ID}:http://192.168.1.10:3773`, "relay"]);
+      expect(profileOf(routes![0]!)).toMatchObject({
+        learned: true,
+        authorization: "t3-connect",
+        wsBaseUrl: "ws://192.168.1.10:3773/",
+      });
+      expect(routes![0]!.target.label).toBe(RELAY.target.label);
+      expect(routes![0]!.target.labelSource).toBe(labelSource);
+    },
+  );
 
   it("replaces a learned LAN address when the server reports a new one", () => {
     const first = mergeLearnedRoutes({

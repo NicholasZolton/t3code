@@ -93,6 +93,10 @@ in the receiving app. Connection settings are under **Settings → Environments*
 on web and desktop and **Settings → Environments** on mobile. A loopback address
 such as `127.0.0.1` reaches only the device opening the link.
 
+On web and desktop, rename a saved environment from its **⋯ → Rename** action in
+**Settings → Environments**. The name is saved only on this device; renaming does
+not change the host name or interrupt running agents.
+
 On a computer with the desktop app, you can open the printed `t3code://pair`
 app link instead. The desktop app asks you to confirm the server address, then
 adds it.
