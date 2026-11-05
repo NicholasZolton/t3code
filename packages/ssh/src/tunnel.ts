@@ -61,6 +61,7 @@ const REMOTE_ARCHIVE_DOWNLOAD_SECONDS = 240;
 const REMOTE_ARCHIVE_LOCK_WAIT_SECONDS = 360;
 const REMOTE_ARCHIVE_LAUNCH_TIMEOUT_MS = 900_000;
 const REMOTE_REUSE_READY_TIMEOUT_MS = 2_000;
+const isSshReadinessError = Schema.is(SshReadinessError);
 
 export interface RemoteT3RunnerOptions {
   readonly nodeScriptPath?: string | null;
@@ -1758,7 +1759,7 @@ PY`;
       ),
     ).pipe(
       Effect.mapError((cause) =>
-        cause instanceof SshReadinessError
+        isSshReadinessError(cause)
           ? cause
           : new SshReadinessError({
               message: `Could not start Portless forward on port ${port}.`,

@@ -66,7 +66,10 @@ function normalizePem(value: string): string {
 export const importRelayPrivateKey = (pem: string) =>
   Jwk.importPkcs8(Redacted.make(normalizePem(pem)), "EdDSA");
 
-/** Parses an SPKI PEM relay verification key once, for callers that verify repeatedly. */
+/**
+ * Parses an SPKI PEM relay verification key once, including for the separately checked relay worker.
+ * @public
+ */
 export const importRelayPublicKey = (pem: string) => Jwk.importSpki(normalizePem(pem), "EdDSA");
 
 // A parsed key carries its own algorithm; relay JWTs are EdDSA only.

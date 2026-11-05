@@ -71,11 +71,7 @@ export interface JjBookmark {
 
 export interface JjWorkspace {
   readonly name: string;
-  /**
-   * Realpath-normalised, or `null` when jj reports no root, which is what `jj workspace list` does
-   * for a workspace whose directory was deleted. An empty root is never realpath'd: that resolves
-   * to the server process's own cwd, which would hand a thread or a delete the wrong directory.
-   */
+  /** Canonical directory, or null when unavailable. An empty path must never resolve to the server's cwd. */
   readonly root: string | null;
 }
 
@@ -518,7 +514,7 @@ const makeVcsDriverShape = Effect.gen(function* () {
         const root =
           row.root === null
             ? null
-            : yield* fileSystem.realPath(row.root).pipe(Effect.orElseSucceed(() => row.root));
+            : yield* fileSystem.realPath(row.root).pipe(Effect.orElseSucceed(() => null));
         return { name: row.name, root } satisfies JjWorkspace;
       }),
     );
