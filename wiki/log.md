@@ -2,7 +2,9 @@
 
 ## 2026-11-05
 
-- **Local branch integration**: [Upstream integration](upstream-integration.md#local-november-5-sync) records merge `1c01e0f4ca` and compatibility repairs through `cc28dd5595`, incorporating all 49 incoming commits through `67eebaca23` with zero branch gap. Fork `main` remains at `9bcf77bb70` with those commits pending; no push, packaging, deployment, or live-server restart has occurred.
+- **Integration**: [PR #56](https://github.com/NicholasZolton/t3code/pull/56) reached fork `main` at `53b9557983`. Refreshed [upstream integration](upstream-integration.md#completed-november-5-sync): all 49 incoming commits through `67eebaca23` are incorporated with ancestry preserved and zero main gap. The main local checkout is fast-forwarded; remote deployment remains separate.
+
+- **Local branch integration**: [Upstream integration](upstream-integration.md#completed-november-5-sync) initially recorded merge `1c01e0f4ca` and compatibility repairs through `cc28dd5595`, incorporating all 49 incoming commits through `67eebaca23` with zero branch gap. At that observation, fork `main` remained at `9bcf77bb70` with those commits pending; no push, packaging, deployment, or live-server restart had occurred.
 
 ## 2026-11-04
 

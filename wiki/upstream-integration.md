@@ -6,30 +6,36 @@ tags: [upstream, fork, integration]
 status: stable
 generated:
   by: opencode/gpt-6.1-sol
-  at: 2026-11-05T05:55:29+00:00
+  at: 2026-11-05T06:14:50+00:00
 verified:
   - by: opencode/gpt-6.1-sol
-    at: 2026-11-05T05:55:29+00:00
+    at: 2026-11-05T06:14:50+00:00
 snapshot:
-  at: 2026-11-05T05:55:29+00:00
-  fork_main: 9bcf77bb7083eb03de5f71cf220d5bfdf6940a45
+  at: 2026-11-05T06:14:50+00:00
+  fork_main: 53b9557983f2d9ab935abd96d63c8098f91917f3
   upstream_main: 67eebaca23f8f7bc46e8817434087fc9c5acf8e3
-  shared_baseline: 3368dd70f20cb192b68895494a4a73455524fb76
-  last_main_integration: 865f3f977091580bc9e72236d7b042d617b2d1c1
-  last_main_upstream: 3368dd70f20cb192b68895494a4a73455524fb76
-  missing_upstream_on_main: 49
+  shared_baseline: 67eebaca23f8f7bc46e8817434087fc9c5acf8e3
+  last_main_integration: 1c01e0f4cab7d60cdc8ec35e41df586d6dc2a388
+  last_main_upstream: 67eebaca23f8f7bc46e8817434087fc9c5acf8e3
+  missing_upstream_on_main: 0
   missing_upstream_at_integrated_tip: 0
   branch_integration: 1c01e0f4cab7d60cdc8ec35e41df586d6dc2a388
   branch_parent: 9bcf77bb7083eb03de5f71cf220d5bfdf6940a45
   branch_code_tip: cc28dd559547b93bd6c66727b60987d631aa26c9
   missing_upstream_on_branch: 0
 sources:
+  - id: november-5-main-integration
+    resource: https://github.com/NicholasZolton/t3code/pull/56
+    title: Completed November 5 upstream integration into fork main
+  - id: november-5-main-review-git
+    resource: "Local Git verification at 2026-11-05T06:14:50+00:00: local main and fetched origin/main equal 53b9557983f2d9ab935abd96d63c8098f91917f3, with parents 9bcf77bb7083eb03de5f71cf220d5bfdf6940a45 and 48fbc5858a399afac714159811a728109c38f88a. Integration 1c01e0f4cab7d60cdc8ec35e41df586d6dc2a388, compatibility code tip cc28dd559547b93bd6c66727b60987d631aa26c9, and pinned upstream 67eebaca23f8f7bc46e8817434087fc9c5acf8e3 are ancestors of main. The shared baseline equals the pinned upstream tip; all 49 incoming commits are incorporated and zero are missing on main. PR 56 merged at 2026-11-05T06:13:56Z. Remote deployment remains separate."
+    title: Completed main ancestry checks against the pinned upstream tip
   - id: november-5-local-integration
-    resource: "Local Git objects: merge 1c01e0f4cab7d60cdc8ec35e41df586d6dc2a388 has parents fork 9bcf77bb7083eb03de5f71cf220d5bfdf6940a45 and upstream 67eebaca23f8f7bc46e8817434087fc9c5acf8e3. Descendant cc28dd559547b93bd6c66727b60987d631aa26c9 preserves that merge and adapts Jujutsu workspace availability and schema-aware SSH errors. Both parents are ancestors of the code tip; zero upstream commits are missing on the branch. Fork main remains at 9bcf77bb7083eb03de5f71cf220d5bfdf6940a45 with 49 incoming commits missing and shared baseline 3368dd70f20cb192b68895494a4a73455524fb76. Of 543 incoming paths without prior fork changes, 542 match upstream exactly; relayJwt.ts only marks its relay-consumed public key importer as public for the scoped export check. No push, PR, packaging, deployment, or live-server restart has occurred."
-    title: Local-only integration, separate main gap, and upstream-first source audit
+    resource: "Initial local Git verification at 2026-11-05T05:55:29+00:00: merge 1c01e0f4cab7d60cdc8ec35e41df586d6dc2a388 has parents fork 9bcf77bb7083eb03de5f71cf220d5bfdf6940a45 and upstream 67eebaca23f8f7bc46e8817434087fc9c5acf8e3. Descendant cc28dd559547b93bd6c66727b60987d631aa26c9 preserves that merge and adapts Jujutsu workspace availability and schema-aware SSH errors. Both parents are ancestors of the code tip; zero upstream commits are missing on the branch. At that observation, fork main remained at 9bcf77bb7083eb03de5f71cf220d5bfdf6940a45 with 49 incoming commits missing and shared baseline 3368dd70f20cb192b68895494a4a73455524fb76. Of 543 incoming paths without prior fork changes, 542 match upstream exactly; relayJwt.ts only marks its relay-consumed public key importer as public for the scoped export check. No push, PR, packaging, deployment, or live-server restart had occurred. These commits subsequently reached main through PR 56."
+    title: Initial branch boundary and upstream-first source audit, now incorporated into main
   - id: november-5-upstream
     resource: https://github.com/pingdotgg/t3code/commit/67eebaca23f8f7bc46e8817434087fc9c5acf8e3
-    title: Pinned upstream tip incorporated into the local November 5 sync
+    title: Pinned upstream tip incorporated into the completed November 5 sync
   - id: november-4-main-integration
     resource: https://github.com/NicholasZolton/t3code/pull/55
     title: Completed November 4 upstream integration and OpenCode usage retirement
@@ -280,17 +286,25 @@ sources:
 
 # Upstream integration
 
-Local branch `NicholasZolton/sync-upstream-changes-1` incorporates all 49 newer
-upstream commits through `67eebaca23`, with ancestry preserved and zero branch gap.
-Fork `main` remains at `9bcf77bb70`, still missing those 49 commits. This candidate
-has not been pushed, merged into main, packaged, or deployed.
-[^november-5-local-integration][^november-5-upstream]
+Fork `main` incorporates all 49 newer upstream commits through `67eebaca23`,
+with ancestry preserved and zero gap against that pinned tip.
+[PR #56](https://github.com/NicholasZolton/t3code/pull/56) landed at `53b9557983`;
+the main local checkout is fast-forwarded to the same revision.
+Main integration and remote deployment are separate operations.
+[^november-5-main-integration][^november-5-main-review-git]
 
 This is a revision-pinned snapshot, not a claim about newer upstream work.
 Refresh it after the next review or integration using the
 [maintenance guidance](maintenance.md).
 
-## Local November 5 sync
+## Completed November 5 sync
+
+[PR #56](https://github.com/NicholasZolton/t3code/pull/56) merged on November 5,
+2026, at 06:13:56 UTC. Its landing commit
+`53b9557983f2d9ab935abd96d63c8098f91917f3` preserves previous fork `main`
+`9bcf77bb7083eb03de5f71cf220d5bfdf6940a45` and integrated branch tip
+`48fbc5858a399afac714159811a728109c38f88a` as parents.
+[^november-5-main-integration][^november-5-main-review-git]
 
 Merge `1c01e0f4cab7d60cdc8ec35e41df586d6dc2a388` preserves fork parent
 `9bcf77bb7083eb03de5f71cf220d5bfdf6940a45` and upstream parent
@@ -585,16 +599,16 @@ migrates to upstream branch naming while preserving temporary branch names. The 
 | -------------------------------------------------- | ---------------------------------------- |
 | Fork                                               | `NicholasZolton/t3code`, remote `origin` |
 | Upstream                                           | `pingdotgg/t3code`, remote `upstream`    |
-| Main landing commit                                | `0406c1c1be`: merge of PR #55            |
-| Upstream integration commit                        | `865f3f9770`: merge through `3368dd70f2` |
-| Fork-side parent                                   | `470e518f77`                             |
-| Upstream-side parent / shared baseline             | `3368dd70f2`                             |
+| Main landing commit                                | `53b9557983`: merge of PR #56            |
+| Upstream integration commit                        | `1c01e0f4ca`: merge through `67eebaca23` |
+| Fork-side parent                                   | `9bcf77bb70`                             |
+| Upstream-side parent / shared baseline             | `67eebaca23`                             |
 | Missing commits at that integration's upstream tip | **0**                                    |
 
 Default to upstream implementations. Retain fork code for explicit features
 or fixes upstream does not provide. Native OpenCode 2 and thread management now
 use upstream services; fork configuration and UI improvements remain layered on
-those paths.[^november-4-local-integration][^november-4-main-review-git]
+those paths.[^november-5-local-integration][^november-5-main-review-git]
 
 ## Earlier integration boundaries
 
@@ -923,6 +937,10 @@ git log --reverse --oneline origin/main..upstream/main
 
 [^november-4-main-review-git]: Completed main integration, exact parents, and zero ancestry gap against the pinned upstream tip.
 
-[^november-5-local-integration]: Exact local merge and code-tip revisions, separate main and branch gaps, and upstream-first source comparison; main integration remains pending.
+[^november-5-local-integration]: Exact local merge and code-tip revisions, initial separate main and branch gaps, and upstream-first source comparison; subsequently incorporated into main through PR #56.
 
-[^november-5-upstream]: Exact upstream revision incorporated into the local November 5 integration branch.
+[^november-5-upstream]: Exact upstream revision incorporated into the completed November 5 sync.
+
+[^november-5-main-integration]: PR #56 and its recorded merge time.
+
+[^november-5-main-review-git]: Completed main integration, exact parents, and zero ancestry gap against the pinned upstream tip.
