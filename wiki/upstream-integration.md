@@ -6,7 +6,7 @@ tags: [upstream, fork, integration]
 status: stable
 generated:
   by: claude-code/claude-opus-5-5
-  at: 2026-11-07T18:53:28+00:00
+  at: 2026-11-07T19:42:29+00:00
 verified:
   - by: claude-code/claude-opus-5-5
     at: 2026-11-07T17:09:56+00:00
@@ -303,6 +303,9 @@ sources:
   - id: tailnet-peer-links
     resource: ../apps/server/src/peer/PeerLinks.ts
     title: Plain-http check that accepts addresses the linking machine's Tailscale lists
+  - id: sidebar-all-projects-search
+    resource: ../apps/web/src/components/Sidebar.logic.ts
+    title: Sidebar project filter search that ranks the All projects row with projects
 ---
 
 # Upstream integration
@@ -836,6 +839,15 @@ accepts a `100.64.0.0/10` address that the linking machine's
 `readTailscaleNodeAddresses` when integrating upstream peer-link
 changes.[^tailnet-peer-links]
 
+## Searchable All projects row
+
+Upstream hides the sidebar project filter's "All projects" row once a search
+query is typed, so it can never lead the results under auto-highlight. The fork
+ranks that row by its label like every project row, so typing "all" finds it and
+Enter clears the project scope. A project whose name matches the query better
+still leads. Keep "all" in the items `filterSidebarProjectScopeItems` ranks when
+integrating upstream sidebar filter changes.[^sidebar-all-projects-search]
+
 ## Rechecking the boundary
 
 After fetching `origin main` and `upstream main`, use ancestry to identify the
@@ -899,6 +911,8 @@ git log --reverse --oneline origin/main..upstream/main
 [^fnox-provider-secrets]: Startup loading, home-directory scope, and inherited-value precedence.
 
 [^tailnet-peer-links]: The plain-http check in `PeerLinks` and the Tailscale status reader it uses.
+
+[^sidebar-all-projects-search]: The sidebar project filter's search ranking, which keeps the "All projects" row searchable.
 
 [^reviewed-fork-main]: Exact fork main revision fetched for this review.
 

@@ -373,8 +373,8 @@ describe("filterSidebarProjectScopeItems", () => {
     expect(filter("   ")).toEqual(items);
   });
 
-  it("hides the default row while filtering", () => {
-    expect(filter("all")).toEqual([]);
+  it("finds the default row by its label", () => {
+    expect(filter("all")).toEqual([items[0]]);
   });
 
   it("returns matching projects in source order and supports no-match results", () => {
