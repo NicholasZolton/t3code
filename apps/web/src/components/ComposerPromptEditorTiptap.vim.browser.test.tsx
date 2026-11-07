@@ -134,6 +134,34 @@ describe("Vim composer integration", () => {
     expect(editable.getAttribute("data-vim-mode")).toBe("normal");
   });
 
+  it("runs a key typed outside the editor as a Vim command until insert mode", async () => {
+    const editorRef = createRef<ComposerPromptEditorHandle>();
+    await using screen = await render(
+      <ComposerPromptEditorTiptap
+        value="Please"
+        cursor={6}
+        keybindings={DEFAULT_RESOLVED_KEYBINDINGS}
+        vimEnabled
+        contextRecords={new Map()}
+        skills={[]}
+        disabled={false}
+        placeholder="Prompt"
+        onChange={() => {}}
+        onPaste={() => {}}
+        editorRef={editorRef}
+      />,
+    );
+    const typed = (name: string) =>
+      editorRef.current?.handleVimKey(
+        new KeyboardEvent("keydown", { key: name, cancelable: true }),
+      );
+
+    expect(await act(() => typed("a"))).toBe(true);
+    expect(editableIn(screen.container).getAttribute("data-vim-mode")).toBe("insert");
+    expect(editorRef.current?.readSnapshot().value).toBe("Please");
+    expect(await act(() => typed("b"))).toBe(false);
+  });
+
   it("edits literal markdown and restores the rich editor when Vim is turned off", async () => {
     const editorRef = createRef<ComposerPromptEditorHandle>();
     let draft =
