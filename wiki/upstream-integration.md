@@ -6,7 +6,7 @@ tags: [upstream, fork, integration]
 status: stable
 generated:
   by: claude-code/claude-opus-5-5
-  at: 2026-11-07T18:10:00+00:00
+  at: 2026-11-07T18:46:00+00:00
 verified:
   - by: claude-code/claude-opus-5-5
     at: 2026-11-07T17:09:56+00:00
@@ -297,6 +297,9 @@ sources:
   - id: fnox-provider-secrets
     resource: ../apps/server/src/fnoxSecrets.ts
     title: Server startup step that loads user-level fnox secrets for provider processes
+  - id: tailnet-peer-links
+    resource: ../apps/server/src/peer/PeerLinks.ts
+    title: Plain-http check that accepts addresses the linking machine's Tailscale lists
 ---
 
 # Upstream integration
@@ -813,6 +816,20 @@ call next to `fixPath` in `server.ts` when integrating upstream. Secrets stay in
 the server process and never enter the desktop shell snapshot or its disk
 cache.[^fnox-provider-secrets]
 
+## Tailscale IPv4 addresses for linked environments
+
+Linking sends a pairing code, then a bearer token, to the peer, so `PeerLinks`
+refuses plain http unless the network encrypts it. Upstream allows only loopback,
+MagicDNS names and Tailscale IPv6 there, and refuses a bare `100.64.0.0/10`
+address because carrier-grade NAT shares that range. That made linking from
+`nicholas-dev` to a desktop impossible: the desktop advertises its Tailscale
+IPv4 address, and `nicholas-dev` resolves no MagicDNS names. The fork also
+accepts a `100.64.0.0/10` address that the linking machine's
+`tailscale status --json` lists for itself or a peer. Without a working
+`tailscale` CLI the address stays refused. Keep `encryptsPlainHttp` and
+`readTailscaleNodeAddresses` when integrating upstream peer-link
+changes.[^tailnet-peer-links]
+
 ## Rechecking the boundary
 
 After fetching `origin main` and `upstream main`, use ancestry to identify the
@@ -874,6 +891,8 @@ git log --reverse --oneline origin/main..upstream/main
 [^private-android-signing]: Fork signing policy and the fnox-backed APK signing helper.
 
 [^fnox-provider-secrets]: Startup loading, home-directory scope, and inherited-value precedence.
+
+[^tailnet-peer-links]: The plain-http check in `PeerLinks` and the Tailscale status reader it uses.
 
 [^reviewed-fork-main]: Exact fork main revision fetched for this review.
 

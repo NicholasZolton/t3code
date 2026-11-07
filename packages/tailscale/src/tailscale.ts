@@ -201,26 +201,24 @@ export function isTailscaleIpv4Address(address: string): boolean {
   return first === 100 && second >= 64 && second <= 127;
 }
 
+const tailscaleIpv4AddressesOf = (rawIps: unknown): Array<string> =>
+  Array.isArray(rawIps)
+    ? rawIps.filter(
+        (address): address is string =>
+          typeof address === "string" && isTailscaleIpv4Address(address),
+      )
+    : [];
+
 export const parseTailscaleStatus = (
   rawStatusJson: string,
 ): Effect.Effect<TailscaleStatus, TailscaleStatusParseError> =>
   decodeTailscaleStatusJson(rawStatusJson).pipe(
     Effect.mapError((cause) => new TailscaleStatusParseError({ cause })),
     Effect.map((parsed) => {
-      const rawIps = parsed.Self?.TailscaleIPs;
-      const tailnetIpv4Addresses: Array<string> = [];
-      if (Array.isArray(rawIps)) {
-        for (const address of rawIps) {
-          if (typeof address === "string" && isTailscaleIpv4Address(address)) {
-            tailnetIpv4Addresses.push(address);
-          }
-        }
-      }
-
       const capMap = parsed.Self?.CapMap;
       return {
         magicDnsName: normalizeMagicDnsName(parsed),
-        tailnetIpv4Addresses,
+        tailnetIpv4Addresses: tailscaleIpv4AddressesOf(parsed.Self?.TailscaleIPs),
         httpsServeEnabled:
           typeof capMap === "object" && capMap !== null && !Array.isArray(capMap)
             ? Object.hasOwn(capMap, "https")
@@ -345,6 +343,40 @@ export const parseTailscaleExitNode = (
 
 export const readTailscaleExitNode = readTailscaleOutput("status", ["status", "--json"]).pipe(
   Effect.flatMap(parseTailscaleExitNode),
+);
+
+const TailscaleNodesJson = Schema.Struct({
+  Self: Schema.optional(Schema.Struct({ TailscaleIPs: Schema.optional(Schema.Unknown) })),
+  Peer: Schema.optional(
+    Schema.Record(Schema.String, Schema.Struct({ TailscaleIPs: Schema.optional(Schema.Unknown) })),
+  ),
+});
+
+const decodeTailscaleNodesJson = Schema.decodeEffect(Schema.fromJsonString(TailscaleNodesJson));
+
+/**
+ * The tailnet IPv4 addresses of this machine and its peers. Traffic to one of
+ * them goes through Tailscale's encrypted tunnel; an address in 100.64.0.0/10
+ * alone does not prove that, since carrier-grade NAT uses the same range.
+ */
+export const parseTailscaleNodeAddresses = (
+  rawStatusJson: string,
+): Effect.Effect<ReadonlySet<string>, TailscaleStatusParseError> =>
+  decodeTailscaleNodesJson(rawStatusJson).pipe(
+    Effect.mapError((cause) => new TailscaleStatusParseError({ cause })),
+    Effect.map(
+      (parsed) =>
+        new Set([
+          ...tailscaleIpv4AddressesOf(parsed.Self?.TailscaleIPs),
+          ...Object.values(parsed.Peer ?? {}).flatMap((peer) =>
+            tailscaleIpv4AddressesOf(peer.TailscaleIPs),
+          ),
+        ]),
+    ),
+  );
+
+export const readTailscaleNodeAddresses = readTailscaleOutput("status", ["status", "--json"]).pipe(
+  Effect.flatMap(parseTailscaleNodeAddresses),
 );
 
 const TailscalePrefsJson = Schema.Struct({

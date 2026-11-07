@@ -10,6 +10,7 @@ import * as HostProcess from "@t3tools/shared/HostProcess";
 import {
   ensureTailscaleServe,
   parseTailscaleExitNode,
+  parseTailscaleNodeAddresses,
   parseTailscaleServeRoutesTo,
   parseTailscaleSshEnabled,
   parseTailscaleStatus,
@@ -222,6 +223,24 @@ describe("tailscale", () => {
       assert.deepEqual(unnamed, { name: null, online: false });
 
       assert.equal(yield* parseTailscaleExitNode(tailscaleStatusJson), null);
+    }),
+  );
+
+  it.effect("lists the tailnet IPv4 addresses of this machine and its peers", () =>
+    Effect.gen(function* () {
+      const addresses = yield* parseTailscaleNodeAddresses(
+        JSON.stringify({
+          Self: { TailscaleIPs: ["100.100.100.100", "fd7a:115c:a1e0::1"] },
+          Peer: {
+            "nodekey:a": { TailscaleIPs: ["100.110.249.102", "fd7a:115c:a1e0::2"] },
+            "nodekey:b": { TailscaleIPs: ["192.168.1.20"] },
+            "nodekey:c": {},
+          },
+        }),
+      );
+      assert.deepEqual([...addresses], ["100.100.100.100", "100.110.249.102"]);
+
+      assert.deepEqual([...(yield* parseTailscaleNodeAddresses("{}"))], []);
     }),
   );
 
