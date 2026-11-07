@@ -54,10 +54,10 @@ function Chat(props: { composerKeys: string[]; launcher?: { keys: string; receiv
     scriptKeybindings: [],
     getShortcutContext: () => shortcutContext,
     threadFindActive: false,
-    // Type-to-focus only calls typeKeyAtEnd, so the stand-in composer implements just that.
+    // Type-to-focus only calls typeKey, so the stand-in composer implements just that.
     composerRef: {
       current: {
-        typeKeyAtEnd: (event: KeyboardEvent) => {
+        typeKey: (event: KeyboardEvent) => {
           props.composerKeys.push(event.key);
           return true;
         },

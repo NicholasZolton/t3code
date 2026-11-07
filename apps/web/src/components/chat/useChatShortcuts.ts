@@ -87,7 +87,7 @@ export function useChatShortcuts(input: ChatShortcutsInput) {
       !shortcutContext.terminalFocus &&
       !shortcutContext.modelPickerOpen &&
       shouldTypeToFocusComposer(event) &&
-      input.composerRef.current?.typeKeyAtEnd(event) === true
+      input.composerRef.current?.typeKey(event) === true
     ) {
       event.preventDefault();
       event.stopPropagation();

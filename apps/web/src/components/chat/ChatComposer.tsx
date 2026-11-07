@@ -306,8 +306,8 @@ export interface ChatComposerHandle {
     text: string,
     options?: { ensureLeadingBoundary?: boolean; clipboardData?: DataTransfer },
   ) => boolean;
-  /** Takes a key typed while the composer is unfocused, as Vim input when Vim is on. */
-  typeKeyAtEnd: (event: KeyboardEvent) => boolean;
+  /** Takes a key typed outside the composer: Vim input at the caret, else text at the end. */
+  typeKey: (event: KeyboardEvent) => boolean;
   pasteTextAtEnd: (text: string, options?: { bypassAutoAttachment?: boolean }) => boolean;
   citeAssistantText: (
     citation: AssistantCitation,
@@ -2704,18 +2704,26 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   };
   const insertComposerTextAtEndStable = useStableCallback(insertComposerTextAtEnd);
 
-  const typeComposerKeyAtEnd: ChatComposerHandle["typeKeyAtEnd"] = (event) => {
+  // The scroll-collapsed editor is hidden, so it has to render before it can take focus.
+  const revealScrollCollapsedEditor = () => {
+    if (isComposerScrollCollapsed) flushSync(() => setScrollCollapsedTarget(null));
+  };
+
+  const typeComposerKey: ChatComposerHandle["typeKey"] = (event) => {
     if (!composerVimActive) return insertComposerTextAtEnd(event.key);
-    // Vim reads keys as commands, which only its focused editor can run. A collapsed
-    // mobile editor cannot take focus until it expands, so that key only expands it.
+    // Vim runs keys as commands at its caret, which only its focused editor can do. A
+    // collapsed mobile editor cannot take focus until it expands, so that key only expands it.
     if (isComposerCollapsedMobile) {
       expandMobileComposer();
       return true;
     }
-    focusComposer();
-    return composerEditorRef.current?.handleVimKey(event) || insertComposerTextAtEnd(event.key);
+    revealScrollCollapsedEditor();
+    composerEditorRef.current?.focus();
+    return (
+      composerEditorRef.current?.handleVimKey(event) || insertComposerText(event.key, "cursor")
+    );
   };
-  const typeComposerKeyAtEndStable = useStableCallback(typeComposerKeyAtEnd);
+  const typeComposerKeyStable = useStableCallback(typeComposerKey);
 
   const addComposerFolders = (folders: File[]) => {
     const target = folderDropTarget({
@@ -3031,11 +3039,11 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     composerRef,
     () => ({
       focusAtEnd: () => {
-        if (isComposerScrollCollapsed) flushSync(() => setScrollCollapsedTarget(null));
+        revealScrollCollapsedEditor();
         composerEditorRef.current?.focusAtEnd();
       },
       focusAt: (cursor: number) => {
-        if (isComposerScrollCollapsed) flushSync(() => setScrollCollapsedTarget(null));
+        revealScrollCollapsedEditor();
         composerEditorRef.current?.focusAt(cursor);
       },
       collapseForTimelineNavigation: () => setScrollCollapsedTarget(composerDraftTargetKey),
@@ -3050,7 +3058,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
         countPreparingComposerImages(attachmentTargetKey) > 0 ||
         pendingDraftWork.has(attachmentTargetKey),
       insertTextAtEnd: insertComposerTextAtEndStable,
-      typeKeyAtEnd: typeComposerKeyAtEndStable,
+      typeKey: typeComposerKeyStable,
       pasteTextAtEnd: (text: string, options) => {
         const shortcutArmed = consumePasteAsTextShortcut(pasteAsTextShortcutUntilRef);
         const bypassAutoAttachment = options?.bypassAutoAttachment === true || shortcutArmed;
