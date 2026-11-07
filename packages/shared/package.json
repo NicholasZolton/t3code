@@ -271,6 +271,10 @@
       "types": "./src/keybindings.ts",
       "import": "./src/keybindings.ts"
     },
+    "./keybindingMatching": {
+      "types": "./src/keybindingMatching.ts",
+      "import": "./src/keybindingMatching.ts"
+    },
     "./threadTranscript": {
       "types": "./src/threadTranscript.ts",
       "import": "./src/threadTranscript.ts"
@@ -290,6 +294,10 @@
     "./savedPrompts": {
       "types": "./src/savedPrompts.ts",
       "import": "./src/savedPrompts.ts"
+    },
+    "./pullRequestComposerTrigger": {
+      "types": "./src/pullRequestComposerTrigger.ts",
+      "import": "./src/pullRequestComposerTrigger.ts"
     },
     "./composerInlineTokens": {
       "types": "./src/composerInlineTokens.ts",
@@ -562,6 +570,10 @@
     "./cloneUrl": {
       "types": "./src/cloneUrl.ts",
       "import": "./src/cloneUrl.ts"
+    },
+    "./speech": {
+      "types": "./src/speech.ts",
+      "import": "./src/speech.ts"
     }
   },
   "scripts": {

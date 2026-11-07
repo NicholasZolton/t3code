@@ -177,8 +177,9 @@ object AgentNotifications {
     val history =
       context.getSharedPreferences("$PAIRED_STORE:$registrationId", Context.MODE_PRIVATE)
     val source = "$PAIRED_TAG$registrationId"
-    showAlert(context, history, scheme, data, source)
+    val alerted = showAlert(context, history, scheme, data, source)
     AgentActivitySnapshots.update(context, source, data)
+    if (alerted) coverTerminal(context, data)
     refreshActivity(context)
   }
 
@@ -282,8 +283,9 @@ object AgentNotifications {
     if (registered && fresh && NotificationManagerCompat.from(context).areNotificationsEnabled()) {
       channels(context)
       val scheme = prefs.getString("scheme", "t3code") ?: "t3code"
-      showAlert(context, prefs, scheme, data)
+      val alerted = showAlert(context, prefs, scheme, data)
       AgentActivitySnapshots.update(context, AgentActivitySnapshots.CONNECT, data)
+      if (alerted) coverTerminal(context, data)
       refreshActivity(context)
     }
   }
@@ -294,7 +296,7 @@ object AgentNotifications {
     scheme: String,
     data: Map<String, String>,
     tag: String = ALERT_TAG
-  ) {
+  ): Boolean {
     // Queue retries carry the same alert id. Keep a bounded history even when
     // notification A is retried after notification B has already arrived.
     val alertId = data["alert_id"]
@@ -318,7 +320,14 @@ object AgentNotifications {
           (seen.takeLast(63) + alertId).joinToString("\n"),
         )
         .apply()
+      // Android drops posts to a blocked channel, so that alert shows nothing.
+      return !onScreen && (
+        Build.VERSION.SDK_INT < 26 ||
+          manager(context).getNotificationChannel(ALERT_CHANNEL)?.importance !=
+          NotificationManager.IMPORTANCE_NONE
+        )
     }
+    return false
   }
 
   private fun postAlert(
@@ -411,7 +420,10 @@ object AgentNotifications {
     // Dismissing a run includes its finished card. A new run, or toggling
     // activity off/on, arms it again; terminal replays stay dismissed.
     if (active && !wasActive) presentation.edit().putBoolean("dismissed", false).apply()
-    if (!presentation.getBoolean("dismissed", false)) {
+    val covered = singleTerminal(data)?.let { it in coveredTerminals(presentation) } == true
+    if (presentation.getBoolean("dismissed", false) || covered) {
+      cancelActivity(context)
+    } else {
       showActivity(context, scheme, data, active, remainingMs)
     }
   }
@@ -423,6 +435,38 @@ object AgentNotifications {
     val data = AgentActivitySnapshots.merged(context, now)
     updateActivity(context, prefs, scheme, data, System.currentTimeMillis())
   }
+
+  /** Identifies a finished one-thread card by its path, phase and absolute expiry. */
+  private fun singleTerminal(data: Map<String, String>): String? {
+    val phase = data["activity_phase"]
+    val finished = phase == "completed" || phase == "failed"
+    val single = data.containsKey("activity_line_0") && !data.containsKey("activity_line_1")
+    val expiresAt = data["activity_expires_at"]
+    return "${data["activity_path"]}\n$phase\n$expiresAt"
+      .takeIf { finished && single && expiresAt != null }
+  }
+
+  /**
+   * Only a one-row card on the alert's own thread is known to show nothing more than the alert.
+   * Sources arrive out of order, so every covered finish stays covered until its card expires.
+   */
+  private fun coverTerminal(
+    context: Context,
+    data: Map<String, String>,
+    now: Long = System.currentTimeMillis()
+  ) {
+    val terminal =
+      singleTerminal(data)?.takeIf { data["alert_path"] == data["activity_path"] } ?: return
+    val presentation = context.getSharedPreferences(ACTIVITY_STORE, Context.MODE_PRIVATE)
+    val live =
+      coveredTerminals(presentation).filter {
+        (it.substringAfterLast('\n').toLongOrNull() ?: 0L) > now
+      }
+    presentation.edit().putStringSet("coveredTerminals", (live + terminal).toSet()).apply()
+  }
+
+  private fun coveredTerminals(presentation: SharedPreferences): Set<String> =
+    presentation.getStringSet("coveredTerminals", emptySet()).orEmpty()
 
   private fun showActivity(
     context: Context,
@@ -509,9 +553,8 @@ object AgentNotifications {
     }
   }
 
-  private fun base(context: Context, channel: String): NotificationCompat.Builder {
-    val icon = context.resources.getIdentifier("notification_icon", "drawable", context.packageName)
-    return NotificationCompat.Builder(context, channel)
+  private fun base(context: Context, channel: String): NotificationCompat.Builder =
+    NotificationCompat.Builder(context, channel)
       .setPriority(
         if (channel == ALERT_CHANNEL) {
           NotificationCompat.PRIORITY_HIGH
@@ -520,10 +563,9 @@ object AgentNotifications {
         }
       )
       .setDefaults(if (channel == ALERT_CHANNEL) Notification.DEFAULT_ALL else 0)
-      .setSmallIcon(if (icon != 0) icon else android.R.drawable.ic_dialog_info)
+      .setSmallIcon(R.drawable.agent_activity_mark)
       .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
       .setShowWhen(false)
-  }
 
   private fun contentIntent(
     context: Context,
