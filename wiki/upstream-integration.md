@@ -6,7 +6,7 @@ tags: [upstream, fork, integration]
 status: stable
 generated:
   by: claude-code/claude-opus-5-5
-  at: 2026-11-07T18:46:00+00:00
+  at: 2026-11-07T18:53:28+00:00
 verified:
   - by: claude-code/claude-opus-5-5
     at: 2026-11-07T17:09:56+00:00
@@ -87,6 +87,9 @@ sources:
   - id: opencode-child-tracking
     resource: ../packages/provider-opencode/src/server/v2/adapter.ts
     title: Upstream OpenCode lifecycle with fork reused-child and input-delivery safeguards
+  - id: composer-collapse-removal
+    resource: https://github.com/pingdotgg/t3code/commit/bd84b1781a7febb7398a6838cad0416a3240da1a
+    title: Upstream removes the collapsed composer and its scroll-collapse setting
   - id: october-16-main-integration
     resource: https://github.com/NicholasZolton/t3code/pull/50
     title: Completed October 16 upstream integration into fork main
@@ -428,13 +431,16 @@ restore the old thread scorer. Git and Jujutsu share the upstream-compatible
 change-request workflow rather than separate GitHub-specific helpers.
 [^november-2-local-integration][^shared-pr-workflow]
 
-Unreplaced fork behavior remains: saved prompts, Vim, composer scroll-collapse,
-OpenCode account controls and child-input tracking, notification privacy,
-Jujutsu, SSH readiness safeguards, Crit/Portless, persistent Tailscale publication,
-and private signing. Composer collapse follows upstream timeline-navigation signals;
-missing-workspace recovery stays at the shared workflow boundary and respects the
+Unreplaced fork behavior remains: saved prompts, Vim, OpenCode account controls
+and child-input tracking, notification privacy, Jujutsu, SSH readiness safeguards,
+Crit/Portless, persistent Tailscale publication, and private signing.
+Missing-workspace recovery stays at the shared workflow boundary and respects the
 recorded backend owner instead of silently switching Git/Jujutsu ownership.
 [^november-2-local-integration][^workspace-recovery][^opencode-child-tracking]
+
+Composer scroll-collapse is upstream's, not the fork's. Upstream removed it with
+its setting, so syncs keep it removed; this merge had kept it as fork behavior.
+[^composer-collapse-removal]
 
 ## Completed October 16 sync
 
@@ -1005,6 +1011,8 @@ git log --reverse --oneline origin/main..upstream/main
 [^workspace-recovery]: Shared recovery service preserves backend ownership and retained-branch priority.
 
 [^opencode-child-tracking]: Native OpenCode lifecycle with reused-child admission, execution attribution, and delivery tracking.
+
+[^composer-collapse-removal]: Upstream #25869 deletes the collapsed composer state and the `composerCollapseOnScroll` setting.
 
 [^november-4-local-integration]: Upstream merge and follow-up API adaptations, now incorporated into main through PR #55.
 

@@ -2165,8 +2165,6 @@ export default function ChatView(props: ChatViewProps) {
     timelineEntries,
     timelineAnchorMessageId,
     setTimelineAnchor,
-    onNavigateHistory: () => composerRef.current?.collapseForTimelineNavigation(),
-    onReachedEnd: () => composerRef.current?.restoreAfterTimelineReachedEnd(),
   });
 
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- schedules a frame to focus the composer DOM element when a thread opens with the terminal closed

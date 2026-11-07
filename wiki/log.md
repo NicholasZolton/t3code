@@ -2,6 +2,8 @@
 
 ## 2026-11-07
 
+- **Correction**: Composer scroll-collapse was upstream's, not fork behavior. Upstream removed it, so the fork drops it too; [upstream integration](upstream-integration.md#completed-november-2-sync) no longer lists it as retained.
+
 - **Compatibility**: Recorded the fork-only [Tailscale IPv4 check for linked environments](upstream-integration.md#tailscale-ipv4-addresses-for-linked-environments). A server may now link to a machine at a Tailscale IPv4 address that its own Tailscale lists.
 
 - **Remote deployment target**: Nicholas's remote server is now `nicholas-dev`, a `t3 up` boot service. [Upstream integration](upstream-integration.md#ssh-runtime-release-handoff) notes that the SSH deployment helper does not apply there and points to the service procedure in `AGENTS.md`.
