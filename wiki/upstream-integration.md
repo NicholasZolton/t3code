@@ -5,8 +5,8 @@ description: Main and branch integration boundaries and fork compatibility excep
 tags: [upstream, fork, integration]
 status: stable
 generated:
-  by: opencode/gpt-6.1-sol
-  at: 2026-11-05T06:14:50+00:00
+  by: claude-code/claude-opus-5-5
+  at: 2026-11-07T09:06:00+00:00
 verified:
   - by: opencode/gpt-6.1-sol
     at: 2026-11-05T06:14:50+00:00
@@ -282,6 +282,9 @@ sources:
   - id: private-android-signing
     resource: ../docs/operations/android-notifications.md#private-fork-apk-signing
     title: Private fork APK signing with the repository's fnox local profile
+  - id: fnox-provider-secrets
+    resource: ../apps/server/src/fnoxSecrets.ts
+    title: Server startup step that loads user-level fnox secrets for provider processes
 ---
 
 # Upstream integration
@@ -753,6 +756,18 @@ private installations. The user-level age identity remains outside the repositor
 and official/EAS signing stays unchanged. See the [signing procedure](../docs/operations/android-notifications.md#private-fork-apk-signing).
 [^private-android-signing]
 
+## fnox secrets for provider processes
+
+fnox loads secrets from a shell prompt hook, which never runs when the desktop app
+starts or when T3 probes the login shell. At startup, the server runs
+`fnox export` from the home directory in the background, so a project's
+`fnox.toml` never applies server-wide. It adds only names the server did not
+inherit. Provider processes then see the user-level secrets a new terminal would,
+such as tokens expanded in `.mcp.json` headers. Keep the `hydrateFnoxSecrets`
+call next to `fixPath` in `server.ts` when integrating upstream. Secrets stay in
+the server process and never enter the desktop shell snapshot or its disk
+cache.[^fnox-provider-secrets]
+
 ## Rechecking the boundary
 
 After fetching `origin main` and `upstream main`, use ancestry to identify the
@@ -812,6 +827,8 @@ git log --reverse --oneline origin/main..upstream/main
 [^fork-jujutsu]: Durable backend ownership, recovery behavior, and supported Jujutsu baseline.
 
 [^private-android-signing]: Fork signing policy and the fnox-backed APK signing helper.
+
+[^fnox-provider-secrets]: Startup loading, home-directory scope, and inherited-value precedence.
 
 [^reviewed-fork-main]: Exact fork main revision fetched for this review.
 

@@ -1,5 +1,9 @@
 # Wiki update log
 
+## 2026-11-07
+
+- **Compatibility**: Recorded the fork-only [fnox secrets for provider processes](upstream-integration.md#fnox-secrets-for-provider-processes) startup step, which upstream syncs must keep next to `fixPath`.
+
 ## 2026-11-05
 
 - **Integration**: [PR #56](https://github.com/NicholasZolton/t3code/pull/56) reached fork `main` at `53b9557983`. Refreshed [upstream integration](upstream-integration.md#completed-november-5-sync): all 49 incoming commits through `67eebaca23` are incorporated with ancestry preserved and zero main gap. The main local checkout is fast-forwarded; remote deployment remains separate.
