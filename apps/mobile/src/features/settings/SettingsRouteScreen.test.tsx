@@ -20,36 +20,37 @@ vi.mock("@clerk/expo", () => ({
   useAuth: () => ({ isLoaded: true, isSignedIn: false }),
   useUser: () => ({ user: null }),
 }));
-vi.mock("@react-navigation/native", () => ({ useNavigation: () => ({}) }));
+vi.mock("@react-navigation/native", () => ({
+  useNavigation: () => ({}),
+  useNavigationState: () => null,
+}));
 vi.mock("react-native-safe-area-context", () => ({ useSafeAreaInsets: () => ({ bottom: 0 }) }));
 vi.mock("../cloud/publicConfig", () => ({ hasCloudPublicConfig: () => harness.cloudConfigured }));
-vi.mock("../workspace/navigation-tab-order", () => ({
+vi.mock("../layout/workspace/navigation-tab-order", () => ({
   navigationCustomizationAvailable: () => false,
   overflowNavigationTabs: () => [],
 }));
-vi.mock("../workspace/navigation-tabs", () => ({
+vi.mock("../layout/workspace/navigation-tabs", () => ({
   NAVIGATION_TAB_ICONS: {},
   WORKSPACE_TAB_LABELS: {},
   useNavigationTabOrder: () => [],
   useHiddenNavigationTabs: () => [],
 }));
-vi.mock("../workspace/workspace-selection-store", () => ({
+vi.mock("../layout/workspace/workspace-selection-store", () => ({
   currentWorkspaceSelections: () => ({}),
 }));
-vi.mock("../workspace/workspace-tab-navigation", () => ({ rememberedSettingsPage: () => null }));
-vi.mock("../workspace/useSelectWorkspaceTab", () => ({ useSelectWorkspaceTab: () => vi.fn() }));
-vi.mock("../workspace/WorkspaceTabsContext", () => ({ useWorkspaceTabs: () => null }));
-vi.mock("../workspace/useWorkspaceSurface", () => ({
-  useWorkspaceSurface: () => ({ className: "bg-screen" }),
+vi.mock("../layout/workspace/workspace-tab-navigation", () => ({
+  rememberedSettingsPage: () => null,
 }));
+vi.mock("../layout/workspace/useSelectWorkspaceTab", () => ({
+  useSelectWorkspaceTab: () => vi.fn(),
+}));
+vi.mock("../layout/workspace/WorkspaceTabsContext", () => ({ useWorkspaceTabs: () => null }));
 vi.mock("../layout/adaptive-workspace-context", () => ({
   useAdaptiveWorkspaceLayout: () => ({ layout: { usesSplitView: false } }),
 }));
 vi.mock("../../native/native-layout-metrics", () => ({ useNativeColumnLayoutMetrics: () => null }));
-vi.mock("../../native/v5-workspace-context", async () => {
-  const { createContext } = await import("react");
-  return { NativePrimaryColumnContext: createContext(null) };
-});
+vi.mock("../../components/ui/Pane", () => ({ usePaneRole: () => null }));
 vi.mock("../../state/use-remote-environment-registry", () => ({
   useSavedRemoteConnections: () => ({ savedConnectionsById: {} }),
 }));
@@ -61,7 +62,6 @@ vi.mock("./components/SettingsSection", async () => {
   return { SettingsSection: Children, SettingsSidebarContext: createContext(null) };
 });
 vi.mock("./components/SettingsEnvironmentFilterHeader", () => ({
-  SettingsEnvironmentFilterHeader: () => null,
   useSettingsEnvironmentMenu: (): AppBarMenu => ({
     title: "Environments",
     icon: "line.3.horizontal.decrease.circle",

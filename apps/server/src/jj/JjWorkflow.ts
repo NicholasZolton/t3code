@@ -47,6 +47,7 @@ export class JjWorkflow extends Context.Service<
     readonly registeredWorkspaces: (
       cwd: string,
     ) => Effect.Effect<ReadonlyArray<JjWorkspace>, GitCommandError>;
+    readonly currentRefName: (cwd: string) => Effect.Effect<string | null, never>;
     /**
      * Publish a fresh repository to a hosting remote: `git remote add` then the bookmark move and
      * push, because in a colocated repository Git's own HEAD is usually detached.
@@ -488,6 +489,7 @@ export const make = Effect.gen(function* () {
     hasCommit,
     status: status.status,
     localStatus: status.localStatus,
+    currentRefName: status.currentRefName,
     remoteStatus: status.remoteStatus,
     invalidateLocalStatus: invalidateStatus,
     invalidateRemoteStatus: invalidateStatus,

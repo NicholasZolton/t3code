@@ -1,4 +1,5 @@
 import { DEFAULT_VCS_TERMINOLOGY, type VcsTerminology } from "@t3tools/shared/vcs";
+import { Button } from "../../components/ui/Button";
 import {
   worktreeSetupStageLabel,
   type WorktreeSetupSnapshot,
@@ -11,9 +12,8 @@ import { Platform, Pressable, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AppActivityIndicator } from "../../components/ui/AppActivityIndicator";
 import { AppText as Text } from "../../components/ui/AppText";
-import { Button } from "../../components/ui/Button";
 import { SymbolView, type AppSymbolName } from "../../components/ui/AppSymbol";
-import { WorktreeSetupSheet } from "./worktree-setup-sheet";
+import { Sheet } from "../../components/ui/Sheet";
 import { ShimmeringWorkContent } from "./thread-work-log";
 import { useVisibleSecondClock } from "./use-visible-second-clock";
 
@@ -92,7 +92,7 @@ export function WorktreeSetupCard(props: WorktreeSetupCardProps) {
           accessibilityRole="button"
           accessibilityLabel={
             backgroundSetup
-              ? `${scriptName} is still running. Show setup progress.`
+              ? `Background setup is still running: ${scriptName}. Show setup progress.`
               : `${vcsTerminology.workspaceNounTitle} setup details`
           }
           accessibilityState={{ expanded: detailsOpen }}
@@ -208,18 +208,12 @@ function SetupDetailsSheet({
   now,
 }: WorktreeSetupCardProps & { onClose: () => void; now: number }) {
   const insets = useSafeAreaInsets();
-  const [bodyHeight, setBodyHeight] = useState(0);
   const canCancel = snapshot.phase === "running" && !turnStarted;
   return (
-    <WorktreeSetupSheet
-      height={bodyHeight}
-      onClose={onClose}
-      title={`${vcsTerminology.workspaceNounTitle} setup`}
-    >
+    <Sheet title={`${vcsTerminology.workspaceNounTitle} setup`} onClose={onClose}>
       <ScrollView
         contentInsetAdjustmentBehavior="automatic"
         bounces={false}
-        onContentSizeChange={(_width, height) => setBodyHeight(height)}
         contentContainerStyle={{
           paddingHorizontal: 20,
           paddingTop: 12,
@@ -249,17 +243,15 @@ function SetupDetailsSheet({
         ) : null}
         {canCancel ? (
           <View className="mt-3 flex-row items-center justify-end gap-4 border-t border-border pt-1">
-            <Pressable
-              accessibilityRole="button"
+            <Button
+              label="Cancel setup"
+              tone="danger"
               accessibilityLabel={`Cancel ${vcsTerminology.workspaceNoun} setup`}
               onPress={() => {
                 onClose();
                 onCancel();
               }}
-              className="min-h-11 justify-center px-2"
-            >
-              <Text className="font-t3-medium text-sm text-danger-foreground">Cancel setup</Text>
-            </Pressable>
+            />
             {onWorkLocally ? (
               <Button
                 label="Work locally"
@@ -273,7 +265,7 @@ function SetupDetailsSheet({
           </View>
         ) : null}
       </ScrollView>
-    </WorktreeSetupSheet>
+    </Sheet>
   );
 }
 
