@@ -143,6 +143,8 @@ export interface ComposerPromptEditorHandle {
   focus: () => void;
   focusAt: (cursor: number) => void;
   focusAtEnd: () => void;
+  /** Runs a key pressed outside the editor through Vim; false means Vim leaves it as text. */
+  handleVimKey: (event: KeyboardEvent) => boolean;
   readSelectionRange: () => { start: number; end: number };
   requestCitationComment: (request: ComposerCitationCommentRequest) => void;
   readSnapshot: () => {
@@ -1756,6 +1758,7 @@ function ComposerPromptEditorTiptapInner(
               ),
         );
       },
+      handleVimKey: (event) => (editor ? handleComposerVimKeyDown(editor.view, event) : false),
       readSelectionRange: () => {
         readSnapshot();
         return selectionRangeRef.current;
