@@ -108,10 +108,12 @@ describeJj("JjStatus.localStatus", () => {
 
         const local = yield* status.localStatus({ cwd: workspacePath });
         assert.equal(local.refName, bookmark);
+        assert.equal(yield* status.currentRefName(workspacePath), bookmark);
 
         yield* runJj(workspacePath, ["bookmark", "move", "main", "--to", "@"]);
         const afterMainMoves = yield* status.localStatus({ cwd: workspacePath });
         assert.equal(afterMainMoves.refName, bookmark);
+        assert.equal(yield* status.currentRefName(workspacePath), bookmark);
       }),
     ),
   );
@@ -233,6 +235,11 @@ describeJj("JjStatus.localStatus", () => {
       yield* status.localStatus({ cwd: root });
 
       assert.equal(jjCalls.count - warmStart, 2);
+
+      // Status reads check the ref on every cache hit, so that check must stay one command.
+      const refStart = jjCalls.count;
+      yield* status.currentRefName(root);
+      assert.equal(jjCalls.count - refStart, 1);
     }).pipe(Effect.provide(countingDriverLayer(jjCalls)));
   });
 

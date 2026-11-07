@@ -220,6 +220,8 @@ export interface JjStatusDeps {
 
 export interface JjStatusOps {
   readonly localStatus: (input: VcsStatusInput) => Effect.Effect<VcsStatusLocalResult, never>;
+  /** `localStatus().refName` without snapshotting the working copy or re-reading remotes. */
+  readonly currentRefName: (cwd: string) => Effect.Effect<string | null, never>;
   readonly remoteStatus: (
     input: VcsStatusInput,
     options?: { readonly refreshUpstream?: boolean; readonly refreshMissingPullRequest?: boolean },
@@ -472,5 +474,13 @@ export const makeJjStatus = Effect.fn("JjStatus.make")(function* (
     };
   });
 
-  return { localStatus, remoteStatus, status };
+  const currentRefName: JjStatusOps["currentRefName"] = Effect.fn("JjStatus.currentRefName")(
+    function* (cwd) {
+      const segment = yield* driver.currentSegment(cwd).pipe(Effect.option);
+      if (segment._tag === "None") return null;
+      return yield* resolveWorkspaceRefName(driver, cwd, segment.value);
+    },
+  );
+
+  return { localStatus, currentRefName, remoteStatus, status };
 });

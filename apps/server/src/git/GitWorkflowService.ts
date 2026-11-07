@@ -547,14 +547,15 @@ export const make = Effect.gen(function* () {
       { git: gitManager.localStatus, jj: jjWorkflow.localStatus },
     ),
     currentBranch: Effect.fn("GitWorkflowService.currentBranch")((cwd) =>
-      routeOr("GitWorkflowService.currentBranch", workflowRouting, () => Effect.succeed(null), {
-        git: () => readGitBranch(cwd),
-        jj: () =>
-          jjWorkflow.invalidateLocalStatus(cwd).pipe(
-            Effect.andThen(jjWorkflow.localStatus({ cwd })),
-            Effect.map((status) => status.refName),
-          ),
-      })({ cwd }),
+      routeOr<{ readonly cwd: string }, string | null, GitManagerServiceError>(
+        "GitWorkflowService.currentBranch",
+        workflowRouting,
+        () => Effect.succeed(null),
+        {
+          git: () => readGitBranch(cwd),
+          jj: () => jjWorkflow.currentRefName(cwd),
+        },
+      )({ cwd }),
     ),
     hasRefNamed: Effect.fn("GitWorkflowService.hasRefNamed")((input) =>
       // No ref name holds a pattern character, and one here would widen the match.

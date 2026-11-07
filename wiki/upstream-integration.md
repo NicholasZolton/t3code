@@ -5,25 +5,31 @@ description: Main and branch integration boundaries and fork compatibility excep
 tags: [upstream, fork, integration]
 status: stable
 generated:
-  by: opencode/gpt-6.1-sol
-  at: 2026-11-05T06:14:50+00:00
+  by: claude-code/claude-opus-5-5
+  at: 2026-11-07T16:55:59+00:00
 verified:
-  - by: opencode/gpt-6.1-sol
-    at: 2026-11-05T06:14:50+00:00
+  - by: claude-code/claude-opus-5-5
+    at: 2026-11-07T16:55:59+00:00
 snapshot:
-  at: 2026-11-05T06:14:50+00:00
-  fork_main: 53b9557983f2d9ab935abd96d63c8098f91917f3
-  upstream_main: 67eebaca23f8f7bc46e8817434087fc9c5acf8e3
+  at: 2026-11-07T16:55:59+00:00
+  fork_main: c0bde3fa7067faa6ad3c8c5477e701199f0888e3
+  upstream_main: e455200077ce60806a01c8f28435b58860dcfc74
   shared_baseline: 67eebaca23f8f7bc46e8817434087fc9c5acf8e3
   last_main_integration: 1c01e0f4cab7d60cdc8ec35e41df586d6dc2a388
   last_main_upstream: 67eebaca23f8f7bc46e8817434087fc9c5acf8e3
-  missing_upstream_on_main: 0
+  missing_upstream_on_main: 277
   missing_upstream_at_integrated_tip: 0
-  branch_integration: 1c01e0f4cab7d60cdc8ec35e41df586d6dc2a388
-  branch_parent: 9bcf77bb7083eb03de5f71cf220d5bfdf6940a45
-  branch_code_tip: cc28dd559547b93bd6c66727b60987d631aa26c9
+  branch_integration: 6087079d9d4297ea5f9681c397691a962b49c875
+  branch_parent: c0bde3fa7067faa6ad3c8c5477e701199f0888e3
+  branch_code_tip: 69a4603d988dc1ed30d9c1c85ad6e1892ceeab53
   missing_upstream_on_branch: 0
 sources:
+  - id: november-7-local-integration
+    resource: "Local Git verification at 2026-11-07T16:55:59+00:00: merge 6087079d9d4297ea5f9681c397691a962b49c875 has parents fork c0bde3fa7067faa6ad3c8c5477e701199f0888e3 and upstream e455200077ce60806a01c8f28435b58860dcfc74. Descendant 69a4603d988dc1ed30d9c1c85ad6e1892ceeab53 preserves that merge and adapts fork code to upstream APIs. Zero upstream commits are missing on the branch. Fetched origin/main equals c0bde3fa7067faa6ad3c8c5477e701199f0888e3, sharing baseline 67eebaca23f8f7bc46e8817434087fc9c5acf8e3 with upstream and missing 277 incoming commits; the merge is not an ancestor of main. Of 1129 incoming paths without prior fork changes, 1127 match upstream exactly; the two exceptions keep fuzzy ranking in upstream's new shared reviewer filter. All .repos content matches upstream. The fork's divergence from upstream fell from 415 files (+34,899/-3,640) to 414 (+34,723/-3,508)."
+    title: Local branch boundary and upstream-first source audit; main integration pending
+  - id: november-7-upstream
+    resource: https://github.com/pingdotgg/t3code/commit/e455200077ce60806a01c8f28435b58860dcfc74
+    title: Pinned upstream tip incorporated into the local November 7 integration branch
   - id: november-5-main-integration
     resource: https://github.com/NicholasZolton/t3code/pull/56
     title: Completed November 5 upstream integration into fork main
@@ -286,16 +292,37 @@ sources:
 
 # Upstream integration
 
-Fork `main` incorporates all 49 newer upstream commits through `67eebaca23`,
-with ancestry preserved and zero gap against that pinned tip.
-[PR #56](https://github.com/NicholasZolton/t3code/pull/56) landed at `53b9557983`;
-the main local checkout is fast-forwarded to the same revision.
-Main integration and remote deployment are separate operations.
-[^november-5-main-integration][^november-5-main-review-git]
+Local branch `NicholasZolton/upstream-gap-review` incorporates all 277 newer upstream
+commits through `e455200077`, with ancestry preserved and zero branch gap.
+Fork `main` remains at `c0bde3fa70`, still missing those 277 commits. This
+candidate has not been merged into main, packaged, or deployed.
+[^november-7-local-integration][^november-7-upstream]
 
 This is a revision-pinned snapshot, not a claim about newer upstream work.
 Refresh it after the next review or integration using the
 [maintenance guidance](maintenance.md).
+
+## Local November 7 sync
+
+Merge `6087079d9d4297ea5f9681c397691a962b49c875` preserves fork parent
+`c0bde3fa7067faa6ad3c8c5477e701199f0888e3` and upstream parent
+`e455200077ce60806a01c8f28435b58860dcfc74`. Follow-up
+`69a4603d988dc1ed30d9c1c85ad6e1892ceeab53` retains that merge unchanged.
+Of 1129 incoming paths without prior fork changes, 1127 match upstream exactly;
+the two exceptions keep fuzzy ranking in upstream's new shared reviewer filter.
+All reference repositories match upstream. Realigning stale merge leftovers to
+upstream shrank the fork's divergence from 415 to 414 files.
+[^november-7-local-integration]
+
+Adopt upstream's mobile AppBar and route presets, fresh sessions (`/clear`),
+dictation, secret providers, and Android one-alert-per-completion behavior.
+Keep Jujutsu, prompts, Vim, fuzzy menus, diff shortcuts, paired notifications,
+worktree settings, and SSH shutdown. Upstream status reads now confirm the
+branch on every cache hit, so Jujutsu's branch check must stay one `jj log`
+rather than a full status, which snapshots the working copy. Paired
+notifications merge sources out of order, so the upstream completion dedupe
+keeps a set of covered finishes, pruned at card expiry, instead of one key.
+[^november-7-local-integration]
 
 ## Completed November 5 sync
 
@@ -940,6 +967,10 @@ git log --reverse --oneline origin/main..upstream/main
 [^november-5-local-integration]: Exact local merge and code-tip revisions, initial separate main and branch gaps, and upstream-first source comparison; subsequently incorporated into main through PR #56.
 
 [^november-5-upstream]: Exact upstream revision incorporated into the completed November 5 sync.
+
+[^november-7-local-integration]: Exact local merge and code-tip revisions, separate main and branch gaps, and upstream-first source comparison; main integration remains pending.
+
+[^november-7-upstream]: Exact upstream revision incorporated into the local November 7 integration branch.
 
 [^november-5-main-integration]: PR #56 and its recorded merge time.
 
