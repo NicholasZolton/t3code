@@ -2,6 +2,8 @@
 
 ## 2026-11-07
 
+- **Remote deployment target**: Nicholas's remote server is now `nicholas-dev`, a `t3 up` boot service. [Upstream integration](upstream-integration.md#ssh-runtime-release-handoff) notes that the SSH deployment helper does not apply there and points to the service procedure in `AGENTS.md`.
+
 - **Compatibility**: Recorded the fork-only [fnox secrets for provider processes](upstream-integration.md#fnox-secrets-for-provider-processes) startup step, which upstream syncs must keep next to `fixPath`.
 
 - **Integration**: [PR #59](https://github.com/NicholasZolton/t3code/pull/59) reached fork `main` at `703297e186`. Refreshed [upstream integration](upstream-integration.md#completed-november-7-sync): all 277 incoming commits through `e455200077` are incorporated with ancestry preserved and zero main gap. Remote deployment remains separate.
