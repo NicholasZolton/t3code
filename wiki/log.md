@@ -2,6 +2,8 @@
 
 ## 2026-11-07
 
+- **Integration**: [PR #59](https://github.com/NicholasZolton/t3code/pull/59) reached fork `main` at `703297e186`. Refreshed [upstream integration](upstream-integration.md#completed-november-7-sync): all 277 incoming commits through `e455200077` are incorporated with ancestry preserved and zero main gap. Remote deployment remains separate.
+
 - **Local branch integration**: [Upstream integration](upstream-integration.md#local-november-7-sync) records merge `6087079d9d` through upstream `e455200077`, incorporating all 277 incoming commits with zero branch gap; adaptations through `69a4603d98` retain that merge. Fork `main` remains at `c0bde3fa70` with those commits pending. Jujutsu branch checks must stay one command, and paired notifications keep a set of covered finishes. No main integration, packaging, or deployment has occurred.
 
 ## 2026-11-05
