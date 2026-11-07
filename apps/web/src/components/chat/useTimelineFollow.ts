@@ -157,8 +157,6 @@ interface TimelineFollowInput {
   readonly timelineEntries: ReadonlyArray<TimelineEntry>;
   readonly timelineAnchorMessageId: MessageId | null;
   readonly setTimelineAnchor: Dispatch<SetStateAction<TimelineAnchor>>;
-  readonly onNavigateHistory: () => void;
-  readonly onReachedEnd: () => void;
 }
 
 /**
@@ -308,7 +306,6 @@ export function useTimelineFollow(input: TimelineFollowInput) {
   );
   const handlePageScrollStart = useStableCallback((key: PageScrollKey) => {
     if ((key === "PageUp" && timelineRealContentOverflowsViewport()) || !isTimelineAtLogicalEnd()) {
-      input.onNavigateHistory();
       // Through the viewport, so a running position restore stops too.
       viewportRef.current?.navigate({ releasesFollow: true });
     }
@@ -326,7 +323,6 @@ export function useTimelineFollow(input: TimelineFollowInput) {
   };
   const onComposerPageScrollReleaseStable = useStableCallback(onComposerPageScrollRelease);
   const scrollToEnd = (animated: boolean = false) => {
-    input.onReachedEnd();
     // Stops a running position restore; follow itself is re-armed below.
     viewportRef.current?.navigate({ releasesFollow: false });
     followStore.dispatch(visit, { type: "followEnd" });
@@ -368,10 +364,7 @@ export function useTimelineFollow(input: TimelineFollowInput) {
       contentScrollsUp: timelineRealContentOverflowsViewport,
       awayFromEnd,
     });
-    if (releases) {
-      releaseFollowForNavigation();
-      input.onNavigateHistory();
-    }
+    if (releases) releaseFollowForNavigation();
   };
   const handleNavigationStable = useStableCallback(handleNavigation);
   /**
@@ -495,7 +488,6 @@ export function useTimelineFollow(input: TimelineFollowInput) {
   const onTimelineFooterGrowStable = useStableCallback(onTimelineFooterGrow);
 
   const onIsAtEndChange = (isAtEnd: boolean) => {
-    if (isAtEnd) input.onReachedEnd();
     const scroll = visitScroll();
     if (!isAtEnd && readFollow().mode === "following") {
       scroll.showScrollDebouncer.cancel();

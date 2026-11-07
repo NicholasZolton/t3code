@@ -295,8 +295,6 @@ function consumePasteAsTextShortcut(deadline: { current: number }): boolean {
 }
 
 export interface ChatComposerHandle {
-  collapseForTimelineNavigation: () => void;
-  restoreAfterTimelineReachedEnd: () => void;
   focusAtEnd: () => void;
   focusAt: (cursor: number) => void;
   addDroppedFiles: (files: File[]) => void;
@@ -1053,7 +1051,6 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   const isMobileViewport = useMediaQuery("max-sm");
   const isSoftwareKeyboardOpen = useSoftwareKeyboardOpen();
   const [isComposerFocused, setIsComposerFocused] = useState(false);
-  const [scrollCollapsedTarget, setScrollCollapsedTarget] = useState<string | null>(null);
   const [composerSubmissionError, setComposerSubmissionError] = useState<string | null>(null);
   const [providerInputSubmissionError, setProviderInputSubmissionError] = useState<string | null>(
     null,
@@ -1069,21 +1066,6 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     !isComposerFocused &&
     !hasMultilinePrompt &&
     pendingUserInputs.length === 0;
-  const isComposerScrollCollapsed =
-    !isMobileViewport &&
-    routeKind === "server" &&
-    settings.composerCollapseOnScroll &&
-    scrollCollapsedTarget === composerDraftTargetKey &&
-    !hasMultilinePrompt &&
-    !isEditingQueuedMessage &&
-    composerTrigger === null &&
-    pendingUserInputs.length === 0 &&
-    activePendingApproval === null &&
-    !isDragOverComposer &&
-    !isPreparingWorktree &&
-    composerSubmissionError === null &&
-    providerInputSubmissionError === null;
-  const isComposerCollapsed = isComposerCollapsedMobile || isComposerScrollCollapsed;
 
   const composerEditorRef = useRef<ComposerPromptEditorHandle>(null);
   const pasteAsTextShortcutUntilRef = useRef(0);
@@ -1236,7 +1218,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   const showComposerTopDrawer =
     pendingUserInputs.length > 0 ||
     (!isComposerCollapsedMobile && showPlanFollowUpPrompt && activeProposedPlan !== null);
-  const showCollapsedMobilePromptRow = isComposerCollapsed;
+  const showCollapsedMobilePromptRow = isComposerCollapsedMobile;
   const showComposerAttachAction =
     fileStagingLimit !== null &&
     (!activePendingProgress ||
@@ -1636,7 +1618,6 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     cursorAdjacentToMention: boolean,
     contextIds: string[],
   ) => {
-    setScrollCollapsedTarget(null);
     refreshWorkspaceSnapshotOnTyping();
     if (activePendingProgress?.activeQuestion && pendingUserInputs.length > 0) {
       if (activePendingProgress.activeQuestion.allowCustomAnswer === false) return;
@@ -2365,7 +2346,6 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   };
   const compactThreadContextStable = useStableCallback(compactThreadContext);
   const expandMobileComposer = () => {
-    setScrollCollapsedTarget(null);
     if (composerBlurFrameRef.current !== null) {
       window.cancelAnimationFrame(composerBlurFrameRef.current);
       composerBlurFrameRef.current = null;
@@ -2466,8 +2446,9 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     expandMobileComposer: expandMobileComposerStable,
   });
   const hasBlockingComposerTopDrawer = pendingUserInputs.length > 0;
-  const composerControlsCollapsed = isComposerCollapsed;
-  const showInlineRestingControls = isComposerCollapsed;
+  const composerControlsCollapsed = isComposerCollapsedMobile;
+  // The collapsed mobile web composer keeps a second controls row inside the card.
+  const showInlineRestingControls = isComposerCollapsedMobile;
   const composerControlsHidden = showInlineRestingControls && !restingControlsVisible;
   if (composerControlsHidden && isComposerModelPickerOpen) {
     setIsComposerModelPickerOpen(false);
@@ -2704,11 +2685,6 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   };
   const insertComposerTextAtEndStable = useStableCallback(insertComposerTextAtEnd);
 
-  // The scroll-collapsed editor is hidden, so it has to render before it can take focus.
-  const revealScrollCollapsedEditor = () => {
-    if (isComposerScrollCollapsed) flushSync(() => setScrollCollapsedTarget(null));
-  };
-
   const typeComposerKey: ChatComposerHandle["typeKey"] = (event) => {
     if (!composerVimActive) return insertComposerTextAtEnd(event.key);
     // Vim runs keys as commands at its caret, which only its focused editor can do. A
@@ -2717,7 +2693,6 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       expandMobileComposer();
       return true;
     }
-    revealScrollCollapsedEditor();
     composerEditorRef.current?.focus();
     return (
       composerEditorRef.current?.handleVimKey(event) || insertComposerText(event.key, "cursor")
@@ -3023,7 +2998,6 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   }, []);
 
   const openModelPicker = () => {
-    setScrollCollapsedTarget(null);
     if (composerControlsHidden) {
       if (composerBlurFrameRef.current !== null) {
         window.cancelAnimationFrame(composerBlurFrameRef.current);
@@ -3039,15 +3013,11 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     composerRef,
     () => ({
       focusAtEnd: () => {
-        revealScrollCollapsedEditor();
         composerEditorRef.current?.focusAtEnd();
       },
       focusAt: (cursor: number) => {
-        revealScrollCollapsedEditor();
         composerEditorRef.current?.focusAt(cursor);
       },
-      collapseForTimelineNavigation: () => setScrollCollapsedTarget(composerDraftTargetKey),
-      restoreAfterTimelineReachedEnd: () => setScrollCollapsedTarget(null),
       addDroppedFiles: (files: File[]) => {
         void addComposerAttachments(files).then((inserted) => {
           if (!inserted) focusComposer();
@@ -3375,7 +3345,6 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
           composerBlurFrameRef.current = null;
         }
         setIsComposerFocused(true);
-        setScrollCollapsedTarget(null);
       }}
       onBlurCapture={(event) => {
         if (
@@ -3526,7 +3495,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
               className={cn(
                 "relative px-4 pb-2",
                 "pt-3.5 sm:pt-4",
-                isComposerCollapsed && "hidden",
+                isComposerCollapsedMobile && "hidden",
               )}
             >
               {isStashMenuOpen && !composerMenuOpen && (
@@ -3707,7 +3676,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
               </div>
             ) : null}
 
-            {isComposerCollapsed && speechInput.state.phase === "idle" ? null : (
+            {isComposerCollapsedMobile && speechInput.state.phase === "idle" ? null : (
               <div
                 data-chat-composer-footer="true"
                 className={cn(

@@ -1108,12 +1108,6 @@ export function ChatSettingsPanel() {
       description:
         "Use the system clipboard for Vim yanks, deletes, and pastes. When off, use a private Vim register.",
     },
-    {
-      key: "composerCollapseOnScroll",
-      searchId: "composer-collapse",
-      description:
-        "Rest the composer of an existing thread into a single line when you scroll the conversation. Focus the composer or start typing to expand it again.",
-    },
   ] as const;
 
   return (

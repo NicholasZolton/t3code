@@ -465,8 +465,6 @@ function GuestThread({
     timelineEntries: entries,
     timelineAnchorMessageId: null,
     setTimelineAnchor: ignore,
-    onNavigateHistory: ignore,
-    onReachedEnd: ignore,
   });
   const renderHtmlRender = useStableCallback(
     (row: Extract<TimelineRow, { kind: "html-render" }>) => (
