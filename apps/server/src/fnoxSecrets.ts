@@ -33,7 +33,9 @@ export const hydrateFnoxSecrets = Effect.fn("hydrateFnoxSecrets")(
       Object.entries(secrets).filter(([name]) => env[name] === undefined),
     );
     Object.assign(env, missing);
-    yield* Effect.logInfo("Loaded fnox secrets", { names: Object.keys(missing) });
+    const names = Object.keys(missing);
+    if (names.length === 0) return;
+    yield* Effect.logInfo("Loaded fnox secrets", { names });
   },
   // fnox is not installed.
   Effect.catchTags({ ProcessSpawnError: () => Effect.void }),
