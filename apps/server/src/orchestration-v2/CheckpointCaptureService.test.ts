@@ -657,9 +657,9 @@ it.layer(layerProjectionStoreTest)("CheckpointCaptureServiceV2", (it) => {
                     IdAllocator.layer,
                     NodeCrypto.layer,
                     Layer.mock(CheckpointStore.CheckpointStore)({
-                      isGitRepository: () => Effect.succeed(true),
+                      supportsCheckpoints: () => Effect.succeed(true),
                       hasCheckpointRef: () => Effect.succeed(true),
-                      captureCheckpoint: () => Effect.void,
+                      captureCheckpoint: () => Effect.succeed({ exclusions: [] }),
                       diffCheckpoints: () => Effect.succeed(""),
                       listAuthoredPaths: () => Effect.succeed(null),
                     }),

@@ -219,7 +219,7 @@ it.effect.each([false, true])(
             Layer.mock(DesktopIpc.DesktopIpc, {}),
             Layer.mock(DesktopLocalEnvironmentAuth.DesktopLocalEnvironmentAuth, {}),
             Layer.mock(DesktopManagedPolicy.DesktopManagedPolicy, {}),
-            Layer.mock(DesktopSshEnvironment.DesktopSshEnvironment, {}),
+            Layer.mock(DesktopSshEnvironment.DesktopSshEnvironment, { shutdown: Effect.void }),
             Layer.mock(DesktopSshPasswordPrompts.DesktopSshPasswordPrompts, {}),
             Layer.mock(DesktopTelemetryPublisher.DesktopTelemetryPublisher, {}),
             Layer.mock(DesktopWebLinks.DesktopWebLinks, {}),

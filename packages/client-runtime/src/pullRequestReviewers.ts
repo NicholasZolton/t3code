@@ -2,6 +2,7 @@ import type {
   PullRequestReviewerCandidate,
   PullRequestReviewerCandidateList,
 } from "@t3tools/contracts";
+import { searchItems } from "@t3tools/shared/searchRanking";
 
 // Loaded rows retain the request state updated by mutations.
 export function mergeReviewerCandidates(
@@ -9,18 +10,14 @@ export function mergeReviewerCandidates(
   searched: ReadonlyArray<PullRequestReviewerCandidate>,
   query: string,
 ): ReadonlyArray<PullRequestReviewerCandidate> {
-  const needle = query.trim().toLowerCase();
   const key = (candidate: PullRequestReviewerCandidate) => `${candidate.kind}:${candidate.id}`;
   const known = new Set(loaded.map(key));
   const hostMatches = new Set(searched.map(key));
+  const ranked = searchItems(loaded, query, (candidate) => [candidate.login, candidate.name ?? ""]);
+  const rankedSet = new Set(ranked);
   return [
-    ...loaded.filter(
-      (candidate) =>
-        hostMatches.has(key(candidate)) ||
-        needle.length === 0 ||
-        candidate.login.toLowerCase().includes(needle) ||
-        (candidate.name ?? "").toLowerCase().includes(needle),
-    ),
+    ...ranked,
+    ...loaded.filter((candidate) => !rankedSet.has(candidate) && hostMatches.has(key(candidate))),
     // The host matched these on its own terms, an email for one, so they are not narrowed again.
     ...searched.filter((candidate) => !known.has(key(candidate))),
   ];

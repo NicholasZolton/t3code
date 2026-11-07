@@ -13,10 +13,7 @@ import { serverEnvironment } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { SettingsSection } from "./components/SettingsSection";
 import { SettingsScreen } from "./components/SettingsScreen";
-import {
-  SettingsEnvironmentFilterHeader,
-  useSettingsEnvironmentMenu,
-} from "./components/SettingsEnvironmentFilterHeader";
+import { useSettingsEnvironmentMenu } from "./components/SettingsEnvironmentFilterHeader";
 import { useSettingsEnvironmentFilter } from "./settings-environment-filter";
 import { SharePromptsSection } from "./SharePromptsSection";
 
@@ -69,113 +66,110 @@ export function SettingsPromptsRouteScreen() {
   };
 
   return (
-    <>
-      <SettingsEnvironmentFilterHeader />
-      <SettingsScreen title="Prompts" menus={[environmentMenu]}>
-        <ScreenScrollView
-          contentContainerClassName="gap-5 px-5 pt-4"
-          contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 18) + 18 }}
-        >
+    <SettingsScreen title="Prompts" menus={[environmentMenu]}>
+      <ScreenScrollView
+        contentContainerClassName="gap-5 px-5 pt-4"
+        contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 18) + 18 }}
+      >
+        <Text className="text-sm text-foreground-muted">
+          Type &gt; followed by a short name in the composer. {"{{env.NAME}}"} reads from the host
+          machine; {"{{clipboard}}"} reads this device’s clipboard.
+        </Text>
+        {selectedProjectKey !== null ? (
           <Text className="text-sm text-foreground-muted">
-            Type &gt; followed by a short name in the composer. {"{{env.NAME}}"} reads from the host
-            machine; {"{{clipboard}}"} reads this device’s clipboard.
+            Select environments instead of a project to edit prompts.
           </Text>
-          {selectedProjectKey !== null ? (
-            <Text className="text-sm text-foreground-muted">
-              Select environments instead of a project to edit prompts.
-            </Text>
-          ) : null}
-          {selectedTargets.length > 1 ? (
-            <Text className="text-xs text-foreground-muted">
-              Changes are saved to every selected machine.
-            </Text>
-          ) : null}
-          {selectedProjectKey === null ? (
-            <SettingsSection title="Reusable prompts">
-              {Object.entries(prompts)
-                .sort(([a], [b]) => a.localeCompare(b))
-                .map(([promptName, promptBody]) => (
-                  <View key={promptName} className="gap-1 border-b border-border p-4">
-                    <Text className="font-t3-medium">&gt;{promptName}</Text>
-                    <Text numberOfLines={2} className="text-xs text-foreground-muted">
-                      {promptBody}
-                    </Text>
-                    <View className="flex-row gap-5 pt-2">
-                      <Pressable
-                        disabled={pending}
-                        onPress={() => open(promptName)}
-                        accessibilityRole="button"
-                      >
-                        <Text className="text-primary">Edit</Text>
-                      </Pressable>
-                      <Pressable
-                        disabled={pending}
-                        onPress={() =>
-                          Dialog.alert("Delete prompt?", `Remove >${promptName}?`, [
-                            { text: "Cancel" },
-                            {
-                              text: "Delete",
-                              style: "destructive",
-                              onPress: () => void write({ [promptName]: null }),
-                            },
-                          ])
-                        }
-                        accessibilityRole="button"
-                      >
-                        <Text className="text-danger-foreground">Delete</Text>
-                      </Pressable>
-                    </View>
+        ) : null}
+        {selectedTargets.length > 1 ? (
+          <Text className="text-xs text-foreground-muted">
+            Changes are saved to every selected machine.
+          </Text>
+        ) : null}
+        {selectedProjectKey === null ? (
+          <SettingsSection title="Reusable prompts">
+            {Object.entries(prompts)
+              .sort(([a], [b]) => a.localeCompare(b))
+              .map(([promptName, promptBody]) => (
+                <View key={promptName} className="gap-1 border-b border-border p-4">
+                  <Text className="font-t3-medium">&gt;{promptName}</Text>
+                  <Text numberOfLines={2} className="text-xs text-foreground-muted">
+                    {promptBody}
+                  </Text>
+                  <View className="flex-row gap-5 pt-2">
+                    <Pressable
+                      disabled={pending}
+                      onPress={() => open(promptName)}
+                      accessibilityRole="button"
+                    >
+                      <Text className="text-primary">Edit</Text>
+                    </Pressable>
+                    <Pressable
+                      disabled={pending}
+                      onPress={() =>
+                        Dialog.alert("Delete prompt?", `Remove >${promptName}?`, [
+                          { text: "Cancel" },
+                          {
+                            text: "Delete",
+                            style: "destructive",
+                            onPress: () => void write({ [promptName]: null }),
+                          },
+                        ])
+                      }
+                      accessibilityRole="button"
+                    >
+                      <Text className="text-danger-foreground">Delete</Text>
+                    </Pressable>
                   </View>
-                ))}
-              <Pressable className="p-4" accessibilityRole="button" onPress={() => open(null)}>
-                <Text className="text-primary">Add prompt</Text>
+                </View>
+              ))}
+            <Pressable className="p-4" accessibilityRole="button" onPress={() => open(null)}>
+              <Text className="text-primary">Add prompt</Text>
+            </Pressable>
+          </SettingsSection>
+        ) : null}
+        {selectedProjectKey === null ? <SharePromptsSection /> : null}
+        {editing !== null && selectedProjectKey === null ? (
+          <View className="gap-3 rounded-2xl border border-border p-4">
+            <Text className="font-t3-medium">Short name</Text>
+            <TextInput
+              value={name}
+              onChangeText={setName}
+              maxLength={SAVED_PROMPT_NAME_MAX_LENGTH}
+              placeholder="pr"
+              autoCapitalize="none"
+              autoCorrect={false}
+              className="rounded-lg border border-border p-3 text-foreground"
+            />
+            <Text className="font-t3-medium">Prompt</Text>
+            <TextInput
+              value={body}
+              onChangeText={setBody}
+              maxLength={SAVED_PROMPT_BODY_MAX_LENGTH}
+              placeholder="Go ahead and file a PR…"
+              multiline
+              className="min-h-32 rounded-lg border border-border p-3 text-foreground"
+              textAlignVertical="top"
+            />
+            <View className="flex-row gap-5">
+              <Pressable
+                disabled={!canSave || pending}
+                accessibilityRole="button"
+                onPress={() =>
+                  void write({
+                    ...(editing && editing !== trimmedName ? { [editing]: null } : {}),
+                    [trimmedName]: body,
+                  })
+                }
+              >
+                <Text className="text-primary">Save</Text>
               </Pressable>
-            </SettingsSection>
-          ) : null}
-          {selectedProjectKey === null ? <SharePromptsSection /> : null}
-          {editing !== null && selectedProjectKey === null ? (
-            <View className="gap-3 rounded-2xl border border-border p-4">
-              <Text className="font-t3-medium">Short name</Text>
-              <TextInput
-                value={name}
-                onChangeText={setName}
-                maxLength={SAVED_PROMPT_NAME_MAX_LENGTH}
-                placeholder="pr"
-                autoCapitalize="none"
-                autoCorrect={false}
-                className="rounded-lg border border-border p-3 text-foreground"
-              />
-              <Text className="font-t3-medium">Prompt</Text>
-              <TextInput
-                value={body}
-                onChangeText={setBody}
-                maxLength={SAVED_PROMPT_BODY_MAX_LENGTH}
-                placeholder="Go ahead and file a PR…"
-                multiline
-                className="min-h-32 rounded-lg border border-border p-3 text-foreground"
-                textAlignVertical="top"
-              />
-              <View className="flex-row gap-5">
-                <Pressable
-                  disabled={!canSave || pending}
-                  accessibilityRole="button"
-                  onPress={() =>
-                    void write({
-                      ...(editing && editing !== trimmedName ? { [editing]: null } : {}),
-                      [trimmedName]: body,
-                    })
-                  }
-                >
-                  <Text className="text-primary">Save</Text>
-                </Pressable>
-                <Pressable accessibilityRole="button" onPress={() => setEditing(null)}>
-                  <Text>Cancel</Text>
-                </Pressable>
-              </View>
+              <Pressable accessibilityRole="button" onPress={() => setEditing(null)}>
+                <Text>Cancel</Text>
+              </Pressable>
             </View>
-          ) : null}
-        </ScreenScrollView>
-      </SettingsScreen>
-    </>
+          </View>
+        ) : null}
+      </ScreenScrollView>
+    </SettingsScreen>
   );
 }

@@ -163,7 +163,7 @@ const SETTINGS_SCREENS = {
   SettingsPrompts: createNativeStackScreen({
     screen: SettingsPromptsRouteScreen,
     linking: "settings/prompts",
-    options: { ...SETTINGS_PAGE_OPTIONS, title: "Reusable prompts" },
+    options: settingsPage("Reusable prompts"),
   }),
   Settings: createNativeStackScreen({
     screen: SettingsRouteScreen,
@@ -505,7 +505,7 @@ const RootStackConfig = createWorkspaceStackNavigator({
     PairedNotification: createNativeStackScreen({
       screen: PairedNotificationRouteScreen,
       linking: "notifications/:registrationId/:notificationId",
-      options: GLASS_HEADER_OPTIONS,
+      options: settingsPage("Notification"),
     }),
     PullRequest: createNativeStackScreen({
       screen: PullRequestRouteScreen,

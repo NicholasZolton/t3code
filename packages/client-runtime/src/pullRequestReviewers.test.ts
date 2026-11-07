@@ -25,6 +25,9 @@ describe("mergeReviewerCandidates", () => {
     expect(mergeReviewerCandidates(loaded, [], "HOP").map((entry) => entry.login)).toEqual([
       "grace",
     ]);
+    expect(mergeReviewerCandidates(loaded, [], "lns").map((entry) => entry.login)).toEqual([
+      "linus",
+    ]);
   });
 
   it("adds candidates only the host's search found, after the loaded ones", () => {

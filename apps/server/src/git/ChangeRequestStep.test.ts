@@ -40,6 +40,7 @@ const textGeneration: TextGeneration.TextGeneration["Service"] = {
   generateBranchName: () => Effect.succeed({ branch: "feature/add-the-thing" }),
   generateThreadTitle: () => Effect.succeed({ title: "Add the thing" }),
   generateReviewGuide: () => Effect.die("not exercised"),
+  generateTranscriptionPostProcessing: () => Effect.die("not exercised"),
 };
 
 function makeLayer(created: Array<{ readonly baseRefName: string; readonly cwd: string }>) {
