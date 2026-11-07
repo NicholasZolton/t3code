@@ -1,3 +1,5 @@
+import * as NodeNet from "node:net";
+
 import { NodeHttpServer } from "@effect/platform-node";
 import { type ExecutionEnvironmentDescriptor, OrchestratorMcpFailure } from "@t3tools/contracts";
 import { expect, it } from "@effect/vitest";
@@ -14,6 +16,7 @@ import * as HttpRouter from "effect/http/HttpRouter";
 import * as SqlClient from "effect/sql/SqlClient";
 import * as TestClock from "effect/testing/TestClock";
 import { Tool, Toolkit } from "effect/ai";
+import * as Undici from "undici";
 import {
   FetchHttpClient,
   HttpClient,
@@ -82,9 +85,12 @@ const serveB = (descriptor: ExecutionEnvironmentDescriptor) =>
 /** Environment A, which links to B. */
 const makeA = (
   descriptor: ExecutionEnvironmentDescriptor,
-  secrets?: typeof ServerSecretStore.layer,
+  options: {
+    readonly secrets?: typeof ServerSecretStore.layer;
+    readonly tailnet?: ReadonlyArray<string>;
+  } = {},
 ) =>
-  layerLinkingEnvironment(descriptor, secrets).pipe(
+  layerLinkingEnvironment(descriptor, options).pipe(
     Layer.build,
     Effect.map((context) => ({
       links: Context.get(context, PeerLinks.PeerLinks),
@@ -111,6 +117,36 @@ const probe = (
 
 const linkedSessions = (b: ServedPeer) => b.linkedSessions;
 
+/** A tailnet address of B's machine. */
+const TAILNET_ADDRESS = "100.101.102.103";
+
+/**
+ * Until the scope closes, this process's fetches to `TAILNET_ADDRESS` reach
+ * loopback on the same port, as Tailscale carries them to B's machine. They
+ * keep the address as their Host, which B's sign-in checks.
+ */
+const routeTailnetToLoopback = Effect.acquireRelease(
+  Effect.sync(() => {
+    const previous = Undici.getGlobalDispatcher();
+    const tailnet = new Undici.Agent({
+      connect: (options, callback) => {
+        const socket = NodeNet.connect({
+          host: options.hostname === TAILNET_ADDRESS ? "127.0.0.1" : options.hostname,
+          port: Number(options.port),
+        });
+        socket.once("connect", () => callback(null, socket));
+        socket.once("error", (error) => callback(error, null));
+      },
+    });
+    Undici.setGlobalDispatcher(tailnet);
+    return { previous, tailnet };
+  }),
+  ({ previous, tailnet }) =>
+    Effect.sync(() => Undici.setGlobalDispatcher(previous)).pipe(
+      Effect.andThen(Effect.promise(() => tailnet.destroy())),
+    ),
+);
+
 /** Another environment on a socket of its own, answering as `descriptor`. */
 const serveApart = (descriptor: ExecutionEnvironmentDescriptor) =>
   Layer.build(Layer.fresh(NodeHttpServer.layerTest)).pipe(
@@ -120,11 +156,9 @@ const serveApart = (descriptor: ExecutionEnvironmentDescriptor) =>
 it.effect("routes peer reads to readers and sees uncommitted link updates", () =>
   Effect.scoped(
     Effect.gen(function* () {
-      const context = yield* layerLinkingEnvironment(
-        laptop,
-        ServerSecretStore.layer,
-        layerReaderDatabase,
-      ).pipe(Layer.build);
+      const context = yield* layerLinkingEnvironment(laptop, {
+        database: layerReaderDatabase,
+      }).pipe(Layer.build);
       const links = Context.get(context, PeerLinks.PeerLinks);
       const sql = Context.get(context, SqlClient.SqlClient);
       yield* sql`
@@ -265,7 +299,7 @@ it.effect("a link whose row cannot be stored keeps none of its token", () =>
           }),
         ),
       );
-      const a = yield* makeA(laptop, noted);
+      const a = yield* makeA(laptop, { secrets: noted });
       yield* a.sql`
         CREATE TRIGGER refuse_link BEFORE INSERT ON peer_environment_links
         BEGIN SELECT RAISE(ABORT, 'database or disk is full'); END
@@ -570,6 +604,15 @@ it.effect(
           })
           .pipe(Effect.flip);
         expect(lanAlternate.message).toContain("plain http");
+        // Carrier NAT shares Tailscale's range, so this machine's Tailscale must list the address.
+        const unlisted = yield* a.links
+          .link({
+            url: `http://${TAILNET_ADDRESS}:3773`,
+            pairingCode: pairing.credential,
+            access: "auto",
+          })
+          .pipe(Effect.flip);
+        expect(unlisted.message).toContain("plain http");
 
         yield* Ref.set(b.descriptor, laptop);
         const self = yield* a.links
@@ -578,6 +621,29 @@ it.effect(
         expect(self.reason).toBe("self");
         // Neither attempt spent the pairing code on a session.
         expect(yield* linkedSessions(b)).toEqual([]);
+      }),
+    ).pipe(Effect.provide(NodeHttpServer.layerTest)),
+);
+
+it.effect(
+  "links a picked machine over plain http to a peer address this machine's tailnet lists",
+  () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const b = yield* serveB(box);
+        const a = yield* makeA(laptop, { tailnet: [TAILNET_ADDRESS] });
+        yield* routeTailnetToLoopback;
+        const tailnetUrl = `http://${TAILNET_ADDRESS}:${new URL(b.url).port}`;
+        const pairing = yield* b.auth.issuePairingCredential();
+        const linked = yield* a.links.link({
+          url: "http://192.168.1.20:3773",
+          alternateUrls: [tailnetUrl],
+          pairingCode: pairing.credential,
+          access: "auto",
+          expectedEnvironmentId: box.environmentId,
+        });
+        expect(linked).toMatchObject({ environmentId: box.environmentId, urls: [tailnetUrl] });
+        expect((yield* linkedSessions(b)).length).toBe(1);
       }),
     ).pipe(Effect.provide(NodeHttpServer.layerTest)),
 );
@@ -623,8 +689,9 @@ it.effect("linking a picked machine that answers nowhere names it and links noth
         })
         .pipe(Effect.flip);
       expect(failed.reason).toBe("unreachable");
+      // It names the address it tried, and why it skipped the other.
       expect(failed.message).toBe(
-        `This environment could not reach Box at ${impostor.url}, http://192.168.1.20:3773.`,
+        `This environment could not reach Box at ${impostor.url}. http://192.168.1.20:3773 is plain http, which would send the link's credentials unencrypted. Use its https address, or a Tailscale address this machine reaches.`,
       );
       expect(yield* a.links.list).toEqual([]);
       expect(yield* linkedSessions(impostor)).toEqual([]);

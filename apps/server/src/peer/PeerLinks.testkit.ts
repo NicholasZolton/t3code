@@ -10,7 +10,10 @@ import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Ref from "effect/Ref";
+import * as Sink from "effect/Sink";
+import * as Stream from "effect/Stream";
 import * as FetchHttpClient from "effect/http/FetchHttpClient";
+import * as ChildProcessSpawner from "effect/process/ChildProcessSpawner";
 import * as HttpRouter from "effect/http/HttpRouter";
 import * as HttpServer from "effect/http/HttpServer";
 import * as HttpServerRequest from "effect/http/HttpServerRequest";
@@ -150,20 +153,58 @@ export const servePeer = <E, R>(
 
 export type ServedPeer = Effect.Success<ReturnType<typeof servePeer>>;
 
+/** `tailscale status` on the linking machine, listing `addresses` as its peers' tailnet addresses. */
+const layerTailnet = (addresses: ReadonlyArray<string>) =>
+  Layer.succeed(
+    ChildProcessSpawner.ChildProcessSpawner,
+    ChildProcessSpawner.make((command) =>
+      command._tag === "StandardCommand" && command.command === "tailscale"
+        ? Effect.succeed(
+            ChildProcessSpawner.makeHandle({
+              pid: ChildProcessSpawner.ProcessId(1),
+              exitCode: Effect.succeed(ChildProcessSpawner.ExitCode(0)),
+              isRunning: Effect.succeed(false),
+              kill: () => Effect.void,
+              unref: Effect.succeed(Effect.void),
+              stdin: Sink.drain,
+              stdout: Stream.make(
+                new TextEncoder().encode(
+                  JSON.stringify({ Peer: { "nodekey:peer": { TailscaleIPs: addresses } } }),
+                ),
+              ),
+              stderr: Stream.empty,
+              all: Stream.empty,
+              getInputFd: () => Sink.drain,
+              getOutputFd: () => Stream.empty,
+            }),
+          )
+        : Effect.die("The linking environment runs only tailscale."),
+    ),
+  );
+
 /**
  * The environment that links: its own database and secret store, reaching
- * peers over plain HTTP. Provide it to anything built on its links.
+ * peers over plain HTTP. Its Tailscale lists `tailnet` and nothing else.
+ * Provide it to anything built on its links.
  */
 export const layerLinkingEnvironment = <E = never>(
   descriptor: ExecutionEnvironmentDescriptor,
-  secrets: typeof ServerSecretStore.layer = ServerSecretStore.layer,
-  database: Layer.Layer<
-    SqlClient.SqlClient,
-    E | Layer.Error<typeof Sqlite.layerMemory>
-  > = Sqlite.layerMemory,
+  {
+    secrets = ServerSecretStore.layer,
+    database = Sqlite.layerMemory,
+    tailnet = [],
+  }: {
+    readonly secrets?: typeof ServerSecretStore.layer;
+    readonly database?: Layer.Layer<
+      SqlClient.SqlClient,
+      E | Layer.Error<typeof Sqlite.layerMemory>
+    >;
+    readonly tailnet?: ReadonlyArray<string>;
+  } = {},
 ) =>
   PeerMcpClient.layer.pipe(
     Layer.provideMerge(PeerLinks.layer),
+    Layer.provide(layerTailnet(tailnet)),
     Layer.provideMerge(ServerSettings.layerTest({ linkedEnvironmentsEnabled: true })),
     Layer.provideMerge(database),
     Layer.provide(Layer.mergeAll(secrets, FetchHttpClient.layer)),
