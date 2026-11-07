@@ -273,6 +273,18 @@ export const makeJjWorkspaces = (deps: JjWorkspaceOpsDeps): JjWorkspaceOps => {
           .pipe(
             mapJjFailure(operation, input.cwd, `Could not create ${path.dirname(worktreePath)}.`),
           );
+        // Newer jj backs each workspace with a Git worktree, whose registration outlives a
+        // deleted directory and blocks re-adding the path. Without --force, Git clears only a
+        // registration whose directory is gone; an unregistered path is a harmless failure.
+        if (!destinationExisted) {
+          yield* JjProcess.colocatedGitCommand(
+            process,
+            operation,
+            { gitDir: paths.gitDir, cwd: input.cwd },
+            ["worktree", "remove", worktreePath],
+            { allowNonZeroExit: true },
+          ).pipe(Effect.ignore);
+        }
 
         // `-r X` means "@ is a fresh empty child of X". The bookmark stays on X and the thread's
         // edits land in `@`, which is git's `worktree add -b new base` translated.
