@@ -35,6 +35,7 @@ import {
   guardHttpResponseWriteErrors,
   rejectRequestsUntilServing,
 } from "./httpResponseErrorGuard.ts";
+import { hydrateFnoxSecrets } from "./fnoxSecrets.ts";
 import { fixPath } from "./os-jank.ts";
 import * as Ws from "./ws.ts";
 import * as AgentScopeLive from "./process/agentScope.ts";
@@ -866,6 +867,7 @@ const layerMakeServer = Layer.unwrap(
     const layerLauncher = ServiceLauncherClient.layer;
 
     yield* fixPath({ shellEnvironmentPrepared: config.shellEnvironmentPrepared });
+    yield* Effect.forkScoped(hydrateFnoxSecrets());
 
     const layerHttpListening = Layer.effectDiscard(
       Effect.gen(function* () {
