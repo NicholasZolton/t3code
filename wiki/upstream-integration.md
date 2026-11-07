@@ -6,7 +6,7 @@ tags: [upstream, fork, integration]
 status: stable
 generated:
   by: claude-code/claude-opus-5-5
-  at: 2026-11-07T17:09:56+00:00
+  at: 2026-11-07T18:10:00+00:00
 verified:
   - by: claude-code/claude-opus-5-5
     at: 2026-11-07T17:09:56+00:00
@@ -748,6 +748,11 @@ managed launcher whose process uses that exact installed runtime, preserves
 the previous archive, and restores the launcher if startup fails. Coordinate
 the restart with active remote turns. Its readiness check covers loopback only,
 not the phone-facing Tailscale endpoint.[^ssh-deployment]
+
+Nicholas's remote server, `nicholas-dev`, does not use this helper. It runs the `t3 up` boot
+service, which the [remote deployment checks](../AGENTS.md#remote-deployment-checks) switch with
+the new runtime's `t3 service install`. The Linux archive's `libatomic` step needs Linux tools;
+the 2026-11-07 deploy from the Mac ran that step in an Ubuntu container.[^remote-deployment-checks]
 
 Tailnet publication must be remembered in the running server's state directory
 so restarts restore forwarding to its actual listener. A standalone Tailscale
