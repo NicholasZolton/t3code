@@ -2,6 +2,8 @@
 
 ## 2026-11-07
 
+- **Compatibility**: Recorded the fork-only [searchable All projects row](upstream-integration.md#searchable-all-projects-row) in the sidebar project filter. Upstream hides it while a search query is typed.
+
 - **Correction**: Composer scroll-collapse was upstream's, not fork behavior. Upstream removed it, so the fork drops it too; [upstream integration](upstream-integration.md#completed-november-2-sync) no longer lists it as retained.
 
 - **Compatibility**: Recorded the fork-only [Tailscale IPv4 check for linked environments](upstream-integration.md#tailscale-ipv4-addresses-for-linked-environments). A server may now link to a machine at a Tailscale IPv4 address that its own Tailscale lists.

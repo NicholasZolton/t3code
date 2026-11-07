@@ -1054,11 +1054,7 @@ export function filterSidebarProjectScopeItems<
 >(input: { items: readonly TItem[]; query: string }): readonly TItem[] {
   const query = input.query.trim();
   if (query.length === 0) return input.items;
-  return searchItems(
-    input.items.filter((item) => item.value !== "all"),
-    query,
-    (item) => [item.label],
-  );
+  return searchItems(input.items, query, (item) => [item.label]);
 }
 
 interface SidebarProjectScopeMenuState {
