@@ -6,27 +6,33 @@ tags: [upstream, fork, integration]
 status: stable
 generated:
   by: opencode/gpt-6.1-sol
-  at: 2026-11-09T17:15:31+00:00
+  at: 2026-11-09T17:18:22+00:00
 verified:
   - by: opencode/gpt-6.1-sol
-    at: 2026-11-09T17:15:31+00:00
+    at: 2026-11-09T17:18:22+00:00
 snapshot:
-  at: 2026-11-09T17:15:31+00:00
-  fork_main: 7265fa73f437c896336820dd6146010e1897bc97
+  at: 2026-11-09T17:18:22+00:00
+  fork_main: 7a0869df09c91d721d7b77565bbe8cab2c0f0bf1
   upstream_main: 7b248349bdc066b1488f52083662597ab22d6fe3
-  shared_baseline: 5ee1dbffbea1c3e2930f6512a99e81e8c4ecc3c4
-  last_main_integration: e5f32987d0e27564e7edf043e9502e3aa2e12f03
-  last_main_upstream: 5ee1dbffbea1c3e2930f6512a99e81e8c4ecc3c4
-  missing_upstream_on_main: 48
+  shared_baseline: 7b248349bdc066b1488f52083662597ab22d6fe3
+  last_main_integration: 82fe80c22ec4c40f51e29951a0bc42d066da1861
+  last_main_upstream: 7b248349bdc066b1488f52083662597ab22d6fe3
+  missing_upstream_on_main: 0
   missing_upstream_at_integrated_tip: 0
   branch_integration: 82fe80c22ec4c40f51e29951a0bc42d066da1861
   branch_parent: 7265fa73f437c896336820dd6146010e1897bc97
   branch_code_tip: 82fe80c22ec4c40f51e29951a0bc42d066da1861
   missing_upstream_on_branch: 0
 sources:
+  - id: november-9-followup-main
+    resource: https://github.com/NicholasZolton/t3code/pull/69
+    title: Completed November 9 follow-up integration into fork main
+  - id: november-9-followup-main-git
+    resource: "Local Git verification at 2026-11-09T17:18:22+00:00: fetched origin/main equals 7a0869df09c91d721d7b77565bbe8cab2c0f0bf1, with parents fork main 7265fa73f437c896336820dd6146010e1897bc97 and branch tip fd06a4b7aadcb2c799b342ec0b9e50f4dbfa626d. Merge 82fe80c22ec4c40f51e29951a0bc42d066da1861 and pinned upstream 7b248349bdc066b1488f52083662597ab22d6fe3 are ancestors of main. The shared baseline equals that upstream tip, all 48 incoming commits are incorporated, and zero upstream commits are missing on main. PR 69 merged at 2026-11-09T17:18:10Z. No CI checks or reviews were registered at merge. Local verification and its three reproduced upstream browser failures and native verification gap are recorded on the PR. No live deployment occurred."
+    title: Completed follow-up main ancestry and merge verification
   - id: november-9-followup-candidate
     resource: "Local Git verification at 2026-11-09T17:15:31+00:00: merge 82fe80c22ec4c40f51e29951a0bc42d066da1861 has parents fork main 7265fa73f437c896336820dd6146010e1897bc97 and upstream 7b248349bdc066b1488f52083662597ab22d6fe3. All 48 incoming commits are ancestors of the branch, with zero branch gap. Fork main still lacks those commits, sharing baseline 5ee1dbffbea1c3e2930f6512a99e81e8c4ecc3c4. Of 275 incoming paths without prior fork changes, 273 match upstream exactly; the shared model-search implementation retains fork ranking after upstream moved it, and the chat-status test covers Jujutsu identity. Changed-file format, lint, patch install, knip, GraphQL, 41-package typecheck, and React Compiler checks pass. Tests pass 3418 cases; three full-app browser failures reproduce on a pristine checkout of the pinned upstream, and the draft case also fails on fork main. Production web/server builds and 99 focused fork regression tests pass. A real browser verified onboarding, a complete free Replay turn with approval, and model mention insertion. Native verification is blocked by the device hub failing to start; paid model evals and desktop packaging were not run. No live deployment has occurred."
-    title: November 9 follow-up candidate and separate main boundary
+    title: November 9 follow-up candidate boundary, now incorporated into main
   - id: november-9-followup-upstream
     resource: https://github.com/pingdotgg/t3code/commit/7b248349bdc066b1488f52083662597ab22d6fe3
     title: Pinned upstream tip for the November 9 follow-up
@@ -331,17 +337,23 @@ sources:
 
 # Upstream integration
 
-Fork `main` at `7265fa73f4` incorporates upstream through `5ee1dbffbe`.
-The follow-up candidate `82fe80c22e` incorporates all 48 newer upstream commits
-through `7b248349bd`, preserving both parents and leaving zero branch gap.
-Those 48 commits are not yet on fork `main`. Main integration and remote
-deployment are separate operations.[^november-9-followup-candidate]
+Fork `main` incorporates all 48 newer upstream commits through `7b248349bd`,
+preserving ancestry with zero gap against that pinned tip.
+[PR #69](https://github.com/NicholasZolton/t3code/pull/69) landed at `7a0869df09`.
+Main integration and remote deployment remain separate operations.
+[^november-9-followup-main][^november-9-followup-main-git]
 
 This is a revision-pinned snapshot, not a claim about newer upstream work.
 Refresh it after the next review or integration using the
 [maintenance guidance](maintenance.md).
 
-## November 9 follow-up candidate
+## Completed November 9 follow-up
+
+[PR #69](https://github.com/NicholasZolton/t3code/pull/69) merged at
+`7a0869df09c91d721d7b77565bbe8cab2c0f0bf1` on November 9, 2026,
+at 17:18:10 UTC. It retains fork parent `7265fa73f4` and integrated branch tip
+`fd06a4b7aa`; all 48 incoming upstream commits are now ancestors of fork `main`.
+[^november-9-followup-main][^november-9-followup-main-git]
 
 Merge `82fe80c22ec4c40f51e29951a0bc42d066da1861` combines fork `main`
 `7265fa73f437c896336820dd6146010e1897bc97` and upstream
@@ -943,7 +955,11 @@ git rev-list --count origin/main..upstream/main
 git log --reverse --oneline origin/main..upstream/main
 ```
 
-[^november-9-followup-candidate]: Ancestry-preserving follow-up merge, upstream-only source audit, and separate unchanged-main boundary.
+[^november-9-followup-main]: PR #69 and its recorded merge time.
+
+[^november-9-followup-main-git]: Completed main ancestry checks and zero gap against the pinned upstream tip.
+
+[^november-9-followup-candidate]: Ancestry-preserving follow-up merge and upstream-only source audit before main integration.
 
 [^november-9-followup-upstream]: Exact upstream revision reviewed for the November 9 follow-up.
 

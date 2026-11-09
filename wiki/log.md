@@ -2,7 +2,7 @@
 
 ## 2026-11-09
 
-- **Follow-up candidate**: [Upstream integration](upstream-integration.md#november-9-follow-up-candidate) records merge `82fe80c22e` through upstream `7b248349bd`, with all 48 newer commits present on the branch and still missing on fork `main`. Adopt upstream's Welcome page, MCP setup, shared model mentions, and list cleanup while retaining the fork's compatibility boundaries. No live deployment occurred.
+- **Follow-up integration**: [PR #69](https://github.com/NicholasZolton/t3code/pull/69) reached fork `main` at `7a0869df09`. Refreshed [upstream integration](upstream-integration.md#completed-november-9-follow-up): all 48 newer commits through `7b248349bd` are incorporated with ancestry preserved and zero main gap. Three browser failures reproduce on clean upstream; native verification remains blocked by device-hub startup. No live deployment occurred.
 
 - **Integration**: [PR #68](https://github.com/NicholasZolton/t3code/pull/68) reached fork `main` at `2d55bfc6f4`. Refreshed [upstream integration](upstream-integration.md#completed-november-9-sync): all 95 incoming commits through `5ee1dbffbe` are incorporated with ancestry preserved and zero main gap. Copilot's file limit prevented review; local verification and gaps are recorded on the PR. No live deployment occurred.
 
