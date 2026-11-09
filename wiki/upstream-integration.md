@@ -5,25 +5,31 @@ description: Main and branch integration boundaries and fork compatibility excep
 tags: [upstream, fork, integration]
 status: stable
 generated:
-  by: claude-code/claude-opus-5-5
-  at: 2026-11-07T19:42:29+00:00
+  by: opencode/gpt-6.1-sol
+  at: 2026-11-09T06:06:40+00:00
 verified:
-  - by: claude-code/claude-opus-5-5
-    at: 2026-11-07T17:09:56+00:00
+  - by: opencode/gpt-6.1-sol
+    at: 2026-11-09T06:06:40+00:00
 snapshot:
-  at: 2026-11-07T17:09:56+00:00
-  fork_main: 703297e186f1f269c7ff11a20e34584b16b4e786
-  upstream_main: e455200077ce60806a01c8f28435b58860dcfc74
+  at: 2026-11-09T06:06:40+00:00
+  fork_main: 19474d8c52d9c558472d51a4456a25eb08fcf19e
+  upstream_main: c4ce7b0fd74f6beb37ed6034f5c8416e5aa7e165
   shared_baseline: e455200077ce60806a01c8f28435b58860dcfc74
   last_main_integration: 6087079d9d4297ea5f9681c397691a962b49c875
   last_main_upstream: e455200077ce60806a01c8f28435b58860dcfc74
-  missing_upstream_on_main: 0
+  missing_upstream_on_main: 92
   missing_upstream_at_integrated_tip: 0
-  branch_integration: 6087079d9d4297ea5f9681c397691a962b49c875
-  branch_parent: c0bde3fa7067faa6ad3c8c5477e701199f0888e3
-  branch_code_tip: 69a4603d988dc1ed30d9c1c85ad6e1892ceeab53
+  branch_integration: fcf161aee52d30da2fb9607d9ae5893e15bd6b59
+  branch_parent: 19474d8c52d9c558472d51a4456a25eb08fcf19e
+  branch_code_tip: fcf161aee52d30da2fb9607d9ae5893e15bd6b59
   missing_upstream_on_branch: 0
 sources:
+  - id: november-9-local-integration
+    resource: "Local Git verification at 2026-11-09T06:06:40+00:00: merge fcf161aee52d30da2fb9607d9ae5893e15bd6b59 has parents fork 19474d8c52d9c558472d51a4456a25eb08fcf19e and upstream c4ce7b0fd74f6beb37ed6034f5c8416e5aa7e165. All 92 incoming commits are ancestors of the branch, with zero branch gap. Fetched origin/main still lacks those commits and shares baseline e455200077ce60806a01c8f28435b58860dcfc74. All 502 incoming paths without prior fork changes match upstream byte-for-byte, including deleted paths. The merge is not yet on main; validation and client compatibility repairs are in progress. No live runtime deployment has occurred."
+    title: November 9 candidate merge and separate main boundary
+  - id: november-9-upstream
+    resource: https://github.com/pingdotgg/t3code/commit/c4ce7b0fd74f6beb37ed6034f5c8416e5aa7e165
+    title: Pinned upstream tip for the November 9 sync
   - id: november-7-main-integration
     resource: https://github.com/NicholasZolton/t3code/pull/59
     title: Completed November 7 upstream integration into fork main
@@ -319,6 +325,23 @@ Main integration and remote deployment are separate operations.
 This is a revision-pinned snapshot, not a claim about newer upstream work.
 Refresh it after the next review or integration using the
 [maintenance guidance](maintenance.md).
+
+## Local November 9 sync
+
+Merge `fcf161aee52d30da2fb9607d9ae5893e15bd6b59` combines fork `main`
+`19474d8c52d9c558472d51a4456a25eb08fcf19e` with upstream
+`c4ce7b0fd74f6beb37ed6034f5c8416e5aa7e165`. The branch contains all 92 incoming
+commits; fork `main` still lacks them. All 502 incoming paths without prior fork
+changes match upstream exactly. Validation remains in progress.
+[^november-9-local-integration][^november-9-upstream]
+
+Adopt upstream's checkout cache, collision-resistant worktree names, cheaper branch
+reads and cleanup scans, text generators, mobile UI primitives, and removal of
+legacy plan mode. Keep project grouping and flat worktree layouts around upstream
+creation, and keep the Jujutsu exclusion in upstream's shared cleanup-path guard.
+Android activity remains independent of ordinary alerts, including paired sources;
+out-of-order completion deduplication and encrypted delivery remain fork boundaries.
+[^november-9-local-integration]
 
 ## Completed November 7 sync
 
@@ -654,16 +677,16 @@ migrates to upstream branch naming while preserving temporary branch names. The 
 | -------------------------------------------------- | ---------------------------------------- |
 | Fork                                               | `NicholasZolton/t3code`, remote `origin` |
 | Upstream                                           | `pingdotgg/t3code`, remote `upstream`    |
-| Main landing commit                                | `53b9557983`: merge of PR #56            |
-| Upstream integration commit                        | `1c01e0f4ca`: merge through `67eebaca23` |
-| Fork-side parent                                   | `9bcf77bb70`                             |
-| Upstream-side parent / shared baseline             | `67eebaca23`                             |
+| Main landing commit                                | `703297e186`: merge of PR #59            |
+| Upstream integration commit                        | `6087079d9d`: merge through `e455200077` |
+| Fork-side parent                                   | `c0bde3fa70`                             |
+| Upstream-side parent / shared baseline             | `e455200077`                             |
 | Missing commits at that integration's upstream tip | **0**                                    |
 
 Default to upstream implementations. Retain fork code for explicit features
 or fixes upstream does not provide. Native OpenCode 2 and thread management now
 use upstream services; fork configuration and UI improvements remain layered on
-those paths.[^november-5-local-integration][^november-5-main-review-git]
+those paths.[^november-7-local-integration][^november-7-main-review-git]
 
 ## Earlier integration boundaries
 
@@ -867,6 +890,10 @@ git merge-base --is-ancestor a8df093eb6 origin/main
 git rev-list --count origin/main..upstream/main
 git log --reverse --oneline origin/main..upstream/main
 ```
+
+[^november-9-local-integration]: Candidate merge ancestry and upstream-only path comparison; main integration is pending.
+
+[^november-9-upstream]: Exact upstream revision reviewed for the November 9 sync.
 
 [^main-integration]: PR #27 and its recorded merge time and verification.
 

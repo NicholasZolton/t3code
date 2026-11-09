@@ -5175,12 +5175,14 @@ it.layer(layerGitManagerTest)("GitManager", (it) => {
       });
 
       expect(result.branch).toBe("feature/pr-worktree");
-      expect(result.worktreePath).toBe(
-        NodePath.join(worktreeDirectory, NodePath.basename(repoDir), "feature-pr-worktree"),
-      );
       expect(result.worktreePath).not.toBeNull();
-      expect(NodeFS.existsSync(result.worktreePath as string)).toBe(true);
-      const worktreeBranch = (yield* runGit(result.worktreePath as string, [
+      const worktreePath = result.worktreePath!;
+      expect(NodePath.dirname(worktreePath)).toBe(
+        NodePath.join(worktreeDirectory, NodePath.basename(repoDir)),
+      );
+      expect(NodePath.basename(worktreePath)).toMatch(/^feature-pr-worktree-[0-9a-f]{16}$/);
+      expect(NodeFS.existsSync(worktreePath)).toBe(true);
+      const worktreeBranch = (yield* runGit(worktreePath, [
         "branch",
         "--show-current",
       ])).stdout.trim();

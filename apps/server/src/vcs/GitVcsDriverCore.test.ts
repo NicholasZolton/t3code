@@ -5302,7 +5302,8 @@ it.layer(layerTest)("GitVcsDriver core integration", (it) => {
             { cwd, path: null, refName: initialBranch, newRefName: "example/grouped" },
             { worktreesDirectory: root, projectFolders: true },
           );
-          assert.equal(grouped.worktree.path, paths.join(projectFolder, "example-grouped"));
+          assert.equal(paths.dirname(grouped.worktree.path), projectFolder);
+          assert.match(paths.basename(grouped.worktree.path), /^example-grouped-[0-9a-f]{16}$/);
           assert.equal(
             yield* files.readFileString(paths.join(projectFolder, "opencode.jsonc")),
             "{}\n",
@@ -5316,7 +5317,9 @@ it.layer(layerTest)("GitVcsDriver core integration", (it) => {
             { cwd, path: null, refName: initialBranch, newRefName: "example/flat" },
             { worktreesDirectory: root, projectFolders: false },
           );
-          assert.equal(flat.worktree.path, paths.join(root, `${paths.basename(cwd)}-example-flat`));
+          assert.equal(paths.dirname(flat.worktree.path), root);
+          assert.isTrue(paths.basename(flat.worktree.path).startsWith(`${paths.basename(cwd)}-`));
+          assert.match(paths.basename(flat.worktree.path), /-example-flat-[0-9a-f]{16}$/);
 
           const fromLinkedWorktree = yield* driver.createWorktree(
             {
@@ -5327,9 +5330,10 @@ it.layer(layerTest)("GitVcsDriver core integration", (it) => {
             },
             { worktreesDirectory: root, projectFolders: true },
           );
-          assert.equal(
-            fromLinkedWorktree.worktree.path,
-            paths.join(projectFolder, "example-another"),
+          assert.equal(paths.dirname(fromLinkedWorktree.worktree.path), projectFolder);
+          assert.match(
+            paths.basename(fromLinkedWorktree.worktree.path),
+            /^example-another-[0-9a-f]{16}$/,
           );
         }),
     );

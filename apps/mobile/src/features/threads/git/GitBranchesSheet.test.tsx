@@ -1,6 +1,7 @@
 import { act, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import { expect, it, vi } from "vite-plus/test";
+import { DEFAULT_VCS_TERMINOLOGY } from "@t3tools/shared/vcs";
 
 type InputProps = {
   accessibilityLabel: string;
@@ -57,6 +58,7 @@ vi.mock("../../../state/use-selected-thread-worktree", () => ({
 }));
 vi.mock("../../../state/use-selected-thread-git-state", () => ({
   useSelectedThreadGitState: () => ({
+    vcsTerminology: DEFAULT_VCS_TERMINOLOGY,
     selectedThreadBranches: [],
     selectedThreadBranchesLoading: false,
     gitOperationLabel: null,
