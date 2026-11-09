@@ -428,10 +428,9 @@ describe("ssh tunnel scripts", () => {
     return Effect.gen(function* () {
       const manager = yield* SshTunnel.SshEnvironmentManager;
       yield* manager.ensureEnvironment(target);
-      assert.equal(
-        commands.filter((args) => args.includes("127.0.0.1:58345:127.0.0.1:58345")).length,
-        1,
-      );
+      const forwards = commands.filter((args) => args.includes("127.0.0.1:58345:127.0.0.1:58345"));
+      assert.equal(forwards.length, 1);
+      assert.isTrue(forwards[0]?.includes("ControlPath=none"));
       assert.equal(yield* manager.syncPortlessForward({ target, cwd: "/project/one" }), 58345);
       assert.equal(yield* manager.syncPortlessForward({ target, cwd: "/project/one" }), 58345);
       assert.equal(

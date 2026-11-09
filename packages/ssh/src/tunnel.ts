@@ -1123,6 +1123,31 @@ const reserveLocalTunnelPort = Effect.fn("ssh/tunnel.reserveLocalTunnelPort")(fu
   return yield* net.reserveLoopbackPort();
 });
 
+// Keeps each forward on its own connection. A ControlMaster from the user's SSH config would
+// otherwise own the listener and keep it after this process exits.
+function ownedLocalForwardArgs(localForward: string, hostSpec: string): ReadonlyArray<string> {
+  return [
+    "-o",
+    "ExitOnForwardFailure=yes",
+    "-o",
+    "ControlMaster=no",
+    "-o",
+    "ControlPath=none",
+    "-o",
+    "ControlPersist=no",
+    "-o",
+    "ServerAliveInterval=15",
+    "-o",
+    "ServerAliveCountMax=3",
+    "-n",
+    "-N",
+    "-L",
+    localForward,
+    "--",
+    hostSpec,
+  ];
+}
+
 const startSshTunnel = Effect.fn("ssh/tunnel.startSshTunnel")(function* (input: {
   readonly key: string;
   readonly resolvedTarget: DesktopSshEnvironmentTarget;
@@ -1167,24 +1192,7 @@ const startSshTunnel = Effect.fn("ssh/tunnel.startSshTunnel")(function* (input: 
     ...baseSshArgs(input.resolvedTarget, {
       batchMode: input.authOptions.batchMode ?? "no",
     }),
-    "-o",
-    "ExitOnForwardFailure=yes",
-    "-o",
-    "ControlMaster=no",
-    "-o",
-    "ControlPath=none",
-    "-o",
-    "ControlPersist=no",
-    "-o",
-    "ServerAliveInterval=15",
-    "-o",
-    "ServerAliveCountMax=3",
-    "-n",
-    "-N",
-    "-L",
-    `${input.localPort}:127.0.0.1:${input.remotePort}`,
-    "--",
-    hostSpec,
+    ...ownedLocalForwardArgs(`${input.localPort}:127.0.0.1:${input.remotePort}`, hostSpec),
   ];
   const sshCommand = yield* resolveSshCommand;
   const tunnelCommand = [sshCommand, ...args];
@@ -1685,19 +1693,7 @@ PY`;
     );
     const args = [
       ...baseSshArgs(target, { batchMode: authSecrets.has(key) ? "no" : "yes" }),
-      "-o",
-      "ExitOnForwardFailure=yes",
-      "-o",
-      "ControlMaster=no",
-      "-o",
-      "ServerAliveInterval=15",
-      "-o",
-      "ServerAliveCountMax=3",
-      "-n",
-      "-N",
-      "-L",
-      `127.0.0.1:${port}:127.0.0.1:${port}`,
-      hostSpec,
+      ...ownedLocalForwardArgs(`127.0.0.1:${port}:127.0.0.1:${port}`, hostSpec),
     ];
     const scope = yield* Scope.make("sequential");
     const child = yield* (yield* ChildProcessSpawner.ChildProcessSpawner)
