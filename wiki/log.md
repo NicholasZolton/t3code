@@ -2,7 +2,9 @@
 
 ## 2026-11-09
 
-- **Local branch integration**: [Upstream integration](upstream-integration.md#local-november-9-sync) records merges `fcf161aee5` and `e5f32987d0` through upstream `5ee1dbffbe`: all 95 incoming commits are present on the branch, while fork `main` remains at `19474d8c52`. Of 545 incoming paths without prior fork changes, only two mobile test fixtures differ from upstream. Main integration and live deployment remain pending.
+- **Integration**: [PR #68](https://github.com/NicholasZolton/t3code/pull/68) reached fork `main` at `2d55bfc6f4`. Refreshed [upstream integration](upstream-integration.md#completed-november-9-sync): all 95 incoming commits through `5ee1dbffbe` are incorporated with ancestry preserved and zero main gap. Copilot's file limit prevented review; local verification and gaps are recorded on the PR. No live deployment occurred.
+
+- **Local branch integration**: [Upstream integration](upstream-integration.md#completed-november-9-sync) initially recorded merges `fcf161aee5` and `e5f32987d0` through upstream `5ee1dbffbe`, with all 95 incoming commits present on the branch while fork `main` remained at `19474d8c52`. Of 545 incoming paths without prior fork changes, only two mobile test fixtures differ from upstream. PR #68 subsequently closed that main gap.
 
 ## 2026-11-07
 

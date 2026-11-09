@@ -6,30 +6,36 @@ tags: [upstream, fork, integration]
 status: stable
 generated:
   by: opencode/gpt-6.1-sol
-  at: 2026-11-09T06:38:55+00:00
+  at: 2026-11-09T06:58:19+00:00
 verified:
   - by: opencode/gpt-6.1-sol
-    at: 2026-11-09T06:38:55+00:00
+    at: 2026-11-09T06:58:19+00:00
 snapshot:
-  at: 2026-11-09T06:38:55+00:00
-  fork_main: 19474d8c52d9c558472d51a4456a25eb08fcf19e
+  at: 2026-11-09T06:58:19+00:00
+  fork_main: 2d55bfc6f46b5fb508f063ad57f73cdf0a6b8535
   upstream_main: 5ee1dbffbea1c3e2930f6512a99e81e8c4ecc3c4
-  shared_baseline: e455200077ce60806a01c8f28435b58860dcfc74
-  last_main_integration: 6087079d9d4297ea5f9681c397691a962b49c875
-  last_main_upstream: e455200077ce60806a01c8f28435b58860dcfc74
-  missing_upstream_on_main: 95
+  shared_baseline: 5ee1dbffbea1c3e2930f6512a99e81e8c4ecc3c4
+  last_main_integration: e5f32987d0e27564e7edf043e9502e3aa2e12f03
+  last_main_upstream: 5ee1dbffbea1c3e2930f6512a99e81e8c4ecc3c4
+  missing_upstream_on_main: 0
   missing_upstream_at_integrated_tip: 0
   branch_integration: e5f32987d0e27564e7edf043e9502e3aa2e12f03
   branch_parent: 50cc2a17aa6e68d1d464c013027389ccb767bfea
   branch_code_tip: e5f32987d0e27564e7edf043e9502e3aa2e12f03
   missing_upstream_on_branch: 0
 sources:
+  - id: november-9-main-integration
+    resource: https://github.com/NicholasZolton/t3code/pull/68
+    title: Completed November 9 upstream integration into fork main
+  - id: november-9-main-review-git
+    resource: "Local Git verification at 2026-11-09T06:58:19+00:00: fetched origin/main equals 2d55bfc6f46b5fb508f063ad57f73cdf0a6b8535, with parents 19474d8c52d9c558472d51a4456a25eb08fcf19e and 87eecdc25518d90b0786dfa0f0d842b3dce7aebe. Initial merge fcf161aee52d30da2fb9607d9ae5893e15bd6b59, final integration e5f32987d0e27564e7edf043e9502e3aa2e12f03, and pinned upstream 5ee1dbffbea1c3e2930f6512a99e81e8c4ecc3c4 are ancestors of main. The shared baseline equals the pinned upstream tip; all 95 incoming commits are incorporated and zero are missing on main. PR 68 merged at 2026-11-09T06:58:06Z. Copilot could not review the file count and no CI checks were registered; the PR records local verification and its gaps. No live deployment has occurred."
+    title: Completed main ancestry checks against the pinned upstream tip
   - id: november-9-latest-integration
     resource: "Local Git verification at 2026-11-09T06:38:55+00:00: merge e5f32987d0e27564e7edf043e9502e3aa2e12f03 has parents branch 50cc2a17aa6e68d1d464c013027389ccb767bfea and upstream 5ee1dbffbea1c3e2930f6512a99e81e8c4ecc3c4. It preserves initial merge fcf161aee52d30da2fb9607d9ae5893e15bd6b59 and all 95 incoming upstream commits, with zero branch gap. Fetched origin/main remains 19474d8c52d9c558472d51a4456a25eb08fcf19e and lacks those commits. Of 545 incoming paths without prior fork changes, 543 match upstream exactly; two mobile branch-sheet fixtures supply the fork's VCS terminology. Additional test changes follow upstream's hashed worktree names. Changed-file checks pass except the full-app draft browser test, whose timeout also reproduces in a clean checkout of fork main. Production web, server, and marketing builds pass; native clients remain unverified. The merge is not yet on main; no live deployment has occurred."
-    title: Latest candidate ancestry and upstream-first source audit
+    title: Latest candidate ancestry and upstream-first source audit, now incorporated into main
   - id: november-9-local-integration
     resource: "Local Git verification at 2026-11-09T06:06:40+00:00: merge fcf161aee52d30da2fb9607d9ae5893e15bd6b59 has parents fork 19474d8c52d9c558472d51a4456a25eb08fcf19e and upstream c4ce7b0fd74f6beb37ed6034f5c8416e5aa7e165. All 92 incoming commits are ancestors of the branch, with zero branch gap. Fetched origin/main still lacks those commits and shares baseline e455200077ce60806a01c8f28435b58860dcfc74. All 502 incoming paths without prior fork changes match upstream byte-for-byte, including deleted paths. The merge is not yet on main; validation and client compatibility repairs are in progress. No live runtime deployment has occurred."
-    title: November 9 candidate merge and separate main boundary
+    title: Initial November 9 candidate merge and separate main boundary, now incorporated into main
   - id: november-9-upstream
     resource: https://github.com/pingdotgg/t3code/commit/5ee1dbffbea1c3e2930f6512a99e81e8c4ecc3c4
     title: Pinned upstream tip for the November 9 sync
@@ -319,23 +325,30 @@ sources:
 
 # Upstream integration
 
-Fork `main` incorporates all 277 newer upstream commits through `e455200077`,
+Fork `main` incorporates all 95 newer upstream commits through `5ee1dbffbe`,
 with ancestry preserved and zero gap against that pinned tip.
-[PR #59](https://github.com/NicholasZolton/t3code/pull/59) landed at `703297e186`.
+[PR #68](https://github.com/NicholasZolton/t3code/pull/68) landed at `2d55bfc6f4`.
 Main integration and remote deployment are separate operations.
-[^november-7-main-integration][^november-7-main-review-git]
+[^november-9-main-integration][^november-9-main-review-git]
 
 This is a revision-pinned snapshot, not a claim about newer upstream work.
 Refresh it after the next review or integration using the
 [maintenance guidance](maintenance.md).
 
-## Local November 9 sync
+## Completed November 9 sync
+
+[PR #68](https://github.com/NicholasZolton/t3code/pull/68) merged on November 9,
+2026, at 06:58:06 UTC. Its landing commit
+`2d55bfc6f46b5fb508f063ad57f73cdf0a6b8535` preserves previous fork `main`
+`19474d8c52d9c558472d51a4456a25eb08fcf19e` and integrated branch tip
+`87eecdc25518d90b0786dfa0f0d842b3dce7aebe` as parents.
+[^november-9-main-integration][^november-9-main-review-git]
 
 Initial merge `fcf161aee52d30da2fb9607d9ae5893e15bd6b59` combines fork `main`
 `19474d8c52d9c558472d51a4456a25eb08fcf19e` with upstream `c4ce7b0fd7`.
 Follow-up merge `e5f32987d0e27564e7edf043e9502e3aa2e12f03` preserves it and
 incorporates upstream `5ee1dbffbea1c3e2930f6512a99e81e8c4ecc3c4`.
-The branch contains all 95 incoming commits; fork `main` still lacks them.
+Both merges and all 95 incoming commits are now ancestors of fork `main`.
 Of 545 incoming paths without prior fork changes, 543 match upstream exactly;
 two mobile branch-sheet fixtures supply the fork's VCS terminology. Changed-file
 checks pass except a full-app draft browser timeout reproduced on clean fork
@@ -900,7 +913,11 @@ git rev-list --count origin/main..upstream/main
 git log --reverse --oneline origin/main..upstream/main
 ```
 
-[^november-9-local-integration]: Candidate merge ancestry and upstream-only path comparison; main integration is pending.
+[^november-9-main-integration]: PR #68 and its recorded merge time.
+
+[^november-9-main-review-git]: Completed main integration, exact parents, and zero ancestry gap against the pinned upstream tip.
+
+[^november-9-local-integration]: Initial candidate merge ancestry and upstream-only path comparison before main integration.
 
 [^november-9-latest-integration]: Final pinned candidate ancestry and the two incoming test-fixture exceptions.
 
