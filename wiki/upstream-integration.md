@@ -6,24 +6,30 @@ tags: [upstream, fork, integration]
 status: stable
 generated:
   by: opencode/gpt-6.1-sol
-  at: 2026-11-09T06:58:19+00:00
+  at: 2026-11-09T17:15:31+00:00
 verified:
   - by: opencode/gpt-6.1-sol
-    at: 2026-11-09T06:58:19+00:00
+    at: 2026-11-09T17:15:31+00:00
 snapshot:
-  at: 2026-11-09T06:58:19+00:00
-  fork_main: 2d55bfc6f46b5fb508f063ad57f73cdf0a6b8535
-  upstream_main: 5ee1dbffbea1c3e2930f6512a99e81e8c4ecc3c4
+  at: 2026-11-09T17:15:31+00:00
+  fork_main: 7265fa73f437c896336820dd6146010e1897bc97
+  upstream_main: 7b248349bdc066b1488f52083662597ab22d6fe3
   shared_baseline: 5ee1dbffbea1c3e2930f6512a99e81e8c4ecc3c4
   last_main_integration: e5f32987d0e27564e7edf043e9502e3aa2e12f03
   last_main_upstream: 5ee1dbffbea1c3e2930f6512a99e81e8c4ecc3c4
-  missing_upstream_on_main: 0
+  missing_upstream_on_main: 48
   missing_upstream_at_integrated_tip: 0
-  branch_integration: e5f32987d0e27564e7edf043e9502e3aa2e12f03
-  branch_parent: 50cc2a17aa6e68d1d464c013027389ccb767bfea
-  branch_code_tip: e5f32987d0e27564e7edf043e9502e3aa2e12f03
+  branch_integration: 82fe80c22ec4c40f51e29951a0bc42d066da1861
+  branch_parent: 7265fa73f437c896336820dd6146010e1897bc97
+  branch_code_tip: 82fe80c22ec4c40f51e29951a0bc42d066da1861
   missing_upstream_on_branch: 0
 sources:
+  - id: november-9-followup-candidate
+    resource: "Local Git verification at 2026-11-09T17:15:31+00:00: merge 82fe80c22ec4c40f51e29951a0bc42d066da1861 has parents fork main 7265fa73f437c896336820dd6146010e1897bc97 and upstream 7b248349bdc066b1488f52083662597ab22d6fe3. All 48 incoming commits are ancestors of the branch, with zero branch gap. Fork main still lacks those commits, sharing baseline 5ee1dbffbea1c3e2930f6512a99e81e8c4ecc3c4. Of 275 incoming paths without prior fork changes, 273 match upstream exactly; the shared model-search implementation retains fork ranking after upstream moved it, and the chat-status test covers Jujutsu identity. Changed-file format, lint, patch install, knip, GraphQL, 41-package typecheck, and React Compiler checks pass. Tests pass 3418 cases; three full-app browser failures reproduce on a pristine checkout of the pinned upstream, and the draft case also fails on fork main. Production web/server builds and 99 focused fork regression tests pass. A real browser verified onboarding, a complete free Replay turn with approval, and model mention insertion. Native verification is blocked by the device hub failing to start; paid model evals and desktop packaging were not run. No live deployment has occurred."
+    title: November 9 follow-up candidate and separate main boundary
+  - id: november-9-followup-upstream
+    resource: https://github.com/pingdotgg/t3code/commit/7b248349bdc066b1488f52083662597ab22d6fe3
+    title: Pinned upstream tip for the November 9 follow-up
   - id: november-9-main-integration
     resource: https://github.com/NicholasZolton/t3code/pull/68
     title: Completed November 9 upstream integration into fork main
@@ -325,15 +331,39 @@ sources:
 
 # Upstream integration
 
-Fork `main` incorporates all 95 newer upstream commits through `5ee1dbffbe`,
-with ancestry preserved and zero gap against that pinned tip.
-[PR #68](https://github.com/NicholasZolton/t3code/pull/68) landed at `2d55bfc6f4`.
-Main integration and remote deployment are separate operations.
-[^november-9-main-integration][^november-9-main-review-git]
+Fork `main` at `7265fa73f4` incorporates upstream through `5ee1dbffbe`.
+The follow-up candidate `82fe80c22e` incorporates all 48 newer upstream commits
+through `7b248349bd`, preserving both parents and leaving zero branch gap.
+Those 48 commits are not yet on fork `main`. Main integration and remote
+deployment are separate operations.[^november-9-followup-candidate]
 
 This is a revision-pinned snapshot, not a claim about newer upstream work.
 Refresh it after the next review or integration using the
 [maintenance guidance](maintenance.md).
+
+## November 9 follow-up candidate
+
+Merge `82fe80c22ec4c40f51e29951a0bc42d066da1861` combines fork `main`
+`7265fa73f437c896336820dd6146010e1897bc97` and upstream
+`7b248349bdc066b1488f52083662597ab22d6fe3`.
+Of 275 incoming paths without prior fork changes, 273 match upstream exactly.
+The exceptions retain fork search ranking in upstream's moved shared helper and
+cover Jujutsu identity in the new chat-status selector.
+[^november-9-followup-candidate][^november-9-followup-upstream]
+
+Changed-file checks pass except three full-app browser failures reproduced on
+pristine upstream. Production web/server builds, focused fork regressions, and a
+real-client onboarding/Replay/model-mention pass succeed. Native verification is
+blocked by device-hub startup, and no live deployment has occurred.
+[^november-9-followup-candidate]
+
+Adopt upstream's single Welcome page, external MCP setup, model mentions,
+Legend List upgrade and removed workarounds, mobile terminal and feed fixes,
+and provider lifecycle fixes. Preserve Vim's literal editor alongside model
+mentions, saved prompts, fuzzy search, Git/Jujutsu terminology, and paired
+notification boundaries. The shared awareness-phase helper remains callable by
+paired notifications while accepting upstream's child-approval signal.
+[^november-9-followup-candidate]
 
 ## Completed November 9 sync
 
@@ -912,6 +942,10 @@ git merge-base --is-ancestor a8df093eb6 origin/main
 git rev-list --count origin/main..upstream/main
 git log --reverse --oneline origin/main..upstream/main
 ```
+
+[^november-9-followup-candidate]: Ancestry-preserving follow-up merge, upstream-only source audit, and separate unchanged-main boundary.
+
+[^november-9-followup-upstream]: Exact upstream revision reviewed for the November 9 follow-up.
 
 [^november-9-main-integration]: PR #68 and its recorded merge time.
 
