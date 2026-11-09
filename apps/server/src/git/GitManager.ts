@@ -1467,9 +1467,21 @@ export const make = Effect.gen(function* () {
     }
     return result;
   });
-  const readWorktreesDirectory = serverSettingsService.getSettings.pipe(
-    Effect.map((settings) => settings.worktreesDirectory),
-    Effect.orElseSucceed(() => ""),
+  const readWorktreeCreationSettings = serverSettingsService.getSettings.pipe(
+    Effect.map((settings) => ({
+      worktreesDirectory: settings.worktreesDirectory,
+      fastCheckout: settings.fastWorktreeCheckout,
+      projectFolders: settings.worktreeProjectFolders,
+    })),
+    Effect.orElseSucceed(() => ({ worktreesDirectory: "" })),
+  );
+  // Turning fast checkout off deletes its cache right away, not at the next worktree.
+  yield* serverSettingsService.streamChanges.pipe(
+    Stream.map((settings) => settings.fastWorktreeCheckout),
+    Stream.changes,
+    Stream.filter((enabled) => !enabled),
+    Stream.runForEach(() => gitCore.clearWorktreeCheckoutCache),
+    Effect.forkScoped,
   );
   const createWorktree: GitManager["Service"]["createWorktree"] = Effect.fn(
     "GitManager.createWorktree",
@@ -1481,12 +1493,8 @@ export const make = Effect.gen(function* () {
             Effect.map(({ settings }) => settings.worktreeSubmodules),
             Effect.orElseSucceed(() => null),
           );
-    const settings = yield* serverSettingsService.getSettings.pipe(
-      Effect.orElseSucceed(() => null),
-    );
     const result = yield* gitCore.createWorktree(input, {
-      worktreesDirectory: settings?.worktreesDirectory ?? "",
-      projectFolders: settings?.worktreeProjectFolders ?? true,
+      ...(yield* readWorktreeCreationSettings),
       ...options,
       submodules,
     });
@@ -3315,7 +3323,7 @@ export const make = Effect.gen(function* () {
           path: null,
         },
         {
-          worktreesDirectory: yield* readWorktreesDirectory,
+          ...(yield* readWorktreeCreationSettings),
           projectFolders: worktreeSettings?.worktreeProjectFolders ?? true,
           // Best effort: a settings read failure falls back to the checkout's t3.json.
           submodules: worktreeSettings?.worktreeSubmodules ?? null,

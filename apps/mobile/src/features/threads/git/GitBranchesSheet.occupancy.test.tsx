@@ -1,6 +1,7 @@
 import { act, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import { expect, it, vi } from "vite-plus/test";
+import { DEFAULT_VCS_TERMINOLOGY } from "@t3tools/shared/vcs";
 
 const checkout = vi.hoisted(() => ({
   projectRoot: "",
@@ -42,6 +43,7 @@ vi.mock("../../../state/use-thread-detail", () => ({
 }));
 vi.mock("../../../state/use-selected-thread-git-state", () => ({
   useSelectedThreadGitState: () => ({
+    vcsTerminology: DEFAULT_VCS_TERMINOLOGY,
     selectedThreadBranches: checkout.branches,
     selectedThreadBranchesLoading: false,
     gitOperationLabel: null,
@@ -51,7 +53,7 @@ vi.mock("../../../state/use-selected-thread-git-actions", () => ({
   useSelectedThreadGitActions: () => ({ canChangeThreadBranch: true }),
 }));
 vi.mock("../../../state/query", () => ({ useEnvironmentQuery: () => ({ data: null }) }));
-vi.mock("../../../state/vcs", () => ({ vcsEnvironment: { status: () => null } }));
+vi.mock("../../../state/vcs", () => ({ vcsEnvironment: { branch: () => null } }));
 
 import { GitBranchesSheet } from "./GitBranchesSheet";
 

@@ -1,5 +1,4 @@
 import { sanitizeFeatureBranchName } from "@t3tools/shared/git";
-import { resolveVcsTerminology } from "@t3tools/shared/vcs";
 import { useNavigation, type StaticScreenProps } from "@react-navigation/native";
 import { useState } from "react";
 import { Platform, Pressable, ScrollView, useWindowDimensions, View } from "react-native";
@@ -34,14 +33,14 @@ export function GitBranchesSheet(_props: GitBranchesSheetProps) {
 
   const gitStatus = useEnvironmentQuery(
     selectedThread !== null && selectedThreadCwd !== null
-      ? vcsEnvironment.status({
+      ? vcsEnvironment.branch({
           environmentId: selectedThread.environmentId,
           input: { cwd: selectedThreadCwd },
         })
       : null,
   );
 
-  const vcsTerminology = resolveVcsTerminology(gitStatus.data);
+  const { vcsTerminology } = gitState;
   const noRefLabel = `No ${vcsTerminology.refNoun}`;
   const currentBranchLabel = gitStatus.data?.refName ?? selectedThread?.branch ?? noRefLabel;
   const currentWorktreePath = selectedThreadWorktreePath;

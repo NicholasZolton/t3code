@@ -1,5 +1,9 @@
 # Wiki update log
 
+## 2026-11-09
+
+- **Local branch integration**: [Upstream integration](upstream-integration.md#local-november-9-sync) records merges `fcf161aee5` and `e5f32987d0` through upstream `5ee1dbffbe`: all 95 incoming commits are present on the branch, while fork `main` remains at `19474d8c52`. Of 545 incoming paths without prior fork changes, only two mobile test fixtures differ from upstream. Main integration and live deployment remain pending.
+
 ## 2026-11-07
 
 - **Compatibility**: Recorded the fork-only [searchable All projects row](upstream-integration.md#searchable-all-projects-row) in the sidebar project filter. Upstream hides it while a search query is typed.

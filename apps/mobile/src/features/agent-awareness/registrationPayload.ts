@@ -39,9 +39,19 @@ export function makeRelayDeviceRegistrationRequest(
     readonly preferences: Preferences;
   } & (
     | { readonly platform?: "ios"; readonly iosMajorVersion: number }
-    | { readonly platform: "android"; readonly androidApiLevel: number }
+    | {
+        readonly platform: "android";
+        readonly androidApiLevel: number;
+        readonly notificationPermissionGranted: boolean;
+      }
   ),
 ): RelayDeviceRegistrationRequest {
+  const pushAvailable = supportsAgentAwarenessPush();
+  const liveActivitiesEnabled =
+    pushAvailable &&
+    input.preferences.liveActivitiesEnabled !== false &&
+    (input.platform !== "android" ||
+      (input.notificationPermissionGranted && Boolean(input.pushToken)));
   return {
     deviceId: input.deviceId,
     label: input.label,
@@ -54,6 +64,6 @@ export function makeRelayDeviceRegistrationRequest(
     ...(input.apsEnvironment ? { apsEnvironment: input.apsEnvironment } : {}),
     ...(input.pushToken ? { pushToken: input.pushToken } : {}),
     ...(input.pushToStartToken ? { pushToStartToken: input.pushToStartToken } : {}),
-    preferences: makeAgentAwarenessPreferences(input),
+    preferences: { ...makeAgentAwarenessPreferences(input), liveActivitiesEnabled },
   };
 }
