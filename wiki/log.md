@@ -2,7 +2,7 @@
 
 ## 2026-11-09
 
-- **Local branch integration**: [Upstream integration](upstream-integration.md#local-november-9-sync) records merge `fcf161aee5` through upstream `c4ce7b0fd7`: all 92 incoming commits are present on the branch, while fork `main` remains at `19474d8c52`. All 502 incoming paths without prior fork changes match upstream exactly. Main integration and live deployment remain pending.
+- **Local branch integration**: [Upstream integration](upstream-integration.md#local-november-9-sync) records merges `fcf161aee5` and `e5f32987d0` through upstream `5ee1dbffbe`: all 95 incoming commits are present on the branch, while fork `main` remains at `19474d8c52`. Of 545 incoming paths without prior fork changes, only two mobile test fixtures differ from upstream. Main integration and live deployment remain pending.
 
 ## 2026-11-07
 

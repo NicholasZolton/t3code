@@ -6,29 +6,32 @@ tags: [upstream, fork, integration]
 status: stable
 generated:
   by: opencode/gpt-6.1-sol
-  at: 2026-11-09T06:06:40+00:00
+  at: 2026-11-09T06:38:55+00:00
 verified:
   - by: opencode/gpt-6.1-sol
-    at: 2026-11-09T06:06:40+00:00
+    at: 2026-11-09T06:38:55+00:00
 snapshot:
-  at: 2026-11-09T06:06:40+00:00
+  at: 2026-11-09T06:38:55+00:00
   fork_main: 19474d8c52d9c558472d51a4456a25eb08fcf19e
-  upstream_main: c4ce7b0fd74f6beb37ed6034f5c8416e5aa7e165
+  upstream_main: 5ee1dbffbea1c3e2930f6512a99e81e8c4ecc3c4
   shared_baseline: e455200077ce60806a01c8f28435b58860dcfc74
   last_main_integration: 6087079d9d4297ea5f9681c397691a962b49c875
   last_main_upstream: e455200077ce60806a01c8f28435b58860dcfc74
-  missing_upstream_on_main: 92
+  missing_upstream_on_main: 95
   missing_upstream_at_integrated_tip: 0
-  branch_integration: fcf161aee52d30da2fb9607d9ae5893e15bd6b59
-  branch_parent: 19474d8c52d9c558472d51a4456a25eb08fcf19e
-  branch_code_tip: fcf161aee52d30da2fb9607d9ae5893e15bd6b59
+  branch_integration: e5f32987d0e27564e7edf043e9502e3aa2e12f03
+  branch_parent: 50cc2a17aa6e68d1d464c013027389ccb767bfea
+  branch_code_tip: e5f32987d0e27564e7edf043e9502e3aa2e12f03
   missing_upstream_on_branch: 0
 sources:
+  - id: november-9-latest-integration
+    resource: "Local Git verification at 2026-11-09T06:38:55+00:00: merge e5f32987d0e27564e7edf043e9502e3aa2e12f03 has parents branch 50cc2a17aa6e68d1d464c013027389ccb767bfea and upstream 5ee1dbffbea1c3e2930f6512a99e81e8c4ecc3c4. It preserves initial merge fcf161aee52d30da2fb9607d9ae5893e15bd6b59 and all 95 incoming upstream commits, with zero branch gap. Fetched origin/main remains 19474d8c52d9c558472d51a4456a25eb08fcf19e and lacks those commits. Of 545 incoming paths without prior fork changes, 543 match upstream exactly; two mobile branch-sheet fixtures supply the fork's VCS terminology. Additional test changes follow upstream's hashed worktree names. Changed-file checks pass except the full-app draft browser test, whose timeout also reproduces in a clean checkout of fork main. Production web, server, and marketing builds pass; native clients remain unverified. The merge is not yet on main; no live deployment has occurred."
+    title: Latest candidate ancestry and upstream-first source audit
   - id: november-9-local-integration
     resource: "Local Git verification at 2026-11-09T06:06:40+00:00: merge fcf161aee52d30da2fb9607d9ae5893e15bd6b59 has parents fork 19474d8c52d9c558472d51a4456a25eb08fcf19e and upstream c4ce7b0fd74f6beb37ed6034f5c8416e5aa7e165. All 92 incoming commits are ancestors of the branch, with zero branch gap. Fetched origin/main still lacks those commits and shares baseline e455200077ce60806a01c8f28435b58860dcfc74. All 502 incoming paths without prior fork changes match upstream byte-for-byte, including deleted paths. The merge is not yet on main; validation and client compatibility repairs are in progress. No live runtime deployment has occurred."
     title: November 9 candidate merge and separate main boundary
   - id: november-9-upstream
-    resource: https://github.com/pingdotgg/t3code/commit/c4ce7b0fd74f6beb37ed6034f5c8416e5aa7e165
+    resource: https://github.com/pingdotgg/t3code/commit/5ee1dbffbea1c3e2930f6512a99e81e8c4ecc3c4
     title: Pinned upstream tip for the November 9 sync
   - id: november-7-main-integration
     resource: https://github.com/NicholasZolton/t3code/pull/59
@@ -328,16 +331,22 @@ Refresh it after the next review or integration using the
 
 ## Local November 9 sync
 
-Merge `fcf161aee52d30da2fb9607d9ae5893e15bd6b59` combines fork `main`
-`19474d8c52d9c558472d51a4456a25eb08fcf19e` with upstream
-`c4ce7b0fd74f6beb37ed6034f5c8416e5aa7e165`. The branch contains all 92 incoming
-commits; fork `main` still lacks them. All 502 incoming paths without prior fork
-changes match upstream exactly. Validation remains in progress.
-[^november-9-local-integration][^november-9-upstream]
+Initial merge `fcf161aee52d30da2fb9607d9ae5893e15bd6b59` combines fork `main`
+`19474d8c52d9c558472d51a4456a25eb08fcf19e` with upstream `c4ce7b0fd7`.
+Follow-up merge `e5f32987d0e27564e7edf043e9502e3aa2e12f03` preserves it and
+incorporates upstream `5ee1dbffbea1c3e2930f6512a99e81e8c4ecc3c4`.
+The branch contains all 95 incoming commits; fork `main` still lacks them.
+Of 545 incoming paths without prior fork changes, 543 match upstream exactly;
+two mobile branch-sheet fixtures supply the fork's VCS terminology. Changed-file
+checks pass except a full-app draft browser timeout reproduced on clean fork
+`main`; native clients remain unverified.
+[^november-9-local-integration][^november-9-latest-integration][^november-9-upstream]
 
 Adopt upstream's checkout cache, collision-resistant worktree names, cheaper branch
-reads and cleanup scans, text generators, mobile UI primitives, and removal of
-legacy plan mode. Keep project grouping and flat worktree layouts around upstream
+reads and cleanup scans, text generators, mobile UI primitives, and legacy
+plan-mode removal. The sync also adopts native mobile DPoP signing, Cursor
+Origin, and marketing locales.
+Keep project grouping and flat worktree layouts around upstream
 creation, and keep the Jujutsu exclusion in upstream's shared cleanup-path guard.
 Android activity remains independent of ordinary alerts, including paired sources;
 out-of-order completion deduplication and encrypted delivery remain fork boundaries.
@@ -892,6 +901,8 @@ git log --reverse --oneline origin/main..upstream/main
 ```
 
 [^november-9-local-integration]: Candidate merge ancestry and upstream-only path comparison; main integration is pending.
+
+[^november-9-latest-integration]: Final pinned candidate ancestry and the two incoming test-fixture exceptions.
 
 [^november-9-upstream]: Exact upstream revision reviewed for the November 9 sync.
 
