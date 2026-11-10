@@ -6,27 +6,33 @@ tags: [upstream, fork, integration]
 status: stable
 generated:
   by: opencode/gpt-6.1-sol
-  at: 2026-11-10T17:34:56+00:00
+  at: 2026-11-10T17:44:03+00:00
 verified:
   - by: opencode/gpt-6.1-sol
-    at: 2026-11-10T17:34:56+00:00
+    at: 2026-11-10T17:44:03+00:00
 snapshot:
-  at: 2026-11-10T17:34:56+00:00
-  fork_main: f8595a237d36af56a35d8c6d6dd8b154a6f5b063
+  at: 2026-11-10T17:44:03+00:00
+  fork_main: abb6f0b72a0226029c6977d6d92389d0376544c7
   upstream_main: 8ee7183e6c8a1c22a6698f4909ef7e2a423bec3a
-  shared_baseline: 7b248349bdc066b1488f52083662597ab22d6fe3
-  last_main_integration: 82fe80c22ec4c40f51e29951a0bc42d066da1861
-  last_main_upstream: 7b248349bdc066b1488f52083662597ab22d6fe3
-  missing_upstream_on_main: 114
+  shared_baseline: 8ee7183e6c8a1c22a6698f4909ef7e2a423bec3a
+  last_main_integration: 27d0bb4278e16f2fc70a2a31bccfa994a5d69628
+  last_main_upstream: 8ee7183e6c8a1c22a6698f4909ef7e2a423bec3a
+  missing_upstream_on_main: 0
   missing_upstream_at_integrated_tip: 0
   branch_integration: 27d0bb4278e16f2fc70a2a31bccfa994a5d69628
   branch_parent: f8595a237d36af56a35d8c6d6dd8b154a6f5b063
   branch_code_tip: b69b4e7090831534d440d38e66fb3c0935a6274c
   missing_upstream_on_branch: 0
 sources:
+  - id: november-10-main
+    resource: https://github.com/NicholasZolton/t3code/pull/71
+    title: Completed November 10 upstream integration into fork main
+  - id: november-10-main-git
+    resource: "Local Git verification at 2026-11-10T17:44:03+00:00: fetched origin/main equals abb6f0b72a0226029c6977d6d92389d0376544c7, with parents fork main f8595a237d36af56a35d8c6d6dd8b154a6f5b063 and branch tip 5cc663abc27103138c4b53606a1dc27ec234958c. Integration 27d0bb4278e16f2fc70a2a31bccfa994a5d69628, compatibility repairs b69b4e7090831534d440d38e66fb3c0935a6274c, and upstream 8ee7183e6c8a1c22a6698f4909ef7e2a423bec3a are ancestors of main. All 114 incoming commits are incorporated, the shared baseline equals the pinned upstream tip, and zero upstream commits are missing on main. PR 71 merged at 2026-11-10T17:44:00Z. No CI checks or reviews were registered at merge. No live deployment occurred."
+    title: Completed main ancestry and merge verification
   - id: november-10-candidate
-    resource: "Local Git verification at 2026-11-10T17:34:56+00:00: merge 27d0bb4278e16f2fc70a2a31bccfa994a5d69628 has parents fetched fork main f8595a237d36af56a35d8c6d6dd8b154a6f5b063 and upstream 8ee7183e6c8a1c22a6698f4909ef7e2a423bec3a. Code tip b69b4e7090831534d440d38e66fb3c0935a6274c retains all 114 incoming commits with zero branch gap. Fork main still lacks them and shares baseline 7b248349bdc066b1488f52083662597ab22d6fe3. All 335 incoming paths without prior fork changes match upstream exactly. Five conflicted files retain upstream fixes and necessary fork behavior. Changed-file static checks, 41 affected package typechecks, 111-file React Compiler coverage, production web/server/desktop builds, 28 adaptation tests, 57 fork regressions, and 16 search tests pass. Three full-app browser cases and the SQLite statement.stat performance test fail on pristine upstream too. The complete changed-file suite is being rerun after adapting Portless fixtures to the main-forward readiness probe. Real-client Replay, Vim, model mentions, Prompts settings, and small-fixture diff/find work. Native device verification is blocked by device-hub startup; paid evals and live deployment were not performed."
-    title: November 10 candidate ancestry, source audit, and compatibility boundary
+    resource: "Final branch verification at 2026-11-10T17:44:03+00:00: merge 27d0bb4278e16f2fc70a2a31bccfa994a5d69628 has parents fork main f8595a237d36af56a35d8c6d6dd8b154a6f5b063 and upstream 8ee7183e6c8a1c22a6698f4909ef7e2a423bec3a. Code tip b69b4e7090831534d440d38e66fb3c0935a6274c retains all 114 incoming commits with zero branch gap. All 335 incoming paths without prior fork changes match upstream exactly. Five conflicted files retain upstream fixes and necessary fork behavior. Changed-file static checks, 41 affected package typechecks, 111-file React Compiler coverage, production web/server/desktop builds, 28 adaptation tests, 57 fork regressions, and 16 search tests pass. The final 169-file suite passes 4331 tests; three full-app browser cases and the SQLite statement.stat performance test fail on pristine upstream too. No tests were skipped or weakened. Real-client Replay, Vim, model mentions, Prompts settings, and small-fixture diff/find work. Native device verification is blocked by device-hub startup; paid evals and live deployment were not performed."
+    title: Validated November 10 branch, now incorporated into main
   - id: november-10-upstream
     resource: https://github.com/pingdotgg/t3code/commit/8ee7183e6c8a1c22a6698f4909ef7e2a423bec3a
     title: Pinned upstream tip for the November 10 sync
@@ -346,25 +352,23 @@ sources:
 
 # Upstream integration
 
-Fork `main` incorporates all 48 newer upstream commits through `7b248349bd`,
+Fork `main` incorporates all 114 newer upstream commits through `8ee7183e6c`,
 preserving ancestry with zero gap against that pinned tip.
-[PR #69](https://github.com/NicholasZolton/t3code/pull/69) landed at `7a0869df09`.
+[PR #71](https://github.com/NicholasZolton/t3code/pull/71) landed at `abb6f0b72a`.
 Main integration and remote deployment remain separate operations.
-[^november-9-followup-main][^november-9-followup-main-git]
-
-The November 10 candidate contains all 114 subsequently fetched upstream commits
-through `8ee7183e6c`, but is not yet on `main`.[^november-10-candidate]
+[^november-10-main][^november-10-main-git]
 
 This is a revision-pinned snapshot, not a claim about newer upstream work.
 Refresh it after the next review or integration using the
 [maintenance guidance](maintenance.md).
 
-## November 10 candidate
+## Completed November 10 sync
 
 Merge `27d0bb4278` combines fork `main` `f8595a237d` and upstream `8ee7183e6c`,
 preserving ancestry. All 335 incoming paths without prior fork changes match
-upstream exactly. This is a branch integration, not a completed main sync or
-deployment.[^november-10-candidate][^november-10-upstream]
+upstream exactly. PR #71 incorporates that merge and compatibility repairs
+`b69b4e7090` into fork `main`; no live deployment occurred.
+[^november-10-main-git][^november-10-candidate][^november-10-upstream]
 
 Adopt upstream's default-branch push guard through the existing shared Git/Jujutsu
 change-request reads; do not restore the old Git-only PR implementation. Keep
@@ -378,7 +382,8 @@ case failed before the guard because the launcher tried a replacement, then
 passed with the other four real-process recovery cases.[^ssh-sibling-recovery]
 
 Production web/server/desktop builds and scoped adaptation checks pass. The
-three full-app browser failures and the SQLite performance test's missing
+final changed-file suite passes 4,331 tests; its three full-app browser failures
+and the SQLite performance test's missing
 `statement.stat` method reproduce on pristine upstream. Native device verification
 remains blocked by device-hub startup; no live deployment has occurred.
 [^november-10-candidate]
@@ -777,16 +782,16 @@ migrates to upstream branch naming while preserving temporary branch names. The 
 | -------------------------------------------------- | ---------------------------------------- |
 | Fork                                               | `NicholasZolton/t3code`, remote `origin` |
 | Upstream                                           | `pingdotgg/t3code`, remote `upstream`    |
-| Main landing commit                                | `703297e186`: merge of PR #59            |
-| Upstream integration commit                        | `6087079d9d`: merge through `e455200077` |
-| Fork-side parent                                   | `c0bde3fa70`                             |
-| Upstream-side parent / shared baseline             | `e455200077`                             |
+| Main landing commit                                | `abb6f0b72a`: merge of PR #71            |
+| Upstream integration commit                        | `27d0bb4278`: merge through `8ee7183e6c` |
+| Fork-side parent                                   | `f8595a237d`                             |
+| Upstream-side parent / shared baseline             | `8ee7183e6c`                             |
 | Missing commits at that integration's upstream tip | **0**                                    |
 
 Default to upstream implementations. Retain fork code for explicit features
 or fixes upstream does not provide. Native OpenCode 2 and thread management now
 use upstream services; fork configuration and UI improvements remain layered on
-those paths.[^november-7-local-integration][^november-7-main-review-git]
+those paths.[^november-10-candidate][^november-10-main-git]
 
 ## Earlier integration boundaries
 
@@ -996,6 +1001,10 @@ git log --reverse --oneline origin/main..upstream/main
 ```
 
 [^november-9-followup-main]: PR #69 and its recorded merge time.
+
+[^november-10-main]: PR #71 and its recorded merge time.
+
+[^november-10-main-git]: Completed main ancestry checks and zero gap against the pinned upstream tip.
 
 [^november-10-candidate]: Exact November 10 merge parents, incoming-path audit, and fork compatibility decisions.
 

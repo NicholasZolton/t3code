@@ -2,7 +2,7 @@
 
 ## 2026-11-10
 
-- **Local branch integration**: [Upstream integration](upstream-integration.md#november-10-candidate) records merge `27d0bb4278` and compatibility repairs `b69b4e7090` through `8ee7183e6c`, with all 114 incoming commits on the branch and zero branch gap. All 335 incoming paths without prior fork changes match upstream exactly. The SSH guard now covers live sibling-launch records. Fork `main` remains at `f8595a237d`; PR integration is pending. No live deployment occurred.
+- **Integration**: [PR #71](https://github.com/NicholasZolton/t3code/pull/71) reached fork `main` at `abb6f0b72a`. Refreshed [upstream integration](upstream-integration.md#completed-november-10-sync): all 114 commits through `8ee7183e6c` are incorporated with ancestry preserved and zero main gap. The SSH guard now covers live sibling-launch records. Four test failures reproduce on pristine upstream; native device verification remains blocked. No live deployment occurred.
 
 ## 2026-11-09
 
