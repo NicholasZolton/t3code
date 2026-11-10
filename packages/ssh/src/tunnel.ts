@@ -790,7 +790,8 @@ fi
 if [ -z "$REMOTE_PORT" ] && [ -z "$DEFAULT_RUNTIME_INFO" ]; then
   for SIBLING_DIR in "$DEFAULT_SERVER_HOME"/ssh-launch/*; do
     [ "$SIBLING_DIR" != "$STATE_DIR" ] && [ "$(cat "$SIBLING_DIR/managed" 2>/dev/null || true)" = "managed" ] || continue
-    server_running "$(cat "$SIBLING_DIR/pid" 2>/dev/null || true)" || continue
+    SIBLING_PID="$(cat "$SIBLING_DIR/pid" 2>/dev/null || true)"
+    server_running "$SIBLING_PID" || continue
     REMOTE_PORT="$(cat "$SIBLING_DIR/port" 2>/dev/null || true)"
     if [ -n "$REMOTE_PORT" ] && wait_ready "@@T3_REUSE_READY_TIMEOUT_MS@@"; then
       REMOTE_MANAGED="external"
@@ -798,6 +799,9 @@ if [ -z "$REMOTE_PORT" ] && [ -z "$DEFAULT_RUNTIME_INFO" ]; then
       printf '%s\\n' "$REMOTE_PORT" >"$PORT_FILE"
       printf 'external\\n' >"$MANAGED_FILE"
     else
+      if server_running "$SIBLING_PID"; then
+        existing_server_unavailable
+      fi
       REMOTE_PORT=""
     fi
     break

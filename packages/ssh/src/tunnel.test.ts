@@ -658,7 +658,7 @@ describe("ssh tunnel scripts", () => {
         NetService.NetService,
         NetService.NetService.of({
           ...testNetService,
-          hasListenerOnHost: (port) => Effect.succeed(port === 58345 && portlessListening),
+          hasListenerOnHost: (port) => Effect.succeed(port !== 58345 || portlessListening),
         }),
       ),
       SshAuth.SshPasswordPrompt.disabledLayer,
@@ -738,7 +738,7 @@ describe("ssh tunnel scripts", () => {
         NetService.NetService,
         NetService.NetService.of({
           ...testNetService,
-          hasListenerOnHost: (port) => Effect.succeed(port === 58345 && listening),
+          hasListenerOnHost: (port) => Effect.succeed(port !== 58345 || listening),
         }),
       ),
       SshAuth.SshPasswordPrompt.disabledLayer,
@@ -794,13 +794,7 @@ describe("ssh tunnel scripts", () => {
         NodeCrypto.layer,
         Layer.succeed(ChildProcessSpawner.ChildProcessSpawner, spawner),
         Layer.succeed(HttpClient.HttpClient, testHttpClient),
-        Layer.succeed(
-          NetService.NetService,
-          NetService.NetService.of({
-            ...testNetService,
-            hasListenerOnHost: (port) => Effect.succeed(port === 58345 || port === 49329),
-          }),
-        ),
+        Layer.succeed(NetService.NetService, testNetService),
         SshAuth.SshPasswordPrompt.disabledLayer,
         SshTunnel.SshEnvironmentManager.layer({ resolveCliRunner: Effect.succeed(ARCHIVE) }),
       );

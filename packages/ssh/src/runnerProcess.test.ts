@@ -150,7 +150,7 @@ server.listen(Number(process.env.T3_TEST_PORT ?? 0), "127.0.0.1", () => {
 describe.skipIf(HostProcess.Platform.defaultValue() === "win32")(
   "remote launch readiness recovery",
   () => {
-    it.live.each(["managed", "external", "discovered"] as const)(
+    it.live.each(["managed", "external", "discovered", "sibling"] as const)(
       "preserves an unresponsive %s server and reuses it after recovery",
       (ownership) =>
         Effect.gen(function* () {
@@ -161,11 +161,14 @@ describe.skipIf(HostProcess.Platform.defaultValue() === "win32")(
           const bin = path.join(home, "bin");
           const cliPath = path.join(home, "server.mjs");
           const stateDir = path.join(home, ".t3", "ssh-launch", "fixture");
+          const recordDir =
+            ownership === "sibling" ? path.join(home, ".t3", "ssh-launch", "sibling") : stateDir;
           const holdPath = path.join(home, "hold");
           const signalsPath = path.join(home, "signals");
           const launchesPath = path.join(home, "launches");
           yield* fs.makeDirectory(bin);
           yield* fs.makeDirectory(stateDir, { recursive: true });
+          yield* fs.makeDirectory(recordDir, { recursive: true });
           yield* fs.symlink(process.execPath, path.join(bin, "node"));
           yield* fs.writeFileString(
             cliPath,
@@ -206,11 +209,13 @@ server.listen(0, "127.0.0.1", () => {
               ? {}
               : {
                   port: `${started.port}\n`,
-                  managed: `${ownership}\n`,
-                  ...(ownership === "managed" ? { pid: `${server.pid}\n` } : {}),
+                  managed: `${ownership === "sibling" ? "managed" : ownership}\n`,
+                  ...(ownership === "managed" || ownership === "sibling"
+                    ? { pid: `${server.pid}\n` }
+                    : {}),
                 };
           yield* Effect.forEach(Object.entries(savedState), ([name, contents]) =>
-            fs.writeFileString(path.join(stateDir, name), contents),
+            fs.writeFileString(path.join(recordDir, name), contents),
           );
           const launchScript = (yield* captureLaunchScript(cliPath)).replaceAll(
             'wait_ready "60000"',
@@ -229,7 +234,7 @@ server.listen(0, "127.0.0.1", () => {
             port: started.port,
             origin: `http://127.0.0.1:${started.port}`,
           });
-          if (ownership !== "external") {
+          if (ownership === "managed" || ownership === "discovered") {
             yield* fs.makeDirectory(runtimeDir);
             yield* fs.writeFileString(runtimePath, runtime);
           }
@@ -266,14 +271,14 @@ server.listen(0, "127.0.0.1", () => {
           assert.isFalse(yield* fs.exists(signalsPath));
           assert.isFalse(yield* fs.exists(launchesPath));
           for (const [name, contents] of Object.entries(savedState)) {
-            assert.equal(yield* fs.readFileString(path.join(stateDir, name)), contents);
+            assert.equal(yield* fs.readFileString(path.join(recordDir, name)), contents);
           }
-          if (ownership === "discovered") {
+          if (ownership === "discovered" || ownership === "sibling") {
             assert.isFalse(yield* fs.exists(path.join(stateDir, "pid")));
             assert.isFalse(yield* fs.exists(path.join(stateDir, "port")));
             assert.isFalse(yield* fs.exists(path.join(stateDir, "managed")));
           }
-          if (ownership !== "external")
+          if (ownership === "managed" || ownership === "discovered")
             assert.equal(yield* fs.readFileString(runtimePath), runtime);
 
           yield* fs.remove(holdPath);
