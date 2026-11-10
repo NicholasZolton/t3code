@@ -6,24 +6,33 @@ tags: [upstream, fork, integration]
 status: stable
 generated:
   by: opencode/gpt-6.1-sol
-  at: 2026-11-09T17:18:22+00:00
+  at: 2026-11-10T17:34:56+00:00
 verified:
   - by: opencode/gpt-6.1-sol
-    at: 2026-11-09T17:18:22+00:00
+    at: 2026-11-10T17:34:56+00:00
 snapshot:
-  at: 2026-11-09T17:18:22+00:00
-  fork_main: 7a0869df09c91d721d7b77565bbe8cab2c0f0bf1
-  upstream_main: 7b248349bdc066b1488f52083662597ab22d6fe3
+  at: 2026-11-10T17:34:56+00:00
+  fork_main: f8595a237d36af56a35d8c6d6dd8b154a6f5b063
+  upstream_main: 8ee7183e6c8a1c22a6698f4909ef7e2a423bec3a
   shared_baseline: 7b248349bdc066b1488f52083662597ab22d6fe3
   last_main_integration: 82fe80c22ec4c40f51e29951a0bc42d066da1861
   last_main_upstream: 7b248349bdc066b1488f52083662597ab22d6fe3
-  missing_upstream_on_main: 0
+  missing_upstream_on_main: 114
   missing_upstream_at_integrated_tip: 0
-  branch_integration: 82fe80c22ec4c40f51e29951a0bc42d066da1861
-  branch_parent: 7265fa73f437c896336820dd6146010e1897bc97
-  branch_code_tip: 82fe80c22ec4c40f51e29951a0bc42d066da1861
+  branch_integration: 27d0bb4278e16f2fc70a2a31bccfa994a5d69628
+  branch_parent: f8595a237d36af56a35d8c6d6dd8b154a6f5b063
+  branch_code_tip: b69b4e7090831534d440d38e66fb3c0935a6274c
   missing_upstream_on_branch: 0
 sources:
+  - id: november-10-candidate
+    resource: "Local Git verification at 2026-11-10T17:34:56+00:00: merge 27d0bb4278e16f2fc70a2a31bccfa994a5d69628 has parents fetched fork main f8595a237d36af56a35d8c6d6dd8b154a6f5b063 and upstream 8ee7183e6c8a1c22a6698f4909ef7e2a423bec3a. Code tip b69b4e7090831534d440d38e66fb3c0935a6274c retains all 114 incoming commits with zero branch gap. Fork main still lacks them and shares baseline 7b248349bdc066b1488f52083662597ab22d6fe3. All 335 incoming paths without prior fork changes match upstream exactly. Five conflicted files retain upstream fixes and necessary fork behavior. Changed-file static checks, 41 affected package typechecks, 111-file React Compiler coverage, production web/server/desktop builds, 28 adaptation tests, 57 fork regressions, and 16 search tests pass. Three full-app browser cases and the SQLite statement.stat performance test fail on pristine upstream too. The complete changed-file suite is being rerun after adapting Portless fixtures to the main-forward readiness probe. Real-client Replay, Vim, model mentions, Prompts settings, and small-fixture diff/find work. Native device verification is blocked by device-hub startup; paid evals and live deployment were not performed."
+    title: November 10 candidate ancestry, source audit, and compatibility boundary
+  - id: november-10-upstream
+    resource: https://github.com/pingdotgg/t3code/commit/8ee7183e6c8a1c22a6698f4909ef7e2a423bec3a
+    title: Pinned upstream tip for the November 10 sync
+  - id: ssh-sibling-recovery
+    resource: ../packages/ssh/src/runnerProcess.test.ts
+    title: Real-process recovery coverage for managed, external, discovered, and sibling servers
   - id: november-9-followup-main
     resource: https://github.com/NicholasZolton/t3code/pull/69
     title: Completed November 9 follow-up integration into fork main
@@ -343,9 +352,36 @@ preserving ancestry with zero gap against that pinned tip.
 Main integration and remote deployment remain separate operations.
 [^november-9-followup-main][^november-9-followup-main-git]
 
+The November 10 candidate contains all 114 subsequently fetched upstream commits
+through `8ee7183e6c`, but is not yet on `main`.[^november-10-candidate]
+
 This is a revision-pinned snapshot, not a claim about newer upstream work.
 Refresh it after the next review or integration using the
 [maintenance guidance](maintenance.md).
+
+## November 10 candidate
+
+Merge `27d0bb4278` combines fork `main` `f8595a237d` and upstream `8ee7183e6c`,
+preserving ancestry. All 335 incoming paths without prior fork changes match
+upstream exactly. This is a branch integration, not a completed main sync or
+deployment.[^november-10-candidate][^november-10-upstream]
+
+Adopt upstream's default-branch push guard through the existing shared Git/Jujutsu
+change-request reads; do not restore the old Git-only PR implementation. Keep
+Cursor's VCS hint alongside upstream's interrupted-prompt recovery. SSH retains
+owned Portless forwards and external-server readiness guards while adopting
+upstream's home-wide launch lock and separate connection/readiness waits.
+[^november-10-candidate]
+
+The sibling-discovery path also needs the live-PID readiness guard. Its added
+case failed before the guard because the launcher tried a replacement, then
+passed with the other four real-process recovery cases.[^ssh-sibling-recovery]
+
+Production web/server/desktop builds and scoped adaptation checks pass. The
+three full-app browser failures and the SQLite performance test's missing
+`statement.stat` method reproduce on pristine upstream. Native device verification
+remains blocked by device-hub startup; no live deployment has occurred.
+[^november-10-candidate]
 
 ## Completed November 9 follow-up
 
@@ -872,6 +908,10 @@ merely because readiness times out. This avoids starting competing servers
 against the same T3 home. Explicit Disconnect, desktop shutdown, and requested
 managed-runner changes retain their existing behavior.[^ssh-recovery]
 
+Another alias's launch record counts as discovery even before the server publishes
+`server-runtime.json`; recheck its PID after a failed readiness probe before
+allowing a replacement.[^ssh-sibling-recovery]
+
 The guards retain the remaining protection associated with issue #15608; do not
 restore the older parallel managed-server recovery implementation.
 [^ssh-recovery-issue][^october-15-review-git]
@@ -956,6 +996,12 @@ git log --reverse --oneline origin/main..upstream/main
 ```
 
 [^november-9-followup-main]: PR #69 and its recorded merge time.
+
+[^november-10-candidate]: Exact November 10 merge parents, incoming-path audit, and fork compatibility decisions.
+
+[^november-10-upstream]: Exact upstream revision reviewed for the November 10 sync.
+
+[^ssh-sibling-recovery]: Owned HTTP-process fixtures verify refusal without signals or replacement launches, then reuse after recovery.
 
 [^november-9-followup-main-git]: Completed main ancestry checks and zero gap against the pinned upstream tip.
 
