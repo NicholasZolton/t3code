@@ -6,12 +6,12 @@ tags: [upstream, fork, integration]
 status: stable
 generated:
   by: opencode/gpt-6.1-sol
-  at: 2026-11-11T17:21:58+00:00
+  at: 2026-11-11T18:08:05+00:00
 verified:
   - by: opencode/gpt-6.1-sol
-    at: 2026-11-11T17:21:58+00:00
+    at: 2026-11-11T18:08:05+00:00
 snapshot:
-  at: 2026-11-11T17:21:58+00:00
+  at: 2026-11-11T18:08:05+00:00
   fork_main: ec6fa2d3b84793a358fe224da413c895ef142085
   upstream_main: 1d152c3df4c54419c0e85070d8f89bc302f36658
   shared_baseline: 8ee7183e6c8a1c22a6698f4909ef7e2a423bec3a
@@ -21,12 +21,12 @@ snapshot:
   missing_upstream_at_integrated_tip: 0
   branch_integration: 2e1b75aa3266e50e0f9d8b29c824b34158a3f16f
   branch_parent: ec6fa2d3b84793a358fe224da413c895ef142085
-  branch_code_tip: 0521fad9ffb9fbfd5e4b1a82ca39153388439315
+  branch_code_tip: 69793191b9a519890576f484aba4d4beaafdb118
   missing_upstream_on_branch: 0
 sources:
   - id: november-11-candidate
-    resource: "Local Git verification at 2026-11-11T17:21:58+00:00: merge 2e1b75aa3266e50e0f9d8b29c824b34158a3f16f has parents fork main ec6fa2d3b84793a358fe224da413c895ef142085 and upstream 1d152c3df4c54419c0e85070d8f89bc302f36658. Code tip 0521fad9ffb9fbfd5e4b1a82ca39153388439315 preserves all 161 incoming commits, with zero branch gap. All 644 incoming paths without prior fork changes match upstream exactly. Fork main still has a 161-commit gap. Production web/server/desktop builds, 41 affected-package typechecks, and focused fork regressions pass. Broader tests are in progress; native verification is blocked by device-hub startup. No live deployment occurred."
-    title: November 11 candidate ancestry and upstream-first integration boundary
+    resource: "Local Git verification at 2026-11-11T18:08:00+00:00: merge 2e1b75aa3266e50e0f9d8b29c824b34158a3f16f has parents fork main ec6fa2d3b84793a358fe224da413c895ef142085 and upstream 1d152c3df4c54419c0e85070d8f89bc302f36658. Code tip 69793191b9a519890576f484aba4d4beaafdb118 preserves all 161 incoming commits, with zero branch gap. All 644 incoming paths without prior fork changes match upstream exactly. Fork main still has a 161-commit gap. Production web/server/desktop builds, 41 affected-package typechecks, 230-file React Compiler coverage, changed-file static checks, final scoped checks, and focused fork regressions pass. The 369-file selection has 9449 passing tests after repairing the fork fixture and MCP budget, using Node 26 for the SQLite performance case, and using a non-hidden temporary path for ASAR packaging. Four full-app browser failures reproduce on pristine upstream; the sidebar shortcut failure and five quota-blocked desktop settings cases reproduce on fork main. Three pre-existing skips were not changed. Real-client Replay, question submission, Vim editing, Prompts settings, and the clean-repository Jujutsu menu work. Native verification is blocked by device-hub startup. Copilot cannot review the file count; no CI checks registered and no live deployment occurred."
+    title: Validated November 11 candidate and verification limitations
   - id: november-11-upstream
     resource: https://github.com/pingdotgg/t3code/commit/1d152c3df4c54419c0e85070d8f89bc302f36658
     title: Pinned upstream tip for the November 11 sync
@@ -385,6 +385,12 @@ compaction alongside the fork's reused-child execution safeguards and read-only
 Codex subscription limits. Upstream's empty Git-menu guard must still allow the
 fork's Enable Jujutsu action. Codex project-root recovery must honor the fork's
 configured and previous managed worktree locations.[^november-11-candidate]
+
+The selected tests pass 9,449 cases. Four full-app browser failures reproduce on
+pristine upstream; the sidebar shortcut failure and five desktop settings writes
+blocked by the machine's `/tmp` quota reproduce on fork `main`. Native verification
+is blocked by device-hub startup. No tests were weakened or newly skipped, and no
+live deployment occurred.[^november-11-candidate]
 
 ## Completed November 10 sync
 
