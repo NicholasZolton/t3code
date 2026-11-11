@@ -111,6 +111,7 @@ export type GitBranchPullRequest = NonNullable<VcsStatusResult["pr"]> & {
 
 export interface SourceControlTextGenerationSettings {
   readonly modelSelection: ModelSelection;
+  readonly projectId: ProjectId | null;
   readonly style: SourceControlWritingStyleSettings;
 }
 
@@ -1150,6 +1151,7 @@ export const resolveCommitAndBranchSuggestion = Effect.fn("resolveCommitAndBranc
         ...(input.includeBranch ? { includeBranch: true } : {}),
         ...(policy ? { policy } : {}),
         modelSelection: input.settings.modelSelection,
+        projectId: input.settings.projectId,
       })
       .pipe(Effect.map((result) => sanitizeCommitMessage(result)));
 
@@ -1260,6 +1262,7 @@ export const runChangeRequestStep = Effect.fn("runChangeRequestStep")(function* 
     ...(threadContext ? { threadContext } : {}),
     ...(policy ? { policy } : {}),
     modelSelection: settings.modelSelection,
+    projectId: settings.projectId,
   });
 
   const uuid = yield* random.uuidV4().pipe(
@@ -1354,6 +1357,7 @@ export const resolveTextGenerationSettings = Effect.fn("resolveTextGenerationSet
       if (projectSettings.sourceControlWriterModelSelection === null) {
         return {
           modelSelection: projectSettings.textGenerationModelSelection,
+          projectId,
           style: projectSettings.sourceControlWritingStyle,
         };
       }
@@ -1364,6 +1368,7 @@ export const resolveTextGenerationSettings = Effect.fn("resolveTextGenerationSet
           providers,
           projectId,
         ),
+        projectId,
         style: projectSettings.sourceControlWritingStyle,
       };
     }).pipe(
@@ -2254,7 +2259,7 @@ export const make = Effect.gen(function* () {
     return remoteUrl === null ? null : remoteName;
   });
 
-  // worktree add can set origin/main as upstream; this base is not the branch's published PR head.
+  // worktree add can set the branch's base as upstream; that is not its published PR head.
   const resolveLookupHeadContext = Effect.fn("resolveLookupHeadContext")(function* (
     cwd: string,
     details: {
@@ -2280,15 +2285,16 @@ export const make = Effect.gen(function* () {
         };
       }
     }
-    const upstreamHeadIsDefault =
+    if (headContext.headBranch === details.branch || headContext.isCrossRepository) {
+      return { headContext, lookup: true };
+    }
+    const upstreamHeadIsBase =
       headContext.headBranch === details.defaultBranch ||
       (details.defaultBranch === null &&
-        (headContext.headBranch === "main" || headContext.headBranch === "master"));
-    if (
-      headContext.headBranch === details.branch ||
-      !upstreamHeadIsDefault ||
-      headContext.isCrossRepository
-    ) {
+        (headContext.headBranch === "main" || headContext.headBranch === "master")) ||
+      headContext.headBranch ===
+        (yield* gitCore.readBranchBase(cwd, details.branch).pipe(Effect.orElseSucceed(() => null)));
+    if (!upstreamHeadIsBase) {
       return { headContext, lookup: true };
     }
     const remoteName = yield* findRemoteTrackingRemote(
