@@ -1,5 +1,9 @@
 # Wiki update log
 
+## 2026-11-11
+
+- **Integration candidate**: [November 11 upstream sync](upstream-integration.md#november-11-candidate) preserves all 161 incoming commits through `1d152c3df4` in merge `2e1b75aa32`. All 644 incoming paths without prior fork changes match upstream. Fork `main` remains at `ec6fa2d3b8` pending the PR; native verification is blocked by device-hub startup, and no live deployment occurred.
+
 ## 2026-11-10
 
 - **Compatibility**: [OpenCode limits](upstream-integration.md#opencode-compatibility-boundary) now restore the selected Codex subscription through OpenCode's API and the shared Limits view, without restoring credential-file reads, account switching, or token-refresh ownership.
