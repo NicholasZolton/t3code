@@ -13,8 +13,11 @@ import * as Hex from "effect/encoding/Hex";
 import * as Schema from "effect/Schema";
 import { HttpClient, HttpClientError, HttpClientRequest, HttpClientResponse } from "effect/http";
 
-import { codexPlanLabel } from "../provider/CodexProvider.ts";
-import { codexRateLimitsToLimits } from "../provider/codexUsageLimits.ts";
+import {
+  CodexUsage,
+  codexPlanLabel,
+  codexUsageToLimits,
+} from "@t3tools/provider-core/server/codexUsageLimits";
 import { claudeUsageResponseToLimits } from "../provider/claudeUsageLimits.ts";
 import { makeUnavailableUsageLimits } from "@t3tools/provider-core/server/usageLimits";
 
@@ -40,20 +43,6 @@ const AuthFile = Schema.Struct({
 });
 const AuthFiles = Schema.Struct({ files: Schema.Array(AuthFile) });
 const ApiResponse = Schema.Struct({ status_code: Schema.Number, body: Schema.String });
-const CodexWindow = Schema.Struct({
-  used_percent: Schema.Number,
-  reset_at: Schema.optional(Schema.NullOr(Schema.Number)),
-  limit_window_seconds: Schema.optional(Schema.Number),
-});
-const CodexUsage = Schema.Struct({
-  plan_type: Schema.optional(Schema.String),
-  rate_limit: Schema.NullOr(
-    Schema.Struct({
-      primary_window: Schema.optional(Schema.NullOr(CodexWindow)),
-      secondary_window: Schema.optional(Schema.NullOr(CodexWindow)),
-    }),
-  ),
-});
 const ClaudeWindow = Schema.Struct({
   utilization: Schema.Number,
   resets_at: Schema.NullOr(Schema.String),
@@ -318,16 +307,6 @@ export const makeCliproxyApi = Effect.gen(function* () {
       }
       const body = yield* apiCall(hub, account, `${CODEX_BASE}/usage`);
       const usage = yield* decodeCodexUsage(body);
-      const toWindow = (window: typeof CodexWindow.Type | null | undefined) =>
-        window
-          ? {
-              usedPercent: window.used_percent,
-              resetsAt: window.reset_at ?? null,
-              ...(window.limit_window_seconds === undefined
-                ? {}
-                : { windowDurationMins: window.limit_window_seconds / 60 }),
-            }
-          : null;
       const available = yield* credits(hub, account).pipe(Effect.orElseSucceed(() => undefined));
       const next = available?.[0];
       const planType =
@@ -336,13 +315,9 @@ export const makeCliproxyApi = Effect.gen(function* () {
         ...base,
         plan: codexPlanLabel(planType),
         usageLimits: {
-          ...codexRateLimitsToLimits({
+          ...codexUsageToLimits({
             checkedAt,
-            snapshot: {
-              planType: planType ?? null,
-              primary: toWindow(usage.rate_limit?.primary_window),
-              secondary: toWindow(usage.rate_limit?.secondary_window),
-            },
+            usage: { ...usage, ...(planType === undefined ? {} : { plan_type: planType }) },
           }),
           ...(available
             ? {

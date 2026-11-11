@@ -150,8 +150,13 @@ row to see when it resets and your pace. Turn on **Context window** to also show
 context use against the model's limit. A tick on the bar marks where the provider compacts
 automatically, when it reports that point.
 
+OpenCode 2 also reports the **Codex subscription signed in through OpenCode** under **Usage → Limits**.
+It uses OpenCode's selected ChatGPT login, including when you connect to an external OpenCode server;
+you do not need to install or sign in to the Codex CLI. Only windows the subscription reports appear.
+If the login has expired, refresh it in OpenCode, then refresh limits in T3. Account switching remains in OpenCode.
+
 OpenCode Go reports its session, weekly, and monthly allowance when OpenCode runs locally in
-the environment. T3 cannot report limits for external OpenCode servers because their credentials
+the environment. T3 cannot report Go limits for external OpenCode servers because their credentials
 belong to the remote server. Limits need an OpenCode Go API key, or an OpenCode Console connected
 in OpenCode with an API key. A Console browser sign-in alone does not report them. You can also add
 your Go API key as `OPENCODE_API_KEY` in the OpenCode instance's **Environment variables**, then

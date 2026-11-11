@@ -2,11 +2,11 @@ import * as CodexErrors from "effect-codex-app-server/errors";
 import { describe, expect, it } from "vite-plus/test";
 
 import {
-  codexRateLimitsFailureMessage,
   codexRateLimitsToLimits,
   codexRateLimitsToUpdate,
   mergeCodexRateLimits,
-} from "./codexUsageLimits.ts";
+} from "@t3tools/provider-core/server/codexUsageLimits";
+import { codexRateLimitsFailureMessage } from "./codexUsageLimits.ts";
 
 const checkedAt = "2026-07-18T10:00:00.000Z";
 
@@ -261,7 +261,7 @@ describe("mergeCodexRateLimits", () => {
   });
 });
 
-import { codexUsageLimitResetAt } from "./codexUsageLimits.ts";
+import { codexUsageLimitResetAt } from "@t3tools/provider-core/server/codexUsageLimits";
 
 describe("codexUsageLimitResetAt", () => {
   it("waits for every exhausted window and never invents an unknown reset", () => {

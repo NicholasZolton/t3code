@@ -1,4 +1,8 @@
-import { ProviderDriverKind, settingsSecretLiteral } from "@t3tools/contracts";
+import {
+  ProviderDriverKind,
+  settingsSecretLiteral,
+  type UsageLimitSourceAccount,
+} from "@t3tools/contracts";
 import { OpenCodeSettings } from "../settings.ts";
 import * as Digest from "effect/crypto/Digest";
 import * as SecureRandom from "effect/crypto/SecureRandom";
@@ -25,6 +29,8 @@ import type { ProviderTextGeneration } from "@t3tools/provider-core/server/textG
 import { ProviderDriverError } from "@t3tools/provider-core/server/errors";
 import { openCodeUsageReader, type OpenCodeUsageReaderEnv } from "./usage.ts";
 import { readOpenCodeGoUsageLimits } from "./usageLimits.ts";
+import { readOpenCodeCodexAccount } from "./codexUsageLimits.ts";
+import { makeUnavailableUsageLimits } from "@t3tools/provider-core/server/usageLimits";
 import { loadOpenCode2Catalog } from "./openCode2Catalog.ts";
 import {
   checkOpenCodeProviderStatus,
@@ -396,7 +402,36 @@ export const OpenCodeDriver: ProviderDriver<
       },
       { concurrency: "unbounded" },
     ).pipe(
-      Effect.map(({ provider, usageLimits }) => ({ ...provider, usageLimits })),
+      Effect.flatMap(({ provider, usageLimits }) =>
+        Effect.gen(function* () {
+          const generation = yield* runtimeProbe.lastSuccess;
+          if (
+            !provider.enabled ||
+            provider.status !== "ready" ||
+            Option.isNone(generation) ||
+            generation.value.generation !== "v2"
+          ) {
+            return { ...provider, usageLimits };
+          }
+          const account = yield* openCode2Server
+            .withConnection(({ client }) => readOpenCodeCodexAccount(client, host.paths.cwd))
+            .pipe(
+              Effect.provideService(HttpClient.HttpClient, httpClient),
+              Effect.timeout("10 seconds"),
+              Effect.orElseSucceed((): UsageLimitSourceAccount => ({
+                id: "openai",
+                driver: ProviderDriverKind.make("codex"),
+                usageLimits: makeUnavailableUsageLimits({
+                  checkedAt: provider.checkedAt,
+                  reason: "probeFailed",
+                  message:
+                    "OpenCode could not read its Codex login. Refresh provider status to try again.",
+                }),
+              })),
+            );
+          return { ...provider, usageLimits, usageLimitAccounts: account ? [account] : [] };
+        }),
+      ),
       Effect.map(stampIdentity),
       Effect.provideService(OpenCodeServerOwner.OpenCodeServerOwner, serverOwner),
       Effect.provideService(OpenCodeRuntime.OpenCodeRuntime, openCodeRuntime),
@@ -473,13 +508,11 @@ export const OpenCodeDriver: ProviderDriver<
       streamSettings: snapshotSettings.streamSettings,
       haveSettingsChanged: haveProviderSnapshotSettingsChanged,
       checkProviderOnSettingsChange: () => false,
-      // A failed or still-loading catalog must recover without a manual
-      // refresh. Healthy instances need no recurring server starts.
       refreshOnInterval: (snapshot) =>
         snapshot.enabled &&
         snapshot.installed &&
-        snapshot.status !== "ready" &&
-        snapshot.auth.status === "unknown",
+        ((snapshot.status !== "ready" && snapshot.auth.status === "unknown") ||
+          (snapshot.usageLimitAccounts?.length ?? 0) > 0),
       initialSnapshot: (settings) =>
         makePendingOpenCodeProvider(settings.provider).pipe(Effect.map(stampIdentity)),
       checkProvider,

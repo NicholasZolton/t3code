@@ -2,6 +2,8 @@
 
 ## 2026-11-10
 
+- **Compatibility**: [OpenCode limits](upstream-integration.md#opencode-compatibility-boundary) now restore the selected Codex subscription through OpenCode's API and the shared Limits view, without restoring credential-file reads, account switching, or token-refresh ownership.
+
 - **Integration**: [PR #71](https://github.com/NicholasZolton/t3code/pull/71) reached fork `main` at `abb6f0b72a`. Refreshed [upstream integration](upstream-integration.md#completed-november-10-sync): all 114 commits through `8ee7183e6c` are incorporated with ancestry preserved and zero main gap. The SSH guard now covers live sibling-launch records. Four test failures reproduce on pristine upstream; native device verification remains blocked. No live deployment occurred.
 
 ## 2026-11-09

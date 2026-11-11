@@ -6,7 +6,7 @@ tags: [upstream, fork, integration]
 status: stable
 generated:
   by: opencode/gpt-6.1-sol
-  at: 2026-11-10T17:44:03+00:00
+  at: 2026-11-10T23:52:02+00:00
 verified:
   - by: opencode/gpt-6.1-sol
     at: 2026-11-10T17:44:03+00:00
@@ -24,6 +24,9 @@ snapshot:
   branch_code_tip: b69b4e7090831534d440d38e66fb3c0935a6274c
   missing_upstream_on_branch: 0
 sources:
+  - id: opencode-codex-limits-restoration
+    resource: ../packages/provider-opencode/src/server/codexUsageLimits.ts
+    title: Read-only Codex subscription limits through OpenCode's selected connection
   - id: november-10-main
     resource: https://github.com/NicholasZolton/t3code/pull/71
     title: Completed November 10 upstream integration into fork main
@@ -852,12 +855,13 @@ the new call; observed execution can settle it without a result. Preserve this
 safeguard until upstream can attribute reports to individual runs.
 [^november-4-local-integration][^opencode-child-tracking]
 
-The fork-only OpenCode account/quota views and account switching are intentionally
-removed from web, desktop, and mobile. Use upstream's provider-limits view and native
-Codex account workflow instead; do not restore the separate credential-file reader
-or its RPCs during a sync. General Codex/Claude plan weighting remains, as do
-OpenCode's configured permissions, model defaults, and reused-child safeguards.
-[^november-4-opencode-usage-removal]
+The separate OpenCode account views, credential-file reader, and switching RPCs remain
+retired. The fork now restores only the selected ChatGPT/Codex subscription in the
+shared Limits view: OpenCode's authenticated API owns connection selection, and T3
+reads the subscription without rotating tokens or activating credentials. Keep this
+account separate from OpenCode Go limits; it must not change routing or apply Codex
+exhaustion to unrelated OpenCode models. Preserve this read-only boundary during syncs.
+[^november-4-opencode-usage-removal][^opencode-codex-limits-restoration]
 
 ## Jujutsu migration boundary
 
@@ -1195,6 +1199,8 @@ git log --reverse --oneline origin/main..upstream/main
 [^november-4-upstream]: Exact upstream revision incorporated into the completed November 4 sync.
 
 [^november-4-opencode-usage-removal]: Maintainer-requested removal of fork-only OpenCode account usage and switching, preserving unrelated provider behavior.
+
+[^opencode-codex-limits-restoration]: Active subscription reads through OpenCode's API; no account switching, database access, or token refresh writes.
 
 [^november-4-main-integration]: PR #55 and its recorded merge time.
 

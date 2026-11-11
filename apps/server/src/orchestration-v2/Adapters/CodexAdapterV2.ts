@@ -27,7 +27,7 @@ import {
   mergeCodexRateLimits,
   codexUsageLimitResetAt,
   type CodexRateLimitSnapshot,
-} from "../../provider/codexUsageLimits.ts";
+} from "@t3tools/provider-core/server/codexUsageLimits";
 import {
   CodexSettings,
   defaultInstanceIdForDriver,

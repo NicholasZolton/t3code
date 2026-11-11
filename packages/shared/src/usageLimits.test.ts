@@ -346,6 +346,77 @@ describe("pools", () => {
     expect(collectLimitAccounts(input)).toHaveLength(1);
   });
 
+  it("includes OpenCode's Codex subscription alongside Go without double-counting a native Codex login", () => {
+    const email = "same@example.com";
+    const codex = ProviderDriverKind.make("codex");
+    const opencode = provider({
+      driver: ProviderDriverKind.make("opencode"),
+      instanceId: ProviderInstanceId.make("opencode"),
+      usageLimits: { checkedAt, windows: [{ ...window, id: "go_rolling", usedPercent: 3 }] },
+      usageLimitAccounts: [
+        {
+          id: "selected",
+          driver: codex,
+          email,
+          workspaceId: "workspace",
+          plan: "ChatGPT Pro 200 Subscription",
+          usageLimits: { checkedAt, windows: [window] },
+        },
+      ],
+    });
+    const presentations = new Map([
+      [EnvironmentId.make("env-a"), { ...laptop, serverConfig: { providers: [opencode] } }],
+    ]);
+    expect(collectLimitAccounts(presentations).map((account) => account.driver)).toEqual([
+      "opencode",
+      "codex",
+    ]);
+    expect(
+      collectProviderUsageLimits(opencode.instanceId, [opencode], [], now)?.accounts.map(
+        (account) => account.driver,
+      ),
+    ).toEqual(["opencode", "codex"]);
+
+    const native = provider({
+      auth: { status: "authenticated", email, workspaceId: "workspace" },
+      usageLimits: {
+        checkedAt: "2026-09-03T11:30:00.000Z",
+        windows: [{ ...window, usedPercent: 11 }],
+      },
+    });
+    presentations.set(EnvironmentId.make("env-a"), {
+      ...laptop,
+      serverConfig: { providers: [opencode, native] },
+    });
+    const accounts = collectLimitAccounts(presentations);
+    expect(accounts).toHaveLength(2);
+    expect(
+      accounts.find((account) => account.driver === codex)?.limits.windows[0]?.usedPercent,
+    ).toBe(11);
+
+    const failed = {
+      ...opencode,
+      usageLimitAccounts: opencode.usageLimitAccounts?.map((account) => ({
+        ...account,
+        usageLimits: {
+          checkedAt,
+          windows: [],
+          unavailable: {
+            reason: "probeFailed" as const,
+            message: "Refresh the login in OpenCode.",
+          },
+        },
+      })),
+    };
+    presentations.set(EnvironmentId.make("env-a"), {
+      ...laptop,
+      serverConfig: { providers: [failed] },
+    });
+    expect(collectLimitNotices(presentations)).toContain(
+      "OpenCode · Codex: Refresh the login in OpenCode.",
+    );
+  });
+
   it("takes windows from a fresher hub read but credits and redeem from the native instance", () => {
     const native = provider({
       driver: claude,

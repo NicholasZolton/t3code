@@ -1,10 +1,7 @@
 import { assert, it } from "@effect/vitest";
 
-import {
-  applyPreferredCodexDefaultModel,
-  codexPlanLabel,
-  mapCodexModelCapabilities,
-} from "./CodexProvider.ts";
+import { applyPreferredCodexDefaultModel, mapCodexModelCapabilities } from "./CodexProvider.ts";
+import { codexPlanLabel } from "@t3tools/provider-core/server/codexUsageLimits";
 
 it("identifies Business Premium separately from other Business seats", () => {
   assert.strictEqual(

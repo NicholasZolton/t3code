@@ -441,8 +441,8 @@ it.layer(layer)("OpenCodeDriver runtime selection", (it) => {
         const path = new URL(request.url).pathname;
         if (path === "/api/model") modelReads += 1;
         const body =
-          path === "/api/info"
-            ? JSON.parse(OPENCODE_2_RESPONSES["/api/info"].body)
+          path === "/api/info" || path === "/api/integration/openai"
+            ? JSON.parse(OPENCODE_2_RESPONSES[path].body)
             : {
                 location: { directory: "/work" },
                 data:

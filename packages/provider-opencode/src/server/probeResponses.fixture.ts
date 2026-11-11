@@ -13,6 +13,11 @@ const SPA_HTML =
   '<!doctype html>\n<html lang="en" style="background-color: var(--v2-background-bg-deep, #fafafa)">\n';
 
 export const OPENCODE_2_RESPONSES = {
+  "/api/integration/openai": {
+    status: 200,
+    contentType: "application/json",
+    body: '{"location":{"directory":"/work"},"data":{"id":"openai","name":"OpenAI","methods":[],"connections":[]}}',
+  },
   "/api/info": {
     status: 200,
     contentType: "application/json",

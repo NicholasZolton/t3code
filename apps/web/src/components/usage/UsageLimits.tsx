@@ -387,7 +387,18 @@ export function UsageLimitsSection({
             ...presentation,
             serverConfig: {
               ...config,
-              providers: config.providers.filter((provider) => isVisible(provider.driver)),
+              providers: config.providers.flatMap((provider) =>
+                isVisible(provider.driver)
+                  ? [
+                      {
+                        ...provider,
+                        usageLimitAccounts: provider.usageLimitAccounts?.filter((account) =>
+                          isVisible(account.driver),
+                        ),
+                      },
+                    ]
+                  : [],
+              ),
               usageLimitSources: config.usageLimitSources?.flatMap((source) => {
                 const accounts = source.accounts.filter((account) => isVisible(account.driver));
                 return accounts.length === 0 && source.accounts.length > 0
