@@ -55,11 +55,12 @@ vi.mock(import("~/state/entities"), async (original) => ({
 }));
 vi.mock(import("~/state/query"), async (original) => ({
   ...(await original()),
-  // Serves both the VCS status and the source-control discovery queries.
+  // Serves VCS status, source-control discovery, and change-preview queries.
   useEnvironmentQuery: (() => ({
     data: {
       versionControlSystems: [],
       sourceControlProviders: [],
+      sources: [],
       isRepo: true,
       refName: state.branch,
       isDefaultRef: state.isDefaultRef,
