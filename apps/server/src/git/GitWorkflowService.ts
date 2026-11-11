@@ -142,6 +142,7 @@ const isWorktreeRecreateNoBaseError = Schema.is(WorktreeRecreateNoBaseError);
 export class GitWorkflowService extends Context.Service<
   GitWorkflowService,
   VcsWorkflowOps & {
+    readonly repositoryRoot: (cwd: string) => Effect.Effect<string | null, GitManagerServiceError>;
     /**
      * Whether a ref in any namespace ends in this name: a local branch, a
      * remote-tracking branch of any remote, a tag. Git falls back to these
@@ -160,8 +161,6 @@ export class GitWorkflowService extends Context.Service<
     ) => Effect.Effect<void, GitCommandError | WorktreeRecreateNoBaseError>;
     readonly currentBranch: (cwd: string) => Effect.Effect<string | null, GitManagerServiceError>;
     readonly branchPullRequest: GitManager.GitManager["Service"]["branchPullRequest"];
-    /** Whether a Git or Jujutsu driver owns this directory. */
-    readonly isRepository: (cwd: string) => Effect.Effect<boolean, GitManagerServiceError>;
   }
 >()("t3/git/GitWorkflowService") {}
 
@@ -508,13 +507,15 @@ export const make = Effect.gen(function* () {
   });
 
   return GitWorkflowService.of({
-    isRepository: Effect.fn("GitWorkflowService.isRepository")((cwd) =>
+    repositoryRoot: Effect.fn("GitWorkflowService.repositoryRoot")((cwd) =>
       registry.detect({ cwd }).pipe(
-        Effect.map((handle) => handle !== null && handle.kind !== "unknown"),
+        Effect.map((handle) =>
+          handle !== null && handle.kind !== "unknown" ? handle.repository.rootPath : null,
+        ),
         Effect.mapError(
           (cause) =>
             new GitManagerError({
-              operation: "GitWorkflowService.isRepository",
+              operation: "GitWorkflowService.repositoryRoot",
               cwd,
               detail: "Failed to detect a VCS repository for this Git workflow.",
               cause,

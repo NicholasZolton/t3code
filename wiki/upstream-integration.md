@@ -6,24 +6,30 @@ tags: [upstream, fork, integration]
 status: stable
 generated:
   by: opencode/gpt-6.1-sol
-  at: 2026-11-10T23:52:02+00:00
+  at: 2026-11-11T18:08:05+00:00
 verified:
   - by: opencode/gpt-6.1-sol
-    at: 2026-11-10T17:44:03+00:00
+    at: 2026-11-11T18:08:05+00:00
 snapshot:
-  at: 2026-11-10T17:44:03+00:00
-  fork_main: abb6f0b72a0226029c6977d6d92389d0376544c7
-  upstream_main: 8ee7183e6c8a1c22a6698f4909ef7e2a423bec3a
+  at: 2026-11-11T18:08:05+00:00
+  fork_main: ec6fa2d3b84793a358fe224da413c895ef142085
+  upstream_main: 1d152c3df4c54419c0e85070d8f89bc302f36658
   shared_baseline: 8ee7183e6c8a1c22a6698f4909ef7e2a423bec3a
   last_main_integration: 27d0bb4278e16f2fc70a2a31bccfa994a5d69628
   last_main_upstream: 8ee7183e6c8a1c22a6698f4909ef7e2a423bec3a
-  missing_upstream_on_main: 0
+  missing_upstream_on_main: 161
   missing_upstream_at_integrated_tip: 0
-  branch_integration: 27d0bb4278e16f2fc70a2a31bccfa994a5d69628
-  branch_parent: f8595a237d36af56a35d8c6d6dd8b154a6f5b063
-  branch_code_tip: b69b4e7090831534d440d38e66fb3c0935a6274c
+  branch_integration: 2e1b75aa3266e50e0f9d8b29c824b34158a3f16f
+  branch_parent: ec6fa2d3b84793a358fe224da413c895ef142085
+  branch_code_tip: 69793191b9a519890576f484aba4d4beaafdb118
   missing_upstream_on_branch: 0
 sources:
+  - id: november-11-candidate
+    resource: "Local Git verification at 2026-11-11T18:08:00+00:00: merge 2e1b75aa3266e50e0f9d8b29c824b34158a3f16f has parents fork main ec6fa2d3b84793a358fe224da413c895ef142085 and upstream 1d152c3df4c54419c0e85070d8f89bc302f36658. Code tip 69793191b9a519890576f484aba4d4beaafdb118 preserves all 161 incoming commits, with zero branch gap. All 644 incoming paths without prior fork changes match upstream exactly. Fork main still has a 161-commit gap. Production web/server/desktop builds, 41 affected-package typechecks, 230-file React Compiler coverage, changed-file static checks, final scoped checks, and focused fork regressions pass. The 369-file selection has 9449 passing tests after repairing the fork fixture and MCP budget, using Node 26 for the SQLite performance case, and using a non-hidden temporary path for ASAR packaging. Four full-app browser failures reproduce on pristine upstream; the sidebar shortcut failure and five quota-blocked desktop settings cases reproduce on fork main. Three pre-existing skips were not changed. Real-client Replay, question submission, Vim editing, Prompts settings, and the clean-repository Jujutsu menu work. Native verification is blocked by device-hub startup. Copilot cannot review the file count; no CI checks registered and no live deployment occurred."
+    title: Validated November 11 candidate and verification limitations
+  - id: november-11-upstream
+    resource: https://github.com/pingdotgg/t3code/commit/1d152c3df4c54419c0e85070d8f89bc302f36658
+    title: Pinned upstream tip for the November 11 sync
   - id: opencode-codex-limits-restoration
     resource: ../packages/provider-opencode/src/server/codexUsageLimits.ts
     title: Read-only Codex subscription limits through OpenCode's selected connection
@@ -355,15 +361,36 @@ sources:
 
 # Upstream integration
 
-Fork `main` incorporates all 114 newer upstream commits through `8ee7183e6c`,
-preserving ancestry with zero gap against that pinned tip.
-[PR #71](https://github.com/NicholasZolton/t3code/pull/71) landed at `abb6f0b72a`.
+The November 11 candidate incorporates all 161 newer upstream commits through
+`1d152c3df4`, preserving ancestry with zero branch gap. Fork `main` remains at
+`ec6fa2d3b8` and still lacks those commits; its last completed upstream integration
+is [PR #71](https://github.com/NicholasZolton/t3code/pull/71).
 Main integration and remote deployment remain separate operations.
-[^november-10-main][^november-10-main-git]
+[^november-11-candidate][^november-10-main-git]
 
 This is a revision-pinned snapshot, not a claim about newer upstream work.
 Refresh it after the next review or integration using the
 [maintenance guidance](maintenance.md).
+
+## November 11 candidate
+
+Merge `2e1b75aa32` combines fork `main` `ec6fa2d3b8` and upstream `1d152c3df4`.
+All 644 incoming paths without prior fork changes match upstream exactly.
+Compatibility repairs use upstream's repository-root and host-classification APIs,
+and carry project-scoped text generation through the shared Git/Jujutsu workflow.
+[^november-11-candidate][^november-11-upstream]
+
+Keep upstream's native OpenCode goals, todos, image jobs, shell jobs, and overflow
+compaction alongside the fork's reused-child execution safeguards and read-only
+Codex subscription limits. Upstream's empty Git-menu guard must still allow the
+fork's Enable Jujutsu action. Codex project-root recovery must honor the fork's
+configured and previous managed worktree locations.[^november-11-candidate]
+
+The selected tests pass 9,449 cases. Four full-app browser failures reproduce on
+pristine upstream; the sidebar shortcut failure and five desktop settings writes
+blocked by the machine's `/tmp` quota reproduce on fork `main`. Native verification
+is blocked by device-hub startup. No tests were weakened or newly skipped, and no
+live deployment occurred.[^november-11-candidate]
 
 ## Completed November 10 sync
 
@@ -1221,3 +1248,7 @@ git log --reverse --oneline origin/main..upstream/main
 [^november-5-main-integration]: PR #56 and its recorded merge time.
 
 [^november-5-main-review-git]: Completed main integration, exact parents, and zero ancestry gap against the pinned upstream tip.
+
+[^november-11-candidate]: Exact candidate parents, code tip, separate main and branch gaps, and upstream-first source comparison.
+
+[^november-11-upstream]: Exact upstream revision incorporated into the November 11 candidate.

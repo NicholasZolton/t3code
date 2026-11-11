@@ -4,6 +4,7 @@ import { resolveAutoFeatureBranchName } from "@t3tools/shared/git";
 import { assert, describe, it } from "vite-plus/test";
 import {
   buildMenuItems,
+  hasUsableGitMenuContent,
   requiresDefaultBranchConfirmation,
   resolveChangesTotals,
   resolveDefaultBranchActionDialogCopy,
@@ -79,211 +80,27 @@ describe("when: ref is clean, up to date, and has no open PR", () => {
     );
   });
 
-  it("resolveQuickAction returns disabled no-action state", () => {
-    const quick = resolveQuickAction(
-      status({ aheadCount: 0, behindCount: 0, hasWorkingTreeChanges: false, pr: null }),
-      false,
-    );
-    assert.deepInclude(quick, { kind: "show_hint", label: "Commit", disabled: true });
-  });
+  it("offers the actions menu only when something in it is usable", () => {
+    const hasContent = (
+      gitStatus: VcsStatusResult,
+      overrides: Partial<Parameters<typeof hasUsableGitMenuContent>[0]> = {},
+    ) =>
+      hasUsableGitMenuContent({
+        menuItems: buildMenuItems(gitStatus, false, gitStatus.hasPrimaryRemote),
+        canWriteSourceControl: true,
+        canPublishRepository: false,
+        hasNotice: false,
+        ...overrides,
+      });
+    const clean = status();
+    const dirty = status({ hasWorkingTreeChanges: true });
 
-  it("buildMenuItems disables commit, push, and create PR", () => {
-    const items = buildMenuItems(status({ aheadCount: 0, behindCount: 0, pr: null }), false);
-    assert.deepEqual(items, [
-      {
-        id: "commit",
-        label: "Commit",
-        disabled: true,
-        icon: "commit",
-        kind: "open_dialog",
-        dialogAction: "commit",
-      },
-      {
-        id: "push",
-        label: "Push",
-        disabled: true,
-        icon: "push",
-        kind: "open_dialog",
-        dialogAction: "push",
-      },
-      {
-        id: "pr",
-        label: "Create PR",
-        disabled: true,
-        icon: "pr",
-        kind: "open_dialog",
-        dialogAction: "create_pr",
-      },
-    ]);
-  });
-});
-
-describe("when: ref is behind upstream", () => {
-  it("resolveQuickAction returns pull", () => {
-    const quick = resolveQuickAction(status({ behindCount: 2 }), false);
-    assert.deepInclude(quick, { kind: "run_pull", label: "Pull", disabled: false });
-  });
-
-  it("buildMenuItems disables push and create PR", () => {
-    const items = buildMenuItems(status({ behindCount: 1, pr: null }), false);
-    assert.deepEqual(items, [
-      {
-        id: "commit",
-        label: "Commit",
-        disabled: true,
-        icon: "commit",
-        kind: "open_dialog",
-        dialogAction: "commit",
-      },
-      {
-        id: "push",
-        label: "Push",
-        disabled: true,
-        icon: "push",
-        kind: "open_dialog",
-        dialogAction: "push",
-      },
-      {
-        id: "pr",
-        label: "Create PR",
-        disabled: true,
-        icon: "pr",
-        kind: "open_dialog",
-        dialogAction: "create_pr",
-      },
-    ]);
-  });
-});
-
-describe("when: ref has diverged from upstream", () => {
-  it("resolveQuickAction returns a disabled sync hint", () => {
-    const quick = resolveQuickAction(status({ aheadCount: 2, behindCount: 1 }), false);
-    assert.deepEqual(quick, {
-      label: "Sync branch",
-      disabled: true,
-      kind: "show_hint",
-      hint: "Branch has diverged from upstream. Rebase/merge first.",
-    });
-  });
-});
-
-describe("when: working tree has local changes", () => {
-  it("resolveQuickAction returns commit, push, and create PR", () => {
-    const quick = resolveQuickAction(status({ hasWorkingTreeChanges: true }), false);
-    assert.deepInclude(quick, {
-      kind: "run_action",
-      action: "commit_push_pr",
-      label: "Commit, push & PR",
-    });
-  });
-
-  it("resolveQuickAction falls back to commit when no origin remote exists", () => {
-    const quick = resolveQuickAction(
-      status({ hasWorkingTreeChanges: true, hasUpstream: false }),
-      false,
-      false,
-      false,
-    );
-    assert.deepInclude(quick, {
-      kind: "run_action",
-      action: "commit",
-      label: "Commit",
-      disabled: false,
-    });
-  });
-
-  it("resolveQuickAction returns commit and push when open PR exists", () => {
-    const quick = resolveQuickAction(
-      status({
-        hasWorkingTreeChanges: true,
-        pr: {
-          number: 16,
-          title: "Existing PR",
-          url: "https://example.com/pr/16",
-          baseRef: "main",
-          headRef: "feature/test",
-          state: "open",
-        },
-      }),
-      false,
-    );
-    assert.deepInclude(quick, {
-      kind: "run_action",
-      action: "commit_push",
-      label: "Commit & push",
-    });
-  });
-
-  it("buildMenuItems enables commit and disables push and PR", () => {
-    const items = buildMenuItems(status({ hasWorkingTreeChanges: true }), false);
-    assert.deepEqual(items, [
-      {
-        id: "commit",
-        label: "Commit",
-        disabled: false,
-        icon: "commit",
-        kind: "open_dialog",
-        dialogAction: "commit",
-      },
-      {
-        id: "push",
-        label: "Push",
-        disabled: true,
-        icon: "push",
-        kind: "open_dialog",
-        dialogAction: "push",
-      },
-      {
-        id: "pr",
-        label: "Create PR",
-        disabled: true,
-        icon: "pr",
-        kind: "open_dialog",
-        dialogAction: "create_pr",
-      },
-    ]);
-  });
-
-  it("buildMenuItems enables push and create PR for ahead commits while local changes remain uncommitted", () => {
-    const items = buildMenuItems(
-      status({
-        refName: "feature/test",
-        hasWorkingTreeChanges: true,
-        aheadCount: 1,
-        workingTree: {
-          files: [{ path: ".vercel/project.json", insertions: 1, deletions: 0 }],
-          insertions: 1,
-          deletions: 0,
-        },
-      }),
-      false,
-    );
-    assert.deepEqual(items, [
-      {
-        id: "commit",
-        label: "Commit",
-        disabled: false,
-        icon: "commit",
-        kind: "open_dialog",
-        dialogAction: "commit",
-      },
-      {
-        id: "push",
-        label: "Push",
-        disabled: false,
-        icon: "push",
-        kind: "open_dialog",
-        dialogAction: "push",
-      },
-      {
-        id: "pr",
-        label: "Create PR",
-        disabled: false,
-        icon: "pr",
-        kind: "open_dialog",
-        dialogAction: "create_pr",
-      },
-    ]);
+    assert.isFalse(hasContent(clean));
+    assert.isTrue(hasContent(dirty));
+    assert.isTrue(hasContent(status({ aheadCount: 1 })));
+    assert.isFalse(hasContent(dirty, { canWriteSourceControl: false }));
+    assert.isTrue(hasContent(status({ hasPrimaryRemote: false }), { canPublishRepository: true }));
+    assert.isTrue(hasContent(clean, { hasNotice: true }));
   });
 });
 
@@ -601,6 +418,37 @@ describe("resolveChangesTotals", () => {
       ),
       { insertions: 20, deletions: 3, baseRef: "origin/master" },
     );
+  });
+
+  it("uses the panel's branch comparison when it has file stats", () => {
+    const dirty = status({
+      branchChanges: { baseRef: "main", insertions: 20, deletions: 3 },
+    });
+    const source = {
+      id: "branch-range",
+      kind: "branch-range",
+      title: "Changes vs release",
+      baseRef: "release",
+      headRef: "feature/test",
+      diff: "",
+      diffHash: "hash",
+      truncated: false,
+    } as const;
+    assert.deepEqual(
+      resolveChangesTotals(dirty, {
+        ...source,
+        files: [
+          { path: "a.ts", previousPath: null, additions: 4, deletions: 1 },
+          { path: "b.ts", previousPath: null, additions: 2, deletions: 0 },
+        ],
+      }),
+      { insertions: 6, deletions: 1, baseRef: "release" },
+    );
+    assert.deepEqual(resolveChangesTotals(dirty, source), {
+      insertions: 20,
+      deletions: 3,
+      baseRef: "main",
+    });
   });
 
   it("falls back to the working tree when branchChanges is omitted", () => {

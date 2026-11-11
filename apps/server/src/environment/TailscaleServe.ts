@@ -15,7 +15,8 @@ import * as Schema from "effect/Schema";
 import { ChildProcessSpawner } from "effect/process";
 
 import { writeFileStringAtomically } from "@t3tools/shared/atomicWrite";
-import { formatHostForUrl, isLoopbackHost, isWildcardHost } from "../startupAccess.ts";
+import { formatHostForUrl, isWildcardHost } from "@t3tools/shared/hostClassification";
+import { isLoopbackHost } from "../startupAccess.ts";
 
 const Settings = Schema.Struct({ servePort: PortSchema });
 type Settings = typeof Settings.Type;

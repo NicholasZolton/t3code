@@ -5,6 +5,7 @@ import type {
   ProjectId,
   WorktreeSubmodules,
 } from "@t3tools/contracts";
+import type { ThreadStructureRuntime } from "@t3tools/client-runtime/state/shell";
 import * as Schema from "effect/Schema";
 import { sanitizeNewRefName } from "@t3tools/shared/git";
 import { scoreSearchFields } from "@t3tools/shared/searchRanking";
@@ -16,6 +17,7 @@ import {
 } from "@t3tools/shared/vcs";
 import { workspaceRelativeFilePath } from "@t3tools/shared/path";
 import { toSortableTimestamp } from "@t3tools/client-runtime/state/thread-sort";
+import { deriveCanInterruptRunningThread } from "../session-logic";
 export { deriveLocalBranchNameFromRemoteRef, sanitizeNewRefName } from "@t3tools/shared/git";
 
 export interface EnvironmentOption {
@@ -125,7 +127,8 @@ export function resolveLockedWorkspaceLabel(
   effectiveEnvMode: EnvMode,
   terminology: VcsTerminology = DEFAULT_VCS_TERMINOLOGY,
 ): string {
-  if (activeWorktreePath) return terminology.workspaceNounTitle;
+  if (activeWorktreePath)
+    return activeWorktreePath.split(/[\\/]/).findLast(Boolean) ?? terminology.workspaceNounTitle;
   return effectiveEnvMode === "worktree"
     ? resolveEnvModeLabel("worktree", terminology)
     : `Local ${terminology.currentRefFallback}`;
@@ -310,6 +313,17 @@ export function resolveBranchSelectionTarget(input: {
     nextWorktreePath,
     reuseExistingWorktree: false,
   };
+}
+
+export function isWorktreeChangeBlocked(input: {
+  runtime: ThreadStructureRuntime | null;
+  currentWorktreePath: string | null;
+  nextWorktreePath: string | null;
+}): boolean {
+  return (
+    input.nextWorktreePath !== input.currentWorktreePath &&
+    deriveCanInterruptRunningThread(true, input.runtime)
+  );
 }
 
 export function shouldIncludeBranchPickerItem(input: {

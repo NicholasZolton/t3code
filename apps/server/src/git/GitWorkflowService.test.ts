@@ -49,9 +49,9 @@ describe("GitWorkflowService", () => {
   it.effect("recognizes a Jujutsu repository for workspace bootstrap", () =>
     Effect.gen(function* () {
       const workflow = yield* GitWorkflowService.GitWorkflowService;
-      const isRepository = yield* workflow.isRepository("/jj-repo");
+      const repositoryRoot = yield* workflow.repositoryRoot("/jj-repo");
 
-      assert.equal(isRepository, true);
+      assert.equal(repositoryRoot, "/jj-repo");
     }).pipe(
       Effect.provide(
         layer({

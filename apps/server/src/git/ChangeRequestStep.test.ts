@@ -23,6 +23,7 @@ import {
 } from "./GitManager.ts";
 
 const settings: SourceControlTextGenerationSettings = {
+  projectId: null,
   modelSelection: { instanceId: ProviderInstanceId.make("claudeAgent"), model: "sonnet" },
   style: {
     mode: "conventional_commits",
