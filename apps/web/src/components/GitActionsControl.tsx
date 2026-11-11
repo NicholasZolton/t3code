@@ -1487,6 +1487,12 @@ export default function GitActionsControl({
 
   const canPublishRepository =
     canWriteSourceControl && isRepo && gitStatusForActions !== null && !hasPrimaryRemote;
+  const canEnableJujutsu =
+    canWriteSourceControl &&
+    gitStatusForActions?.isRepo &&
+    (gitStatusForActions.vcs?.kind === undefined || gitStatusForActions.vcs.kind === "git") &&
+    !activeServerThread?.worktreePath &&
+    !activeDraftThread?.worktreePath;
   const isDetachedHead = gitStatusForActions?.refName === null;
   const isCleanAndBehind =
     gitStatusForActions !== null &&
@@ -1494,12 +1500,14 @@ export default function GitActionsControl({
     !gitStatusForActions.hasWorkingTreeChanges &&
     gitStatusForActions.behindCount > 0 &&
     gitStatusForActions.aheadCount === 0;
-  const hasGitMenuContent = hasUsableGitMenuContent({
-    menuItems: gitActionMenuItems,
-    canWriteSourceControl,
-    canPublishRepository,
-    hasNotice: isDetachedHead || isCleanAndBehind || Boolean(gitStatusError),
-  });
+  const hasGitMenuContent =
+    canEnableJujutsu ||
+    hasUsableGitMenuContent({
+      menuItems: gitActionMenuItems,
+      canWriteSourceControl,
+      canPublishRepository,
+      hasNotice: isDetachedHead || isCleanAndBehind || Boolean(gitStatusError),
+    });
 
   // A disabled menu cannot refresh on open, and terminal edits or commits publish no status.
   const refreshStatusForEmptyMenu = () =>
@@ -1558,10 +1566,7 @@ export default function GitActionsControl({
           <MenuItemLabel>Publish repository...</MenuItemLabel>
         </MenuItem>
       ) : null}
-      {gitStatusForActions?.isRepo &&
-      (gitStatusForActions.vcs?.kind === undefined || gitStatusForActions.vcs.kind === "git") &&
-      !activeServerThread?.worktreePath &&
-      !activeDraftThread?.worktreePath ? (
+      {canEnableJujutsu ? (
         <MenuItem
           disabled={isGitActionRunning || initAction.isPending}
           onClick={() => setIsConvertToJjDialogOpen(true)}

@@ -1310,9 +1310,16 @@ export const make = Effect.gen(function* () {
   });
 
   // Only chats left in an excluded folder, such as Codex's scratch folder, take their project's root.
-  const projectCwd = (cwd: string, projectRoots: ReadonlyArray<string> | undefined) =>
+  const projectCwd = (
+    cwd: string,
+    projectRoots: ReadonlyArray<string> | undefined,
+    configuredWorktreesDirs: ReadonlyArray<string>,
+  ): string =>
     projectRoots !== undefined &&
-    isExcludedProjectPath(path.resolve(expandHomePath(cwd.trim(), homeDir)))
+    isExcludedProjectPath(
+      path.resolve(expandHomePath(cwd.trim(), homeDir)),
+      configuredWorktreesDirs,
+    )
       ? projectRoots[0]!
       : cwd;
 
@@ -1447,6 +1454,7 @@ export const make = Effect.gen(function* () {
     source: AgentSessionSource,
     transcripts: ReadonlyArray<TranscriptCandidate>,
     budget: MetadataReadBudget,
+    configuredWorktreesDirs: ReadonlyArray<string>,
   ) {
     const byOwnerAndCwd = new Map<
       string,
@@ -1462,7 +1470,7 @@ export const make = Effect.gen(function* () {
     for (const transcript of transcripts) {
       const rolloutCwd = yield* readCwd(source, transcript, budget);
       if (rolloutCwd === null || rolloutCwd === false) continue;
-      const cwd = projectCwd(rolloutCwd, transcript.projectRoots);
+      const cwd = projectCwd(rolloutCwd, transcript.projectRoots, configuredWorktreesDirs);
       const key = `${transcript.providerInstanceId}\0${cwd}`;
       const existing = byOwnerAndCwd.get(key);
       if (existing) {
@@ -1493,6 +1501,12 @@ export const make = Effect.gen(function* () {
   const collectCandidates = Effect.fn("AgentSessionScanner.collectCandidates")(function* () {
     const settings = yield* serverSettings.getSettings.pipe(
       Effect.mapError((cause) => new AgentSessionScanError({ operation: "read-settings", cause })),
+    );
+    const configuredWorktreesDirs = managedWorktreesDirectories(
+      settings,
+      worktreesDir,
+      path,
+      homeDir,
     );
 
     const raw: Array<RawCandidate> = [];
@@ -1607,7 +1621,14 @@ export const make = Effect.gen(function* () {
         recordsRemaining: MAX_METADATA_RECORDS_PER_SOURCE,
         truncated: false,
       };
-      raw.push(...(yield* groupTranscriptsByCwd(source, selectedTranscripts, metadataBudget)));
+      raw.push(
+        ...(yield* groupTranscriptsByCwd(
+          source,
+          selectedTranscripts,
+          metadataBudget,
+          configuredWorktreesDirs,
+        )),
+      );
       truncated ||= metadataBudget.truncated;
     }
 
@@ -1923,7 +1944,7 @@ export const make = Effect.gen(function* () {
             return Option.some<AgentSessionRecentThread>({ _tag: "Skipped" });
           }
           const expandedCwd = expandHomePath(
-            projectCwd(snapshot.cwd.value, transcript.projectRoots).trim(),
+            projectCwd(snapshot.cwd.value, transcript.projectRoots, configuredWorktreesDir).trim(),
             homeDir,
           );
           if (
