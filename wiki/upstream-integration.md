@@ -6,24 +6,30 @@ tags: [upstream, fork, integration]
 status: stable
 generated:
   by: opencode/gpt-6.1-sol
-  at: 2026-11-11T18:08:05+00:00
+  at: 2026-11-11T18:09:26+00:00
 verified:
   - by: opencode/gpt-6.1-sol
-    at: 2026-11-11T18:08:05+00:00
+    at: 2026-11-11T18:09:26+00:00
 snapshot:
-  at: 2026-11-11T18:08:05+00:00
-  fork_main: ec6fa2d3b84793a358fe224da413c895ef142085
+  at: 2026-11-11T18:09:26+00:00
+  fork_main: 0187eabf9e2671e2346c5cf2d6f927d0826a3361
   upstream_main: 1d152c3df4c54419c0e85070d8f89bc302f36658
-  shared_baseline: 8ee7183e6c8a1c22a6698f4909ef7e2a423bec3a
-  last_main_integration: 27d0bb4278e16f2fc70a2a31bccfa994a5d69628
-  last_main_upstream: 8ee7183e6c8a1c22a6698f4909ef7e2a423bec3a
-  missing_upstream_on_main: 161
+  shared_baseline: 1d152c3df4c54419c0e85070d8f89bc302f36658
+  last_main_integration: 2e1b75aa3266e50e0f9d8b29c824b34158a3f16f
+  last_main_upstream: 1d152c3df4c54419c0e85070d8f89bc302f36658
+  missing_upstream_on_main: 0
   missing_upstream_at_integrated_tip: 0
   branch_integration: 2e1b75aa3266e50e0f9d8b29c824b34158a3f16f
   branch_parent: ec6fa2d3b84793a358fe224da413c895ef142085
   branch_code_tip: 69793191b9a519890576f484aba4d4beaafdb118
   missing_upstream_on_branch: 0
 sources:
+  - id: november-11-main
+    resource: https://github.com/NicholasZolton/t3code/pull/72
+    title: Completed November 11 upstream integration into fork main
+  - id: november-11-main-git
+    resource: "Local Git verification at 2026-11-11T18:09:26+00:00: fetched origin/main equals 0187eabf9e2671e2346c5cf2d6f927d0826a3361, with parents fork main ec6fa2d3b84793a358fe224da413c895ef142085 and PR tip 10d641ca7665d0a8496a77da8e0c0f944034e972. Integration 2e1b75aa3266e50e0f9d8b29c824b34158a3f16f, final code tip 69793191b9a519890576f484aba4d4beaafdb118, and pinned upstream 1d152c3df4c54419c0e85070d8f89bc302f36658 are ancestors of main. All 161 incoming commits are incorporated, the shared baseline equals the pinned upstream tip, and zero upstream commits are missing on main. PR 72 merged at 2026-11-11T18:09:08Z. No CI checks registered; Copilot could not review the file count. Local verification and reproduced baseline failures are recorded on the PR. No live deployment occurred."
+    title: Completed main ancestry and merge verification
   - id: november-11-candidate
     resource: "Local Git verification at 2026-11-11T18:08:00+00:00: merge 2e1b75aa3266e50e0f9d8b29c824b34158a3f16f has parents fork main ec6fa2d3b84793a358fe224da413c895ef142085 and upstream 1d152c3df4c54419c0e85070d8f89bc302f36658. Code tip 69793191b9a519890576f484aba4d4beaafdb118 preserves all 161 incoming commits, with zero branch gap. All 644 incoming paths without prior fork changes match upstream exactly. Fork main still has a 161-commit gap. Production web/server/desktop builds, 41 affected-package typechecks, 230-file React Compiler coverage, changed-file static checks, final scoped checks, and focused fork regressions pass. The 369-file selection has 9449 passing tests after repairing the fork fixture and MCP budget, using Node 26 for the SQLite performance case, and using a non-hidden temporary path for ASAR packaging. Four full-app browser failures reproduce on pristine upstream; the sidebar shortcut failure and five quota-blocked desktop settings cases reproduce on fork main. Three pre-existing skips were not changed. Real-client Replay, question submission, Vim editing, Prompts settings, and the clean-repository Jujutsu menu work. Native verification is blocked by device-hub startup. Copilot cannot review the file count; no CI checks registered and no live deployment occurred."
     title: Validated November 11 candidate and verification limitations
@@ -361,24 +367,24 @@ sources:
 
 # Upstream integration
 
-The November 11 candidate incorporates all 161 newer upstream commits through
-`1d152c3df4`, preserving ancestry with zero branch gap. Fork `main` remains at
-`ec6fa2d3b8` and still lacks those commits; its last completed upstream integration
-is [PR #71](https://github.com/NicholasZolton/t3code/pull/71).
+Fork `main` incorporates all 161 newer upstream commits through `1d152c3df4`,
+preserving ancestry with zero gap against that pinned tip.
+[PR #72](https://github.com/NicholasZolton/t3code/pull/72) landed at `0187eabf9e`.
 Main integration and remote deployment remain separate operations.
-[^november-11-candidate][^november-10-main-git]
+[^november-11-main][^november-11-main-git]
 
 This is a revision-pinned snapshot, not a claim about newer upstream work.
 Refresh it after the next review or integration using the
 [maintenance guidance](maintenance.md).
 
-## November 11 candidate
+## Completed November 11 sync
 
 Merge `2e1b75aa32` combines fork `main` `ec6fa2d3b8` and upstream `1d152c3df4`.
 All 644 incoming paths without prior fork changes match upstream exactly.
+PR #72 incorporates the merge and compatibility repairs into fork `main`.
 Compatibility repairs use upstream's repository-root and host-classification APIs,
 and carry project-scoped text generation through the shared Git/Jujutsu workflow.
-[^november-11-candidate][^november-11-upstream]
+[^november-11-main-git][^november-11-candidate][^november-11-upstream]
 
 Keep upstream's native OpenCode goals, todos, image jobs, shell jobs, and overflow
 compaction alongside the fork's reused-child execution safeguards and read-only
@@ -812,16 +818,16 @@ migrates to upstream branch naming while preserving temporary branch names. The 
 | -------------------------------------------------- | ---------------------------------------- |
 | Fork                                               | `NicholasZolton/t3code`, remote `origin` |
 | Upstream                                           | `pingdotgg/t3code`, remote `upstream`    |
-| Main landing commit                                | `abb6f0b72a`: merge of PR #71            |
-| Upstream integration commit                        | `27d0bb4278`: merge through `8ee7183e6c` |
-| Fork-side parent                                   | `f8595a237d`                             |
-| Upstream-side parent / shared baseline             | `8ee7183e6c`                             |
+| Main landing commit                                | `0187eabf9e`: merge of PR #72            |
+| Upstream integration commit                        | `2e1b75aa32`: merge through `1d152c3df4` |
+| Fork-side parent                                   | `ec6fa2d3b8`                             |
+| Upstream-side parent / shared baseline             | `1d152c3df4`                             |
 | Missing commits at that integration's upstream tip | **0**                                    |
 
 Default to upstream implementations. Retain fork code for explicit features
 or fixes upstream does not provide. Native OpenCode 2 and thread management now
 use upstream services; fork configuration and UI improvements remain layered on
-those paths.[^november-10-candidate][^november-10-main-git]
+those paths.[^november-11-candidate][^november-11-main-git]
 
 ## Earlier integration boundaries
 
@@ -1252,3 +1258,7 @@ git log --reverse --oneline origin/main..upstream/main
 [^november-11-candidate]: Exact candidate parents, code tip, separate main and branch gaps, and upstream-first source comparison.
 
 [^november-11-upstream]: Exact upstream revision incorporated into the November 11 candidate.
+
+[^november-11-main]: PR #72 and its recorded merge time.
+
+[^november-11-main-git]: Completed main integration, exact parents, and zero ancestry gap against the pinned upstream tip.
