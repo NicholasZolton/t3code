@@ -2774,8 +2774,7 @@ export default function ChatView(props: ChatViewProps) {
         const counts = deriveRevertTurnCountByUserMessageId({
           timelineEntries,
           checkpoints: turnDiffSummaries,
-          threadStartCheckpointReady:
-            findRevertCheckpoint(serverProjection?.checkpoints ?? [], 0) !== undefined,
+          threadStartCheckpointAvailable,
           availableRevertTurnCounts,
           unsettledRunId: activeActivityRun?.completedAt
             ? null

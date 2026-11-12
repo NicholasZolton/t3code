@@ -173,25 +173,10 @@ export function makeHarness(options: UpdatesHarnessOptions = {}) {
           ]
         : [stubBackendInstance]),
   );
-  const layerSsh = Layer.succeed(DesktopSshEnvironment.DesktopSshEnvironment, {
+  const layerSshEnvironment = Layer.mock(DesktopSshEnvironment.DesktopSshEnvironment, {
     closeAllTunnels: Effect.sync(() => {
       installSteps.push("closeSshTunnels");
     }).pipe(Effect.andThen(options.shutdownSsh ?? Effect.void)),
-    discoverHosts: Effect.fn("DesktopSshEnvironment.discoverHosts")(() =>
-      Effect.die("unexpected SSH host discovery"),
-    ),
-    resolveHost: Effect.fn("DesktopSshEnvironment.resolveHost")(() =>
-      Effect.die("unexpected SSH host resolution"),
-    ),
-    ensureEnvironment: Effect.fn("DesktopSshEnvironment.ensureEnvironment")(() =>
-      Effect.die("unexpected SSH connection"),
-    ),
-    disconnectEnvironment: Effect.fn("DesktopSshEnvironment.disconnectEnvironment")(() =>
-      Effect.die("unexpected SSH disconnection"),
-    ),
-    syncPortlessForward: Effect.fn("DesktopSshEnvironment.syncPortlessForward")(() =>
-      Effect.die("unexpected Portless forward"),
-    ),
   });
 
   const layerEnvironment = DesktopEnvironment.layer({
@@ -300,7 +285,7 @@ export function makeHarness(options: UpdatesHarnessOptions = {}) {
     Layer.provideMerge(layerUpdater),
     Layer.provideMerge(layerWindow),
     Layer.provideMerge(layerBackend),
-    Layer.provideMerge(layerSsh),
+    Layer.provideMerge(layerSshEnvironment),
     Layer.provideMerge(DesktopState.layer),
     Layer.provideMerge(layerSettings),
     Layer.provideMerge(

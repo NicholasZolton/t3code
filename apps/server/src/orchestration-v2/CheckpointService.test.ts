@@ -228,6 +228,7 @@ it.effect(
                   yield* Deferred.succeed(firstSnapshotStarted, undefined);
                   yield* Effect.sleep("10 seconds");
                   yield* Ref.update(refs, (current) => new Set([...current, checkpointRef]));
+                  return { exclusions: [] };
                 }),
             }),
           ),
