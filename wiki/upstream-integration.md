@@ -6,24 +6,30 @@ tags: [upstream, fork, integration]
 status: stable
 generated:
   by: opencode/gpt-6.1-sol
-  at: 2026-11-11T18:09:26+00:00
+  at: 2026-11-12T17:37:19+00:00
 verified:
   - by: opencode/gpt-6.1-sol
-    at: 2026-11-11T18:09:26+00:00
+    at: 2026-11-12T17:37:19+00:00
 snapshot:
-  at: 2026-11-11T18:09:26+00:00
-  fork_main: 0187eabf9e2671e2346c5cf2d6f927d0826a3361
-  upstream_main: 1d152c3df4c54419c0e85070d8f89bc302f36658
+  at: 2026-11-12T17:37:19+00:00
+  fork_main: 0827e63928dc9d6fda9257dcf2cc9bce0bf2b922
+  upstream_main: 371963ce0b4cfe8bac3911efd57ae3af90750b41
   shared_baseline: 1d152c3df4c54419c0e85070d8f89bc302f36658
   last_main_integration: 2e1b75aa3266e50e0f9d8b29c824b34158a3f16f
   last_main_upstream: 1d152c3df4c54419c0e85070d8f89bc302f36658
-  missing_upstream_on_main: 0
+  missing_upstream_on_main: 507
   missing_upstream_at_integrated_tip: 0
-  branch_integration: 2e1b75aa3266e50e0f9d8b29c824b34158a3f16f
-  branch_parent: ec6fa2d3b84793a358fe224da413c895ef142085
-  branch_code_tip: 69793191b9a519890576f484aba4d4beaafdb118
+  branch_integration: f792c3302544dd6830f6f1e4e7472f8a0ec2dfb6
+  branch_parent: 0827e63928dc9d6fda9257dcf2cc9bce0bf2b922
+  branch_code_tip: 2841fbb2a886905301e7126502c6617a16c20a23
   missing_upstream_on_branch: 0
 sources:
+  - id: november-12-upstream
+    resource: https://github.com/pingdotgg/t3code/commit/371963ce0b4cfe8bac3911efd57ae3af90750b41
+    title: Pinned upstream tip for the November 12 sync
+  - id: november-12-candidate
+    resource: "Local Git verification at 2026-11-12T17:37:19+00:00: merge f792c3302544dd6830f6f1e4e7472f8a0ec2dfb6 has parents fork main 0827e63928dc9d6fda9257dcf2cc9bce0bf2b922 and upstream 371963ce0b4cfe8bac3911efd57ae3af90750b41. Code tip 2841fbb2a886905301e7126502c6617a16c20a23 incorporates all 507 incoming commits with zero branch gap. Of 1033 incoming paths without prior fork changes, 1032 match upstream exactly; the project MCP clone fixture supplies the fork's Jujutsu dependencies. Production web/server/desktop builds, affected package typechecks after repairs, and focused fork regressions pass. Desktop update tests pass with their temporary paths relocated outside the machine's quota-exhausted /tmp; that test-only relocation was not retained. Seven browser failures reproduce on pristine upstream. Real-client Replay, Spanish settings/search, Prompts, Vim, and the Jujutsu menu work. Native verification is blocked by device-hub startup. The full changed-file test selection remains in progress. The branch is not yet merged into main. No live deployment occurred."
+    title: November 12 candidate ancestry and upstream-only source audit
   - id: november-11-main
     resource: https://github.com/NicholasZolton/t3code/pull/72
     title: Completed November 11 upstream integration into fork main
@@ -367,15 +373,29 @@ sources:
 
 # Upstream integration
 
-Fork `main` incorporates all 161 newer upstream commits through `1d152c3df4`,
-preserving ancestry with zero gap against that pinned tip.
-[PR #72](https://github.com/NicholasZolton/t3code/pull/72) landed at `0187eabf9e`.
-Main integration and remote deployment remain separate operations.
-[^november-11-main][^november-11-main-git]
+Fork `main` at `0827e63928` incorporates upstream through `1d152c3df4`.
+The November 12 candidate merges all 507 newer commits through `371963ce0b`,
+but is not yet on `main`. Main integration and remote deployment remain
+separate operations.[^november-11-main-git][^november-12-candidate]
 
 This is a revision-pinned snapshot, not a claim about newer upstream work.
 Refresh it after the next review or integration using the
 [maintenance guidance](maintenance.md).
+
+## November 12 candidate
+
+Merge `f792c33025` combines fork `main` `0827e63928` and upstream `371963ce0b`.
+Of 1,033 incoming paths without prior fork changes, 1,032 match upstream exactly;
+the project MCP clone fixture supplies the fork's Jujutsu dependencies. Reference
+repositories are unchanged.[^november-12-candidate][^november-12-upstream]
+
+Upstream's `closeAllTunnels` replaces the fork's separate SSH shutdown API.
+It must also close owned Portless forwards during updates and ordinary quit.
+Keep upstream's repository-probe errors distinct from missing checkpoints while
+supporting Jujutsu checkpoint capability checks. Upstream's Tailscale route-owner
+guard must check the actual published target, including the fork's development
+web proxy. Localized settings search keeps the fork's fuzzy ranking.
+[^november-12-candidate]
 
 ## Completed November 11 sync
 
@@ -1262,3 +1282,7 @@ git log --reverse --oneline origin/main..upstream/main
 [^november-11-main]: PR #72 and its recorded merge time.
 
 [^november-11-main-git]: Completed main integration, exact parents, and zero ancestry gap against the pinned upstream tip.
+
+[^november-12-candidate]: Exact candidate parents, code tip, separate main and branch gaps, and upstream-only source comparison.
+
+[^november-12-upstream]: Exact upstream revision incorporated into the November 12 candidate.
