@@ -6,30 +6,36 @@ tags: [upstream, fork, integration]
 status: stable
 generated:
   by: opencode/gpt-6.1-sol
-  at: 2026-11-12T17:37:19+00:00
+  at: 2026-11-12T17:51:51+00:00
 verified:
   - by: opencode/gpt-6.1-sol
-    at: 2026-11-12T17:37:19+00:00
+    at: 2026-11-12T17:51:51+00:00
 snapshot:
-  at: 2026-11-12T17:37:19+00:00
-  fork_main: 0827e63928dc9d6fda9257dcf2cc9bce0bf2b922
+  at: 2026-11-12T17:51:51+00:00
+  fork_main: fee9ab51a2de5bab16c3aa78eab7b72923fdfe67
   upstream_main: 371963ce0b4cfe8bac3911efd57ae3af90750b41
-  shared_baseline: 1d152c3df4c54419c0e85070d8f89bc302f36658
-  last_main_integration: 2e1b75aa3266e50e0f9d8b29c824b34158a3f16f
-  last_main_upstream: 1d152c3df4c54419c0e85070d8f89bc302f36658
-  missing_upstream_on_main: 507
+  shared_baseline: 371963ce0b4cfe8bac3911efd57ae3af90750b41
+  last_main_integration: f792c3302544dd6830f6f1e4e7472f8a0ec2dfb6
+  last_main_upstream: 371963ce0b4cfe8bac3911efd57ae3af90750b41
+  missing_upstream_on_main: 0
   missing_upstream_at_integrated_tip: 0
   branch_integration: f792c3302544dd6830f6f1e4e7472f8a0ec2dfb6
   branch_parent: 0827e63928dc9d6fda9257dcf2cc9bce0bf2b922
-  branch_code_tip: 2841fbb2a886905301e7126502c6617a16c20a23
+  branch_code_tip: d2557e05ece52f40a04c9a3b496df439cc67dec1
   missing_upstream_on_branch: 0
 sources:
+  - id: november-12-main
+    resource: https://github.com/NicholasZolton/t3code/pull/73
+    title: Completed November 12 upstream integration into fork main
+  - id: november-12-main-git
+    resource: "Local Git verification at 2026-11-12T17:51:51+00:00: fetched origin/main equals fee9ab51a2de5bab16c3aa78eab7b72923fdfe67, with parents fork main 0827e63928dc9d6fda9257dcf2cc9bce0bf2b922 and PR tip d2557e05ece52f40a04c9a3b496df439cc67dec1. Integration f792c3302544dd6830f6f1e4e7472f8a0ec2dfb6, final code tip d2557e05ece52f40a04c9a3b496df439cc67dec1, and pinned upstream 371963ce0b4cfe8bac3911efd57ae3af90750b41 are ancestors of main. All 507 incoming commits are incorporated, the shared baseline equals the pinned upstream tip, and zero upstream commits are missing on main. PR 73 merged at 2026-11-12T17:50:28Z with no CI checks or reviews registered. Local verification and its remaining limitations are recorded on the PR. No live deployment occurred."
+    title: Completed main ancestry and merge verification
   - id: november-12-upstream
     resource: https://github.com/pingdotgg/t3code/commit/371963ce0b4cfe8bac3911efd57ae3af90750b41
     title: Pinned upstream tip for the November 12 sync
   - id: november-12-candidate
-    resource: "Local Git verification at 2026-11-12T17:37:19+00:00: merge f792c3302544dd6830f6f1e4e7472f8a0ec2dfb6 has parents fork main 0827e63928dc9d6fda9257dcf2cc9bce0bf2b922 and upstream 371963ce0b4cfe8bac3911efd57ae3af90750b41. Code tip 2841fbb2a886905301e7126502c6617a16c20a23 incorporates all 507 incoming commits with zero branch gap. Of 1033 incoming paths without prior fork changes, 1032 match upstream exactly; the project MCP clone fixture supplies the fork's Jujutsu dependencies. Production web/server/desktop builds, affected package typechecks after repairs, and focused fork regressions pass. Desktop update tests pass with their temporary paths relocated outside the machine's quota-exhausted /tmp; that test-only relocation was not retained. Seven browser failures reproduce on pristine upstream. Real-client Replay, Spanish settings/search, Prompts, Vim, and the Jujutsu menu work. Native verification is blocked by device-hub startup. The full changed-file test selection remains in progress. The branch is not yet merged into main. No live deployment occurred."
-    title: November 12 candidate ancestry and upstream-only source audit
+    resource: "Final candidate verification at 2026-11-12T17:51:51+00:00: merge f792c3302544dd6830f6f1e4e7472f8a0ec2dfb6 has parents fork main 0827e63928dc9d6fda9257dcf2cc9bce0bf2b922 and upstream 371963ce0b4cfe8bac3911efd57ae3af90750b41. Code tip d2557e05ece52f40a04c9a3b496df439cc67dec1 incorporates all 507 incoming commits with zero gap. Of 1033 incoming paths without prior fork changes, 1032 match upstream exactly; the project MCP clone fixture supplies Jujutsu dependencies. Production web/server/desktop builds, all 41 affected package typechecks, 284-file React Compiler coverage, changed-file static checks, and focused fork regressions pass. The 514-file selection has 11726 passing tests and five inherited skips. Integration fixture failures were repaired and checked separately. Eight browser timeouts reproduce on pristine upstream; two full-suite click timeouts pass in isolation on both upstream and the fork. Eight desktop failures are blocked by this host's /tmp; all update and CLI-shim cases pass with temporary staging outside /tmp, which was not retained. Final scoped repair checks pass 30 and 35 tests; a separate remaining-case selection passes 54. Real-client Replay, Spanish settings/search, Prompts, Vim, and the Jujutsu menu work. Native verification is blocked by device-hub startup. These commits reached main through PR 73. No live deployment occurred."
+    title: Validated November 12 candidate and verification limitations
   - id: november-11-main
     resource: https://github.com/NicholasZolton/t3code/pull/72
     title: Completed November 11 upstream integration into fork main
@@ -373,21 +379,27 @@ sources:
 
 # Upstream integration
 
-Fork `main` at `0827e63928` incorporates upstream through `1d152c3df4`.
-The November 12 candidate merges all 507 newer commits through `371963ce0b`,
-but is not yet on `main`. Main integration and remote deployment remain
-separate operations.[^november-11-main-git][^november-12-candidate]
+Fork `main` at `fee9ab51a2` incorporates all 507 incoming commits through
+upstream `371963ce0b` with ancestry preserved and zero remaining gap against that
+tip. PR #73 completed the integration; remote deployment remains
+separate.[^november-12-main-git][^november-12-main]
 
 This is a revision-pinned snapshot, not a claim about newer upstream work.
 Refresh it after the next review or integration using the
 [maintenance guidance](maintenance.md).
 
-## November 12 candidate
+## Completed November 12 sync
 
 Merge `f792c33025` combines fork `main` `0827e63928` and upstream `371963ce0b`.
 Of 1,033 incoming paths without prior fork changes, 1,032 match upstream exactly;
 the project MCP clone fixture supplies the fork's Jujutsu dependencies. Reference
 repositories are unchanged.[^november-12-candidate][^november-12-upstream]
+
+PR #73 incorporates the merge and compatibility repairs into fork `main`.
+The broad selection passes 11,726 tests; remaining browser timing and host `/tmp`
+limitations, passing scoped repairs, and the native verification gap are recorded
+on the PR. No tests were weakened or newly skipped, and no live deployment
+occurred.[^november-12-main-git][^november-12-candidate]
 
 Upstream's `closeAllTunnels` replaces the fork's separate SSH shutdown API.
 It must also close owned Portless forwards during updates and ordinary quit.
@@ -1286,3 +1298,7 @@ git log --reverse --oneline origin/main..upstream/main
 [^november-12-candidate]: Exact candidate parents, code tip, separate main and branch gaps, and upstream-only source comparison.
 
 [^november-12-upstream]: Exact upstream revision incorporated into the November 12 candidate.
+
+[^november-12-main]: PR #73 and its recorded merge time.
+
+[^november-12-main-git]: Completed main integration, exact parents, and zero ancestry gap against the pinned upstream tip.
