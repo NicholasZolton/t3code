@@ -285,7 +285,7 @@ export const OpenInPicker = memo(function OpenInPicker({
 
   // Without `reveal`, the file manager hands a file to the OS default app.
   const canOpenInDefaultApp =
-    openInCwdIsFile && remote.mode === "local-exec" && availableEditors.includes("file-manager");
+    openInCwdIsFile && remote.mode === "local-exec" && effectiveEditors.includes("file-manager");
   const openInDefaultApp = async (): Promise<void> => {
     if (!openInCwd) return;
     if (!readEnvironmentScope(environmentId, AuthOrchestrationOperateScope)) return;
