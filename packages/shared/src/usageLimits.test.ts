@@ -10,6 +10,8 @@ import { describe, expect, it } from "vite-plus/test";
 
 import {
   type LimitAccount,
+  displayLimitWindows,
+  cursorUsageWindowDetails,
   collectProviderUsageLimits,
   sameUsageLimitCommandCoverage,
   withUsageLimitsCommands,
@@ -131,6 +133,7 @@ describe("new thread model fallback", () => {
     ["antigravity", ["gemini-weekly"], "claude-opus-5-5", false],
     ["antigravity", ["3p-weekly"], "claude-opus-5-5", true],
     ["antigravity", ["gemini-weekly"], "antigravity-default", true],
+    ["codex", ["individual"], "gpt-5.5", true],
     ["opencode", ["go_weekly"], "opencode/big-pickle", false],
     ["opencode", ["go_weekly"], "opencode-go/big-pickle", true],
   ] as const)("matches %s pools %s to %s", (driver, ids, model, usesFallback) => {
@@ -1029,6 +1032,105 @@ describe("pooled account columns", () => {
       row.columns.map((member) => (member.window ? member.account.key : null)),
     );
 
+  it.each([
+    {
+      reports: [
+        [14, 14],
+        [14, 14],
+      ],
+      ids: ["autoPercentUsed"],
+      remaining: [86],
+      label: null,
+    },
+    {
+      reports: [
+        [14, 14],
+        [80, 70],
+      ],
+      ids: ["totalPercentUsed", "autoPercentUsed"],
+      remaining: [53, 58],
+      label: "Cursor Models",
+    },
+    {
+      reports: [[undefined, 14]],
+      ids: ["autoPercentUsed"],
+      remaining: [86],
+      label: "Cursor Models",
+    },
+    { reports: [[14, undefined]], ids: ["totalPercentUsed"], remaining: [86], label: null },
+  ])("preserves Cursor totals and scope for $reports", ({ reports, ids, remaining, label }) => {
+    const accounts = reports.map(([total, auto], index) => ({
+      ...account(String(index), [
+        ...(total === undefined ? [] : [{ ...weekly, id: "totalPercentUsed", usedPercent: total }]),
+        ...(auto === undefined ? [] : [{ ...weekly, id: "autoPercentUsed", usedPercent: auto }]),
+      ]),
+      driver: ProviderDriverKind.make("cursor"),
+    }));
+    const pool = collectLimitPools(accounts, now)[0]!;
+    const visible = displayLimitWindows(pool);
+    expect(visible.map((window) => window.id)).toEqual(ids);
+    expect(visible.map((window) => window.remainingPercent)).toEqual(remaining);
+    expect(cursorUsageWindowDetails(ids.at(-1)!, pool)?.label).toBe(label);
+  });
+
+  // regression: #20349 sessions stay visible while the weekly quota is exhausted
+  it.each([
+    ["claudeAgent", "13:00", 40, "14:00", 100],
+    ["codex", "14:00", 100, "14:00", 100],
+    ["claudeAgent", "15:00", 100, "15:00", 100],
+    ["codex", "15:00", 40, "14:00", 60],
+  ] as const)(
+    "%s session resetting at %s with %i percent spent becomes usable at %s with %i percent restored",
+    (driver, sessionReset, usedPercent, usableAt, restoresPercent) => {
+      const at = (time: string) => `2026-09-03T${time}:00.000Z`;
+      const a = {
+        ...account("a", [
+          {
+            ...window,
+            id: driver === "codex" ? "primary" : window.id,
+            usedPercent,
+            resetsAt: at(sessionReset),
+          },
+          {
+            ...weekly,
+            id: driver === "codex" ? "secondary" : weekly.id,
+            usedPercent: 100,
+            resetsAt: at("14:00"),
+          },
+        ]),
+        driver: ProviderDriverKind.make(driver),
+      };
+      const [session] = collectLimitPools([a], now)[0]!.windows;
+      expect.soft(session?.remainingPercent).toBe(0);
+      expect(session?.resets[0]).toMatchObject({
+        at: Date.parse(at(usableAt)),
+        restoresPercent,
+      });
+    },
+  );
+
+  it("excludes weekly-blocked sessions from the pool without changing snapshots or model allowances", () => {
+    const blocked = account("blocked", [
+      window,
+      { ...weekly, usedPercent: 100 },
+      { ...weekly, id: "seven_day_fable", usedPercent: 20 },
+    ]);
+    const accounts = [
+      blocked,
+      account("available", [
+        { ...window, usedPercent: 20 },
+        { ...weekly, usedPercent: 99 },
+        { ...weekly, id: "seven_day_fable", usedPercent: 40 },
+      ]),
+      { ...blocked, key: "cursor", driver: ProviderDriverKind.make("cursor") },
+    ];
+    const snapshot = structuredClone(accounts);
+    const [claude, cursor] = collectLimitPools(accounts, now);
+    expect.soft(claude?.windows.map((row) => row.remainingPercent)).toEqual([40, 1, 70]);
+    expect.soft(cursor?.windows.map((row) => row.remainingPercent)).toEqual([60, 0, 80]);
+    expect(accounts).toEqual(snapshot);
+  });
+
   it("sizes mixed plans by their quota and uses those shares for usage, pace, and resets", () => {
     const accounts = [
       { ...account("five", [{ ...window, usedPercent: 100 }]), plan: "Max 5x" },
@@ -1580,6 +1682,23 @@ describe("external usage settings", () => {
     ]);
     expect(collectLimitAccounts(presentations)).toEqual([]);
     expect(collectLimitNotices(presentations)).toEqual([]);
+  });
+
+  it("shows a notice once when environments with one label report the same failure", () => {
+    const failing = provider({
+      usageLimits: {
+        checkedAt: "2026-09-03T11:00:00.000Z",
+        windows: [],
+        unavailable: { reason: "probeFailed" },
+      },
+    });
+    const host = { entry: { target: { label: "Host" } }, serverConfig: { providers: [failing] } };
+    const presentations = new Map([
+      [EnvironmentId.make("a"), host],
+      [EnvironmentId.make("b"), host],
+      [EnvironmentId.make("c"), host],
+    ]);
+    expect(collectLimitNotices(presentations)).toEqual(["Host · codex: Could not read limits."]);
   });
 });
 

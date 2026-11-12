@@ -83,6 +83,7 @@ import * as ServerSettings from "../serverSettings.ts";
 import type { GitManagerServiceError } from "@t3tools/contracts";
 import * as GitVcsDriver from "../vcs/GitVcsDriver.ts";
 import { workspaceSettings, makeWorkspaceQueries } from "../project/WorkspaceSettings.ts";
+import { isNonRepositoryGitStderr } from "../vcs/GitVcsDriverCore.ts";
 import * as SourceControlProvider from "@t3tools/source-control-core/server/SourceControlProvider";
 import * as SourceControlRateLimit from "@t3tools/source-control-core/server/SourceControlRateLimit";
 import * as SourceControlProviderRegistry from "../sourceControl/SourceControlProviderRegistry.ts";
@@ -137,6 +138,12 @@ export class GitManager extends Context.Service<
       input: { readonly cwd: string; readonly branch: string },
       options?: { readonly refresh?: boolean; readonly freshGitState?: boolean },
     ) => Effect.Effect<GitBranchPullRequest | null, GitManagerServiceError>;
+    /** Whether T3 checked this pull request out onto the branch, which ties it to later threads. */
+    readonly checkedOutPullRequest: (input: {
+      readonly cwd: string;
+      readonly branch: string;
+      readonly url: string;
+    }) => Effect.Effect<boolean>;
     readonly invalidateLocalStatus: (cwd: string) => Effect.Effect<void, never>;
     readonly invalidateRemoteStatus: (cwd: string) => Effect.Effect<void, never>;
     readonly invalidateStatus: (cwd: string) => Effect.Effect<void, never>;
@@ -189,7 +196,7 @@ export type GitActionProgressPayload = StripProgressContext<GitActionProgressEve
 type GitActionProgressEmitter = (event: GitActionProgressPayload) => Effect.Effect<void, never>;
 
 function isNotGitRepositoryError(error: GitCommandError): boolean {
-  return error.message.toLowerCase().includes("not a git repository");
+  return isNonRepositoryGitStderr(error.message);
 }
 
 export interface OpenPrInfo {
@@ -836,7 +843,7 @@ interface BranchHeadContextReads {
 }
 
 // The host's own configuration can target a repository other than the only remote.
-const targetsOnlyRemote = Effect.fn("targetsOnlyRemote")(function* (
+const targetsRemote = Effect.fn("targetsRemote")(function* (
   cwd: string,
   remoteName: string,
   remote: { readonly remoteUrl: string | null; readonly repositoryNameWithOwner: string | null },
@@ -905,14 +912,18 @@ export const resolveBranchHeadContext = Effect.fn("resolveBranchHeadContext")(fu
         ),
         Effect.orElseSucceed(() => 0),
       )) === 1 &&
-    (yield* targetsOnlyRemote(cwd, remoteName, remoteRepository));
+    (yield* targetsRemote(cwd, remoteName, remoteRepository));
   const isForeignRemote = remoteName !== null && remoteName !== "origin" && !isOnlyRemote;
   const isCrossRepository =
-    remoteRepository.repositoryNameWithOwner !== null &&
+    (remoteRepository.repositoryNameWithOwner !== null &&
     originRepository.repositoryNameWithOwner !== null
       ? remoteRepository.repositoryNameWithOwner.toLowerCase() !==
         originRepository.repositoryNameWithOwner.toLowerCase()
-      : isForeignRemote && remoteRepository.repositoryNameWithOwner !== null;
+      : isForeignRemote && remoteRepository.repositoryNameWithOwner !== null) ||
+    (remoteName !== null &&
+      !isOnlyRemote &&
+      remoteRepository.repositoryNameWithOwner !== null &&
+      !(yield* targetsRemote(cwd, remoteName, remoteRepository)));
 
   const ownerHeadSelector =
     remoteRepository.ownerLogin && headBranch.length > 0
@@ -2134,10 +2145,7 @@ export const make = Effect.gen(function* () {
     return handle?.context?.provider ?? provider;
   });
 
-  // The remote that holds a ref named after the local branch, or null when
-  // none does. Remote names may contain slashes, so refs are matched literally
-  // per remote instead of with a glob. When several remotes hold the name, the
-  // preferred remote wins, then origin, then the first configured remote.
+  // Remote names can contain slashes; match refs literally.
   const findRemoteTrackingRemote = Effect.fn("findRemoteTrackingRemote")(function* (
     cwd: string,
     branch: string,
@@ -2991,6 +2999,9 @@ export const make = Effect.gen(function* () {
       repositoryKey: pullRequestRepositoryKey(latest.url),
     };
   });
+
+  const checkedOutPullRequestKey = (branch: string) => `branch.${branch}.t3-pull-request`;
+
   const branchPullRequest: GitManager["Service"]["branchPullRequest"] = Effect.fn(
     "branchPullRequest",
   )(function* ({ cwd, branch }, options) {
@@ -3035,6 +3046,16 @@ export const make = Effect.gen(function* () {
     }
     return confirmed;
   });
+
+  const checkedOutPullRequest: GitManager["Service"]["checkedOutPullRequest"] = Effect.fn(
+    "checkedOutPullRequest",
+  )(function* ({ cwd, branch, url }) {
+    const checkedOutUrl = yield* gitCore
+      .readConfigValue(cwd, checkedOutPullRequestKey(branch))
+      .pipe(Effect.orElseSucceed(() => null));
+    return checkedOutUrl === url;
+  });
+
   const invalidateLocalStatus: GitManager["Service"]["invalidateLocalStatus"] = Effect.fn(
     "invalidateLocalStatus",
   )(function* (cwd) {
@@ -3372,7 +3393,25 @@ export const make = Effect.gen(function* () {
         worktreePath: worktree.worktree.path,
         isOnPullRequestHead: true,
       };
-    }).pipe(Effect.ensuring(invalidateStatus(input.cwd)));
+    }).pipe(
+      Effect.tap((result) =>
+        gitCore
+          .writeConfigValue({
+            cwd: input.cwd,
+            key: checkedOutPullRequestKey(result.branch),
+            value: result.pullRequest.url,
+          })
+          .pipe(
+            Effect.catch((cause) =>
+              Effect.logWarning("GitManager.preparePullRequestThread could not mark the branch", {
+                branch: result.branch,
+                cause,
+              }),
+            ),
+          ),
+      ),
+      Effect.ensuring(invalidateStatus(input.cwd)),
+    );
   }, asUserAction);
 
   const runFeatureBranchStep = Effect.fn("runFeatureBranchStep")(function* (
@@ -3618,6 +3657,7 @@ export const make = Effect.gen(function* () {
     remoteStatus,
     status,
     branchPullRequest,
+    checkedOutPullRequest,
     invalidateLocalStatus,
     invalidateRemoteStatus,
     invalidateStatus,

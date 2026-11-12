@@ -1,5 +1,9 @@
 # Wiki update log
 
+## 2026-11-12
+
+- **Integration candidate**: [Upstream integration](upstream-integration.md#november-12-candidate) records merge `f792c33025` through upstream `371963ce0b`, with all 507 incoming commits present on the branch and still absent from fork `main`. Of 1,033 incoming paths without prior fork changes, only the project MCP clone fixture differs from upstream. The shared SSH cleanup API replaces the fork's separate shutdown API; Jujutsu checkpoints, development proxy publication, and localized fuzzy search retain their fork boundaries. No live deployment occurred.
+
 ## 2026-11-11
 
 - **Integration**: [PR #72](https://github.com/NicholasZolton/t3code/pull/72) reached fork `main` at `0187eabf9e`. Refreshed [upstream integration](upstream-integration.md#completed-november-11-sync): all 161 incoming commits through `1d152c3df4` are incorporated with ancestry preserved and zero main gap. All 644 incoming paths without prior fork changes match upstream. Selected tests pass 9,449 cases; remaining browser and quota failures reproduce on pristine upstream or fork main. Native verification remains blocked by device-hub startup. No live deployment occurred.

@@ -46,7 +46,6 @@ import {
   SEARCH_SECONDARY_FIELD_WEIGHT,
 } from "@t3tools/shared/searchRanking";
 import {
-  createProviderWorkspaceSnapshotRefreshAtomFamily,
   getProviderSkillsForSlashMenu,
   getProviderSlashCommandsForSlashMenu,
   searchProviderSkills,
@@ -64,6 +63,7 @@ import { useEffect, useRef, useState } from "react";
 import type { ComposerEditorSelection } from "../../components/ComposerEditor";
 import { serverEnvironment } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
+import { providerWorkspaceSnapshotRefresh } from "../../state/provider-workspace-snapshot-refresh";
 import {
   useComposerPathSearch,
   useComposerPullRequestSearch,
@@ -80,11 +80,6 @@ async function savedPromptClipboard(body: string): Promise<string> {
   const clipboard = await import("expo-clipboard");
   return clipboard.getStringAsync();
 }
-
-const providerWorkspaceSnapshotRefresh = createProviderWorkspaceSnapshotRefreshAtomFamily({
-  providers: serverEnvironment.providersValueAtom,
-  refreshProviders: serverEnvironment.refreshProviders,
-});
 
 const idleWorkspaceSnapshotRefreshAtom: Atom.Atom<unknown> = Atom.make<void>(undefined).pipe(
   Atom.withLabel("mobile:provider-workspace-snapshot-refresh:idle"),

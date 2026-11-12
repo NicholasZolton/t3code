@@ -152,6 +152,8 @@ export class GitWorkflowService extends Context.Service<
       readonly cwd: string;
       readonly refName: string;
     }) => Effect.Effect<boolean, GitCommandError>;
+    /** The checkout's own HEAD file, inside a linked worktree's admin directory when there is one. */
+    readonly headPath: (cwd: string) => Effect.Effect<string | null, never>;
     readonly deleteLocalBranch: (
       input: GitVcsDriver.GitDeleteLocalBranchInput,
     ) => Effect.Effect<void, GitCommandError>;
@@ -699,6 +701,19 @@ export const make = Effect.gen(function* () {
         jj: (request: typeof input) => jjWorkflow.branchPullRequest(request, options),
       })(input),
     ),
+    headPath: Effect.fn("GitWorkflowService.headPath")(function (cwd) {
+      return git
+        .execute({
+          operation: "GitWorkflowService.headPath",
+          cwd,
+          args: ["rev-parse", "--path-format=absolute", "--git-path", "HEAD"],
+          allowNonZeroExit: true,
+        })
+        .pipe(
+          Effect.map((result) => (result.exitCode === 0 ? result.stdout.trim() || null : null)),
+          Effect.orElseSucceed(() => null),
+        );
+    }),
     listLocalBranchNames: Effect.fn("GitWorkflowService.listLocalBranchNames")((cwd) =>
       route("GitWorkflowService.listLocalBranchNames", commandRouting, {
         git: () => git.listLocalBranchNames(cwd),

@@ -22,6 +22,7 @@ import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Layer from "effect/Layer";
+import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import { FetchHttpClient, HttpRouter, HttpServer } from "effect/http";
 import * as HttpApiBuilder from "effect/http-api/HttpApiBuilder";
@@ -33,6 +34,7 @@ import { withUntracedRequests } from "./http.ts";
 import * as ServerHttp from "./http.ts";
 import {
   guardHttpResponseWriteErrors,
+  keepIdleConnections,
   rejectRequestsUntilServing,
 } from "./httpResponseErrorGuard.ts";
 import { hydrateFnoxSecrets } from "./fnoxSecrets.ts";
@@ -113,6 +115,7 @@ import * as NativeAppIconResolver from "./assets/NativeAppIconResolver.ts";
 import * as AntigravityInstallation from "./provider/AntigravityInstallation.ts";
 import * as ProviderInstallation from "./provider/providerInstallation.ts";
 import * as CodexInstallation from "./provider/CodexInstallation.ts";
+import * as ProviderInstallationGate from "./provider/ProviderInstallationGate.ts";
 import * as ProviderInstanceRegistry from "./provider/ProviderInstanceRegistry.ts";
 import * as ProviderAdapterRegistry from "./orchestration-v2/ProviderAdapterRegistry.ts";
 import * as ProviderRegistry from "./provider/ProviderRegistry.ts";
@@ -221,6 +224,7 @@ import * as RelayClient from "@t3tools/shared/relayClient";
 import * as TailscaleServe from "./environment/TailscaleServe.ts";
 import {
   disableTailscaleServe,
+  readTailscaleServeRootHolders,
   readTailscaleServeRoutesTo,
   readTailscaleStatus,
 } from "@t3tools/tailscale";
@@ -233,6 +237,8 @@ const HTTP_ROUTER_CONFIG = {
 
 // Skip Effect's default 20 s grace; WebSocket scope finalizers already close connections gracefully.
 const HTTP_PREEMPTIVE_SHUTDOWN_GRACE_MS = 0;
+const isDevServerNotProxiableError = Schema.is(TailscaleServe.DevServerNotProxiableError);
+
 const layerResourceAttribution = ResourceAttribution.layer;
 const layerApplicationObservability = EventLoopMonitor.layer.pipe(
   Layer.provideMerge(Observability.layer),
@@ -357,7 +363,7 @@ const layerHttpServer = Layer.unwrap(
     return NodeHttpServer.layer(
       () => {
         const server = rejectRequestsUntilServing(
-          guardHttpResponseWriteErrors(NodeHttp.createServer()),
+          keepIdleConnections(guardHttpResponseWriteErrors(NodeHttp.createServer())),
         );
         if (config.privateNetworkOnly) {
           server.on("connection", (socket) => {
@@ -718,7 +724,12 @@ const layerRuntimeCoreDependenciesBase = Layer.mergeAll(
     Layer.mergeAll(Keybindings.layer, EnvironmentTheme.layer, UsageLimitSources.layer),
   ),
   Layer.provideMerge(ProviderRegistry.layer),
-  Layer.provideMerge(ProviderInstanceRegistryHydration.layer),
+  Layer.provideMerge(
+    ProviderInstanceRegistryHydration.layer.pipe(Layer.provide(SqlitePersistence.layerConfig)),
+  ),
+  // One gate for the server, below hydration so the Claude adapter sees it: layers memoize by
+  // reference, so the runtime layer shares it.
+  Layer.provideMerge(ProviderInstallationGate.layer),
   // Provider hydration builds the Claude runner, which reports agents to the same scanner the
   // terminal and preview layers share.
   Layer.provideMerge(layerPortScanner),
@@ -919,6 +930,22 @@ const layerMakeServer = Layer.unwrap(
           );
       }),
     );
+    // Who holds the Serve port's root: nobody, this server, only dead loopback ports (an unclean
+    // exit leaves one), or another live server or app, whose route is left alone.
+    const tailscaleServeRootHolder = Effect.fn("server.tailscaleServeRootHolder")(
+      function* (target: { readonly host: string; readonly port: number }) {
+        const net = yield* NetService.NetService;
+        const holders = yield* readTailscaleServeRootHolders(config.tailscaleServePort, target);
+        if (holders.length === 0) return "none" as const;
+        if (holders.some((holder) => holder.ours)) return "ours" as const;
+        const live = yield* Effect.forEach(holders, (holder) =>
+          holder.ours || holder.loopback === undefined
+            ? Effect.succeed(true)
+            : net.hasListenerOnHost(holder.loopback.port, holder.loopback.host),
+        );
+        return live.includes(true) ? ("other" as const) : ("dead" as const);
+      },
+    );
     const layerTailscaleServe = config.tailscaleServeEnabled
       ? Layer.effectDiscard(
           Effect.acquireRelease(
@@ -932,34 +959,52 @@ const layerMakeServer = Layer.unwrap(
               }
 
               const localPort = address.port;
-              const tailscaleServe = yield* TailscaleServe.TailscaleServe;
-              return yield* tailscaleServe
-                .publish({
-                  port: localPort,
-                  servePort: config.tailscaleServePort,
-                  host: loopbackUrlHostForAddress(address),
-                  devUrl: config.devUrl,
-                })
-                .pipe(
-                  Effect.map((target) => ({
-                    ...target,
-                    localHost: (target.localHost ?? "127.0.0.1").replace(/^\[|\]$/gu, ""),
-                    servePort: config.tailscaleServePort,
-                  })),
-                  Effect.tap(() =>
-                    Effect.logInfo("Tailscale Serve configured", {
-                      localPort,
-                      servePort: config.tailscaleServePort,
-                    }),
-                  ),
-                  Effect.catch((cause) =>
-                    Effect.logWarning("Failed to configure Tailscale Serve", {
-                      cause,
-                      localPort,
-                      servePort: config.tailscaleServePort,
-                    }).pipe(Effect.as(null)),
-                  ),
+              const input = {
+                port: localPort,
+                servePort: config.tailscaleServePort,
+                host: loopbackUrlHostForAddress(address),
+                devUrl: config.devUrl,
+              };
+              const target = TailscaleServe.resolveLocalTarget(input);
+              if (isDevServerNotProxiableError(target)) {
+                yield* Effect.logWarning("Tailscale Serve left off; dev server is not plain HTTP");
+                return null;
+              }
+              const route = {
+                ...target,
+                localHost: (target.localHost ?? "127.0.0.1").replace(/^\[|\]$/gu, ""),
+                servePort: config.tailscaleServePort,
+              };
+              const holder = yield* tailscaleServeRootHolder({
+                host: route.localHost,
+                port: route.localPort,
+              }).pipe(Effect.orElseSucceed(() => "unreadable" as const));
+              if (holder === "other" || holder === "unreadable") {
+                yield* Effect.logWarning(
+                  holder === "other"
+                    ? "Tailscale Serve left off; its port already serves another server or app"
+                    : "Tailscale Serve left off; its current routes could not be read",
+                  { localPort, servePort: config.tailscaleServePort },
                 );
+                return route;
+              }
+              const tailscaleServe = yield* TailscaleServe.TailscaleServe;
+              return yield* tailscaleServe.publish(input).pipe(
+                Effect.as(route),
+                Effect.tap(() =>
+                  Effect.logInfo("Tailscale Serve configured", {
+                    localPort,
+                    servePort: config.tailscaleServePort,
+                  }),
+                ),
+                Effect.catch((cause) =>
+                  Effect.logWarning("Failed to configure Tailscale Serve", {
+                    cause,
+                    localPort,
+                    servePort: config.tailscaleServePort,
+                  }).pipe(Effect.as(null)),
+                ),
+              );
             }),
             (configured) =>
               configured
@@ -1010,8 +1055,45 @@ const layerMakeServer = Layer.unwrap(
                     ),
                   )
                 : Effect.void,
+          ).pipe(
+            // Startup is not the only time the route can go stale, so whoever finds it on a dead
+            // port takes it back.
+            Effect.tap((configured) =>
+              configured === null
+                ? Effect.void
+                : Effect.sleep("30 seconds").pipe(
+                    Effect.andThen(
+                      tailscaleServeRootHolder({
+                        host: configured.localHost,
+                        port: configured.localPort,
+                      }),
+                    ),
+                    Effect.flatMap((holder) =>
+                      holder === "dead"
+                        ? TailscaleServe.TailscaleServe.use((service) =>
+                            service.publish({
+                              port: configured.localPort,
+                              servePort: configured.servePort,
+                              host: configured.localHost,
+                              devUrl: undefined,
+                            }),
+                          ).pipe(
+                            Effect.andThen(
+                              Effect.logInfo("Tailscale Serve repaired", {
+                                localPort: configured.localPort,
+                                servePort: configured.servePort,
+                              }),
+                            ),
+                          )
+                        : Effect.void,
+                    ),
+                    Effect.ignore,
+                    Effect.forever,
+                    Effect.forkScoped,
+                  ),
+            ),
           ),
-        )
+        ).pipe(Layer.provide(NetService.layer))
       : Layer.empty;
     const layerCloudDesiredLinkReconcile = Layer.effectDiscard(
       Effect.gen(function* () {
