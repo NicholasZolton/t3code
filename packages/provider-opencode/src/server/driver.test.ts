@@ -511,6 +511,10 @@ it.layer(layer)("OpenCodeDriver runtime selection", (it) => {
         const http = HttpClient.make((request) => {
           const path = new URL(request.url).pathname;
           if (path === stalled) return Effect.never;
+          if (path === "/api/model/default")
+            return Effect.succeed(
+              HttpClientResponse.fromWeb(request, new Response(null, { status: 404 })),
+            );
           if (path === "/api/event")
             return Effect.succeed(
               HttpClientResponse.fromWeb(
