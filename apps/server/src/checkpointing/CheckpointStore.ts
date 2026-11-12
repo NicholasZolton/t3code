@@ -90,9 +90,12 @@ export const make = Effect.gen(function* () {
     "CheckpointStore.supportsCheckpoints",
   )(function* (cwd: string) {
     const handle = yield* vcsRegistry.detect({ cwd });
-    if (!handle?.driver.checkpoints) {
-      return false;
+    if (handle === null) {
+      // The registry treats an unreadable Git repository as absent; checkpoints need its failure.
+      const git = yield* vcsRegistry.get("git");
+      return (yield* git.detectRepository(cwd)) !== null;
     }
+    if (!handle.driver.checkpoints) return false;
     const usable = handle.driver.checkpointsUsable;
     return usable ? yield* usable(cwd) : true;
   });

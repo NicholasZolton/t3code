@@ -51,7 +51,6 @@ export type DesktopSshEnvironmentDiscoverError = SshHostDiscoveryError;
 export class DesktopSshEnvironment extends Context.Service<
   DesktopSshEnvironment,
   {
-    readonly shutdown: Effect.Effect<void>;
     readonly discoverHosts: (input?: {
       readonly homeDir?: string;
     }) => Effect.Effect<readonly DesktopDiscoveredSshHost[], DesktopSshEnvironmentDiscoverError>;
@@ -68,6 +67,7 @@ export class DesktopSshEnvironment extends Context.Service<
     readonly syncPortlessForward: (
       input: { readonly target: DesktopSshEnvironmentTarget; readonly cwd: string } | null,
     ) => Effect.Effect<number | null, DesktopSshEnvironmentOperationError>;
+    readonly closeAllTunnels: Effect.Effect<void>;
   }
 >()("@t3tools/desktop/ssh/DesktopSshEnvironment") {}
 
@@ -140,7 +140,6 @@ export const make = Effect.gen(function* () {
   const passwordPrompt = SshAuth.SshPasswordPrompt.of(makePasswordPrompt(prompts));
 
   return DesktopSshEnvironment.of({
-    shutdown: manager.shutdown.pipe(Effect.withSpan("desktop.ssh.shutdown")),
     discoverHosts: Effect.fn("desktop.ssh.discoverHosts")(function* (input) {
       return yield* discoverDesktopSshHostsEffect(input);
     }, Effect.provide(runtimeContext)),
@@ -168,6 +167,7 @@ export const make = Effect.gen(function* () {
       Effect.provideService(SshAuth.SshPasswordPrompt, passwordPrompt),
       Effect.provide(runtimeContext),
     ),
+    closeAllTunnels: manager.closeAllTunnels,
   });
 });
 
