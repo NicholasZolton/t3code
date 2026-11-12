@@ -106,7 +106,7 @@ it.effect.each([false, true, "interrupt"] as const)(
           ordinalWithinScope: 2,
         }),
       );
-      assert.equal(baseline.status, lookupFails ? "missing" : "ready");
+      assert.equal(baseline.status, lookupFails ? "error" : "ready");
       assert.deepEqual(hasCheckpointRef.mock.calls[0]?.[0], {
         cwd: scope.cwd,
         checkpointRef: baseline.ref,

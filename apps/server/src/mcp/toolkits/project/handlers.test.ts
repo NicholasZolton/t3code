@@ -41,6 +41,8 @@ import * as PeerForwarding from "../../../peer/PeerForwarding.ts";
 import * as SourceControlProviderRegistry from "../../../sourceControl/SourceControlProviderRegistry.ts";
 import * as Repositories from "../../../sourceControl/SourceControlRepositoryService.ts";
 import * as GitVcsDriver from "../../../vcs/GitVcsDriver.ts";
+import * as JjWorkflow from "../../../jj/JjWorkflow.ts";
+import * as VcsDriverRegistry from "../../../vcs/VcsDriverRegistry.ts";
 import * as VcsProcess from "../../../vcs/VcsProcess.ts";
 import * as McpInvocationContext from "../../McpInvocationContext.ts";
 import * as McpToolAccess from "../../McpToolAccess.ts";
@@ -781,6 +783,8 @@ it.effect("an agent's clone is not cut off while git is still transferring", () 
       launched: [],
     });
     const repositories = Repositories.layer.pipe(
+      Layer.provide(Layer.mock(JjWorkflow.JjWorkflow)({})),
+      Layer.provide(Layer.mock(VcsDriverRegistry.VcsDriverRegistry)({})),
       Layer.provide(
         Layer.mock(SourceControlProviderRegistry.SourceControlProviderRegistry)({
           resolveLink: () => undefined,

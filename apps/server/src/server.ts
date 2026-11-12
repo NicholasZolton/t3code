@@ -22,6 +22,7 @@ import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Layer from "effect/Layer";
+import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import { FetchHttpClient, HttpRouter, HttpServer } from "effect/http";
 import * as HttpApiBuilder from "effect/http-api/HttpApiBuilder";
@@ -236,6 +237,8 @@ const HTTP_ROUTER_CONFIG = {
 
 // Skip Effect's default 20 s grace; WebSocket scope finalizers already close connections gracefully.
 const HTTP_PREEMPTIVE_SHUTDOWN_GRACE_MS = 0;
+const isDevServerNotProxiableError = Schema.is(TailscaleServe.DevServerNotProxiableError);
+
 const layerResourceAttribution = ResourceAttribution.layer;
 const layerApplicationObservability = EventLoopMonitor.layer.pipe(
   Layer.provideMerge(Observability.layer),
@@ -963,7 +966,7 @@ const layerMakeServer = Layer.unwrap(
                 devUrl: config.devUrl,
               };
               const target = TailscaleServe.resolveLocalTarget(input);
-              if (target instanceof TailscaleServe.DevServerNotProxiableError) {
+              if (isDevServerNotProxiableError(target)) {
                 yield* Effect.logWarning("Tailscale Serve left off; dev server is not plain HTTP");
                 return null;
               }
@@ -1067,11 +1070,14 @@ const layerMakeServer = Layer.unwrap(
                     ),
                     Effect.flatMap((holder) =>
                       holder === "dead"
-                        ? ensureTailscaleServe({
-                            localPort: configured.localPort,
-                            servePort: configured.servePort,
-                            localHost: configured.urlHost,
-                          }).pipe(
+                        ? TailscaleServe.TailscaleServe.use((service) =>
+                            service.publish({
+                              port: configured.localPort,
+                              servePort: configured.servePort,
+                              host: configured.localHost,
+                              devUrl: undefined,
+                            }),
+                          ).pipe(
                             Effect.andThen(
                               Effect.logInfo("Tailscale Serve repaired", {
                                 localPort: configured.localPort,

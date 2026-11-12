@@ -174,7 +174,7 @@ describe.skipIf(HostProcess.Platform.defaultValue() === "win32")(
             cliPath,
             `import * as fs from "node:fs";
 import * as http from "node:http";
-if (process.argv[2] === "serve") {
+if (process.argv[2] !== "fixture-server") {
   fs.appendFileSync(${encodeJsonString(launchesPath)}, "launch\\n");
   process.exit(1);
 }
@@ -191,7 +191,11 @@ server.listen(0, "127.0.0.1", () => {
 `,
           );
           const server = yield* spawner.spawn(
-            ChildProcess.make(process.execPath, [cliPath, "fixture-server"], { detached: false }),
+            ChildProcess.make(
+              process.execPath,
+              [cliPath, "fixture-server", "serve", "--host", "127.0.0.1", "--port", "0"],
+              { detached: false },
+            ),
           );
           yield* Effect.addFinalizer(() =>
             server.kill({ killSignal: "SIGKILL" }).pipe(Effect.ignore),
