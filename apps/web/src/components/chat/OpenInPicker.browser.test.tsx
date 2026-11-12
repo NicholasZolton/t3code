@@ -98,7 +98,7 @@ async function setup() {
   async function renderPicker(
     availableEditors: readonly EditorId[] = editors,
     panel = false,
-    { openInCwd = "/work/project", revealFileManager = false } = {},
+    { openInCwd = "/work/project", openInCwdIsFile = false, revealFileManager = false } = {},
   ) {
     await act(async () => {
       for (const listener of state.listeners) listener();
@@ -108,6 +108,7 @@ async function setup() {
           keybindings={DEFAULT_RESOLVED_KEYBINDINGS}
           availableEditors={availableEditors}
           openInCwd={openInCwd}
+          openInCwdIsFile={openInCwdIsFile}
           revealFileManager={revealFileManager}
           displayMode={panel ? "panel" : "toolbar"}
           compact={!panel}
@@ -186,6 +187,32 @@ describe("host editor access", () => {
     expect(primaryButton().disabled).toBe(true);
     expect(byLabel("Choose editor").disabled).toBe(true);
     expect((await pressOpenFavorite()).defaultPrevented).toBe(false);
+  });
+});
+
+describe("default app", () => {
+  it("opens a file without revealing it or replacing the favorite editor", async () => {
+    await using fixture = await setup();
+    const { renderPicker, byLabel, menuItems, click } = fixture;
+    state.allowed.add(selected);
+    await renderPicker(["vscode", "file-manager"], false, {
+      openInCwd: "/work/project/README.md",
+      openInCwdIsFile: true,
+      revealFileManager: true,
+    });
+    await click(byLabel("Choose editor"));
+    const defaultApp = await vi.waitFor(() => {
+      const item = menuItems().find((candidate) => candidate.textContent === "Default app");
+      if (item === undefined) throw new Error("Default app item is not rendered");
+      return item;
+    });
+    await click(defaultApp);
+
+    expect(state.run).toHaveBeenCalledWith({
+      environmentId: selected,
+      input: { cwd: "/work/project/README.md", editor: "file-manager" },
+    });
+    expect(state.setPreferred).not.toHaveBeenCalled();
   });
 });
 

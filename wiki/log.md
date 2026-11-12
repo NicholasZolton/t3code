@@ -2,6 +2,8 @@
 
 ## 2026-11-12
 
+- **Compatibility**: Recorded the fork-only [Default app item](upstream-integration.md#default-app-in-the-open-in-picker) in the Open-in picker. Upstream offers only editors and the file manager.
+
 - **Integration**: [PR #73](https://github.com/NicholasZolton/t3code/pull/73) reached fork `main` at `fee9ab51a2`. Refreshed [upstream integration](upstream-integration.md#completed-november-12-sync): all 507 commits through `371963ce0b` are incorporated with ancestry preserved and zero main gap. Of 1,033 incoming paths without prior fork changes, only the project MCP clone fixture differs from upstream. The broad selection passes 11,726 tests; remaining timing, host `/tmp`, and native verification limitations are recorded on the PR. No live deployment occurred.
 
 ## 2026-11-11

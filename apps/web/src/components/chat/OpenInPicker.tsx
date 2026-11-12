@@ -19,7 +19,12 @@ import {
   useRemoteOpenState,
 } from "../../remoteOpen";
 import { useEnvironment } from "../../state/environments";
-import { ChevronDownIcon, FolderClosedIcon, SquareArrowOutUpRightIcon } from "lucide-react";
+import {
+  AppWindowIcon,
+  ChevronDownIcon,
+  FolderClosedIcon,
+  SquareArrowOutUpRightIcon,
+} from "lucide-react";
 
 import { Group, GroupSeparator } from "../ui/group";
 import {
@@ -27,6 +32,7 @@ import {
   MenuItem,
   MenuItemLabel,
   MenuPopup,
+  MenuSeparator,
   MenuShortcut,
   MenuSub,
   MenuSubTrigger,
@@ -277,6 +283,18 @@ export const OpenInPicker = memo(function OpenInPicker({
     return (await result)._tag === "Success";
   };
 
+  // Without `reveal`, the file manager hands a file to the OS default app.
+  const canOpenInDefaultApp =
+    openInCwdIsFile && remote.mode === "local-exec" && effectiveEditors.includes("file-manager");
+  const openInDefaultApp = async (): Promise<void> => {
+    if (!openInCwd) return;
+    if (!readEnvironmentScope(environmentId, AuthOrchestrationOperateScope)) return;
+    await openInEditorMutation({
+      environmentId,
+      input: { cwd: openInCwd, editor: "file-manager" },
+    });
+  };
+
   const openFavoriteEditorShortcutLabel = shortcutLabelForCommand(
     keybindings,
     "editor.openFavorite",
@@ -327,6 +345,19 @@ export const OpenInPicker = memo(function OpenInPicker({
               )}
             </MenuItem>
           ))}
+          {canOpenInDefaultApp && (
+            <>
+              <MenuSeparator />
+              <MenuItem
+                density={presentation === "menu" ? "touch" : "default"}
+                disabled={!openInCwd || !canOpenEditor}
+                onClick={() => void openInDefaultApp()}
+              >
+                <AppWindowIcon aria-hidden="true" className={getOpenInIconClass("generic")} />
+                <MenuItemLabel>Default app</MenuItemLabel>
+              </MenuItem>
+            </>
+          )}
           {remote.mode === "remote-links" && !remoteHintSeen && (
             <MenuItem density={presentation === "menu" ? "touch" : "default"} disabled>
               Opens over SSH. Needs your key on {environmentLabel}

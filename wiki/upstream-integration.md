@@ -5,8 +5,8 @@ description: Main and branch integration boundaries and fork compatibility excep
 tags: [upstream, fork, integration]
 status: stable
 generated:
-  by: opencode/gpt-6.1-sol
-  at: 2026-11-12T17:51:51+00:00
+  by: claude-code/claude-opus-5-5
+  at: 2026-11-12T20:54:18+00:00
 verified:
   - by: opencode/gpt-6.1-sol
     at: 2026-11-12T17:51:51+00:00
@@ -375,6 +375,9 @@ sources:
   - id: sidebar-all-projects-search
     resource: ../apps/web/src/components/Sidebar.logic.ts
     title: Sidebar project filter search that ranks the All projects row with projects
+  - id: open-in-default-app
+    resource: ../apps/web/src/components/chat/OpenInPicker.tsx
+    title: Open-in picker item that opens a file with the host's default app
 ---
 
 # Upstream integration
@@ -1049,6 +1052,15 @@ Enter clears the project scope. A project whose name matches the query better
 still leads. Keep "all" in the items `filterSidebarProjectScopeItems` ranks when
 integrating upstream sidebar filter changes.[^sidebar-all-projects-search]
 
+## Default app in the Open-in picker
+
+The fork adds a "Default app" item to the Open-in picker when it targets a file
+on a local-exec environment. It calls the existing `file-manager` editor without
+`reveal`, which hands the file to the host's default app. It opens right away
+and never becomes the favorite editor, so the contracts and server stay
+unchanged. Keep the item when integrating upstream picker
+changes.[^open-in-default-app]
+
 ## Rechecking the boundary
 
 After fetching `origin main` and `upstream main`, use ancestry to identify the
@@ -1142,6 +1154,8 @@ git log --reverse --oneline origin/main..upstream/main
 [^tailnet-peer-links]: The plain-http check in `PeerLinks` and the Tailscale status reader it uses.
 
 [^sidebar-all-projects-search]: The sidebar project filter's search ranking, which keeps the "All projects" row searchable.
+
+[^open-in-default-app]: The Open-in picker's "Default app" item and its local-exec, file-only gate.
 
 [^reviewed-fork-main]: Exact fork main revision fetched for this review.
 
