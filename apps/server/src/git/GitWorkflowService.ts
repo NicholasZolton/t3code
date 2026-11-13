@@ -96,6 +96,7 @@ export interface VcsWorkflowOps {
     readonly remoteName: string;
     readonly refName: string;
   }) => Effect.Effect<boolean, GitCommandError>;
+  readonly resolvePrimaryRemoteName: (cwd: string) => Effect.Effect<string, GitCommandError>;
   readonly resolveRemoteTrackingCommit: (input: {
     readonly cwd: string;
     readonly refName: string;
@@ -154,6 +155,14 @@ export class GitWorkflowService extends Context.Service<
     }) => Effect.Effect<boolean, GitCommandError>;
     /** The checkout's own HEAD file, inside a linked worktree's admin directory when there is one. */
     readonly headPath: (cwd: string) => Effect.Effect<string | null, never>;
+    readonly upstreamDivergence: (cwd: string) => Effect.Effect<
+      {
+        readonly refName: string;
+        readonly aheadCount: number;
+        readonly behindCount: number;
+      } | null,
+      GitManagerServiceError
+    >;
     readonly deleteLocalBranch: (
       input: GitVcsDriver.GitDeleteLocalBranchInput,
     ) => Effect.Effect<void, GitCommandError>;
@@ -460,8 +469,11 @@ export const make = Effect.gen(function* () {
       yield* createWorkspaceWithKind("git", input, options);
       return;
     }
-    const pushedRef = `refs/remotes/origin/${branch}`;
-    if (yield* hasGitCommit(cwd, pushedRef)) {
+    const remoteName = yield* git
+      .resolvePrimaryRemoteName(cwd)
+      .pipe(Effect.orElseSucceed(() => null));
+    const pushedRef = remoteName === null ? null : `refs/remotes/${remoteName}/${branch}`;
+    if (pushedRef !== null && (yield* hasGitCommit(cwd, pushedRef))) {
       yield* createWorkspaceWithKind(
         "git",
         { ...input, refName: pushedRef, newRefName: branch },
@@ -479,18 +491,19 @@ export const make = Effect.gen(function* () {
       );
       return;
     }
-    if (yield* hasGitCommit(cwd, "refs/remotes/origin/HEAD")) {
+    const remoteHead = `refs/remotes/${remoteName}/HEAD`;
+    if (remoteName !== null && (yield* hasGitCommit(cwd, remoteHead))) {
       const { commitSha } = yield* git.resolveRemoteTrackingCommit({
         cwd,
         refName: "HEAD",
-        fallbackRemoteName: "origin",
+        fallbackRemoteName: remoteName,
       });
       yield* createWorkspaceWithKind(
         "git",
         {
           ...input,
           refName: commitSha,
-          baseRefName: "refs/remotes/origin/HEAD",
+          baseRefName: remoteHead,
           newRefName: branch,
         },
         options,
@@ -701,6 +714,42 @@ export const make = Effect.gen(function* () {
         jj: (request: typeof input) => jjWorkflow.branchPullRequest(request, options),
       })(input),
     ),
+    upstreamDivergence: Effect.fn("GitWorkflowService.upstreamDivergence")(function* (cwd) {
+      return yield* routeOr(
+        "GitWorkflowService.upstreamDivergence",
+        workflowRouting,
+        () => Effect.succeed(null),
+        {
+          git: () =>
+            git.statusDetailsRemote(cwd, { refreshUpstream: false }).pipe(
+              Effect.map((details) =>
+                details.hasUpstream && details.branch !== null
+                  ? {
+                      refName: details.branch,
+                      aheadCount: details.aheadCount,
+                      behindCount: details.behindCount,
+                    }
+                  : null,
+              ),
+            ),
+          jj: () =>
+            Effect.all([
+              jjWorkflow.currentRefName(cwd),
+              jjWorkflow.remoteStatus({ cwd }, { refreshUpstream: false }),
+            ]).pipe(
+              Effect.map(([refName, status]) =>
+                status?.hasUpstream && refName !== null
+                  ? {
+                      refName,
+                      aheadCount: status.aheadCount,
+                      behindCount: status.behindCount,
+                    }
+                  : null,
+              ),
+            ),
+        },
+      )({ cwd });
+    }),
     headPath: Effect.fn("GitWorkflowService.headPath")(function (cwd) {
       return git
         .execute({
@@ -752,6 +801,12 @@ export const make = Effect.gen(function* () {
       git: git.fetchWorktreeBaseCommit,
       jj: jjWorkflow.fetchWorktreeBaseCommit,
     }),
+    resolvePrimaryRemoteName: Effect.fn("GitWorkflowService.resolvePrimaryRemoteName")((cwd) =>
+      route("GitWorkflowService.resolvePrimaryRemoteName", commandRouting, {
+        git: () => git.resolvePrimaryRemoteName(cwd),
+        jj: () => jjWorkflow.resolvePrimaryRemoteName(cwd),
+      })({ cwd }),
+    ),
     // Dispatched on the workspace path, not the project: a Git worktree inside a colocated jj
     // project must keep being removable after the detection flip.
     removeWorktree: Effect.fn("GitWorkflowService.removeWorktree")(

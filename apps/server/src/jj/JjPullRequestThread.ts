@@ -110,12 +110,20 @@ export const makeJjPullRequestThread = (deps: JjPullRequestThreadDeps): JjPullRe
         })
         .pipe(mapJjFailure(operation, input.cwd, "Could not resolve this pull request."));
       const pullRequest = toResolvedPullRequest(summary);
-      const localBranch = resolvePullRequestWorktreeLocalBranchName({
-        ...pullRequest,
-        ...(summary.isCrossRepository !== undefined
-          ? { isCrossRepository: summary.isCrossRepository }
-          : {}),
-      });
+      const bookmarks = yield* driver
+        .listBookmarks(input.cwd)
+        .pipe(mapJjFailure(operation, input.cwd, "Could not list existing bookmarks."));
+      const localBranch = resolvePullRequestWorktreeLocalBranchName(
+        {
+          ...pullRequest,
+          ...(summary.isCrossRepository !== undefined
+            ? { isCrossRepository: summary.isCrossRepository }
+            : {}),
+        },
+        new Set(
+          bookmarks.filter((bookmark) => bookmark.remote === null).map((bookmark) => bookmark.name),
+        ),
+      );
 
       const remoteName = yield* driver
         .resolvePrimaryRemoteName(input.cwd)

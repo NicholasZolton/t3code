@@ -4,6 +4,7 @@ import {
   disableTailscaleServe,
   ensureTailscaleServe,
   type TailscaleCommandError,
+  type TailscaleServeHttpsDisabledError,
 } from "@t3tools/tailscale";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
@@ -92,7 +93,10 @@ export class TailscaleServe extends Context.Service<
     }) => Effect.Effect<void, TailscaleServeSettingsError | TailscaleCommandError>;
     readonly publish: (
       input: ServerTarget & { readonly servePort: number },
-    ) => Effect.Effect<LocalTarget, TailscaleCommandError | DevServerNotProxiableError>;
+    ) => Effect.Effect<
+      LocalTarget,
+      TailscaleCommandError | TailscaleServeHttpsDisabledError | DevServerNotProxiableError
+    >;
   }
 >()("t3/environment/TailscaleServe") {}
 
@@ -167,7 +171,10 @@ const make = Effect.gen(function* () {
 
   const publish = Effect.fn("TailscaleServe.publish")(function* (
     input: ServerTarget & { readonly servePort: number },
-  ): Effect.fn.Return<LocalTarget, TailscaleCommandError | DevServerNotProxiableError> {
+  ): Effect.fn.Return<
+    LocalTarget,
+    TailscaleCommandError | TailscaleServeHttpsDisabledError | DevServerNotProxiableError
+  > {
     const target = resolveLocalTarget(input);
     if (isDevServerNotProxiableError(target)) {
       return yield* target;
