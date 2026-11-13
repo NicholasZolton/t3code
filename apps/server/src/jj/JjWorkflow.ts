@@ -439,6 +439,9 @@ export const make = Effect.gen(function* () {
   });
 
   return JjWorkflow.of({
+    resolvePrimaryRemoteName: Effect.fn("JjWorkflow.resolvePrimaryRemoteName")((cwd) =>
+      remotes.requirePrimaryRemoteName("JjWorkflow.resolvePrimaryRemoteName", cwd),
+    ),
     deleteLocalBranch: Effect.fn("JjWorkflow.deleteLocalBranch")((input) =>
       refs.deleteLocalBranch(input),
     ),

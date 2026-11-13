@@ -1,5 +1,9 @@
 # Wiki update log
 
+## 2026-11-13
+
+- **Validated candidate**: [November 13 upstream merge](upstream-integration.md#november-13-candidate) incorporates 379 commits through `286eeea19f` on the integration branch, not yet fork `main`. Partitioned verification passes 12,901 tests; remaining failures reproduce on pinned upstream or fork main. Records shared Git/Jujutsu recovery, process-aware OpenCode recovery, quota weighting, and preserved launch/update fallbacks. No live deployment occurred.
+
 ## 2026-11-12
 
 - **Compatibility**: Recorded the fork-only [Default app item](upstream-integration.md#default-app-in-the-open-in-picker) in the Open-in picker. Upstream offers only editors and the file manager.

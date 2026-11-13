@@ -11,7 +11,6 @@ import {
   type LimitPool,
   type LimitPoolMember,
   type LimitPoolWindow,
-  limitAccountWeight,
   paceRemainingPercent,
   remainingPercent,
   type ResetCreditChoice,
@@ -512,9 +511,7 @@ function PoolBar({
       <div
         className="grid gap-x-1 gap-y-1"
         style={{
-          gridTemplateColumns: pool.columns
-            .map(({ account }) => `minmax(0, ${limitAccountWeight(account)}fr)`)
-            .join(" "),
+          gridTemplateColumns: pool.columns.map(({ weight }) => `minmax(0, ${weight}fr)`).join(" "),
         }}
       >
         {pool.columns.map((member, position) =>
