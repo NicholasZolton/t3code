@@ -17,10 +17,8 @@ export const layer = HttpRouter.add(
     const body = yield* request.arrayBuffer.pipe(
       Effect.provideService(HttpIncomingMessage.MaxBodySize, ByteSize.bytes(MAX_BODY_BYTES)),
       Effect.map((buffer) => new Uint8Array(buffer)),
-      Effect.orElseSucceed(() => null),
     );
-    if (body === null || body.length > MAX_BODY_BYTES)
-      return HttpServerResponse.empty({ status: 413 });
+    if (body.length > MAX_BODY_BYTES) return HttpServerResponse.empty({ status: 413 });
     return yield* integration.receive({ body, headers: request.headers }).pipe(
       Effect.map((result) =>
         HttpServerResponse.empty({

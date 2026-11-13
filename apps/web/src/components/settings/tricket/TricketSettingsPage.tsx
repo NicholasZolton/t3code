@@ -33,7 +33,7 @@ function Field({ children }: { readonly children: ReactNode }): ReactNode {
 
 export function TricketSettingsPage(): ReactNode {
   const { environment } = useSettingsScope();
-  if (environment?.serverConfig?.environment.capabilities.tricketIntegration !== true)
+  if (environment && environment.serverConfig?.environment.capabilities.tricketIntegration !== true)
     return (
       <SettingsPageContainer>
         <p className="text-sm text-muted-foreground">
@@ -265,6 +265,19 @@ function TricketForm({ environmentId }: { readonly environmentId: EnvironmentId 
         <SettingsRow
           title="Repository on this environment"
           description="Each handoff gets a new thread and isolated worktree here, never on the client."
+          resetAction={
+            values.projectId !== null ? (
+              <Button
+                size="xs"
+                variant="ghost"
+                aria-label="Clear Tricket repository"
+                disabled={disabled || frozenConnection}
+                onClick={() => setDraft((current) => ({ ...current, projectId: null }))}
+              >
+                Clear
+              </Button>
+            ) : null
+          }
           control={
             <Field>
               <Select
