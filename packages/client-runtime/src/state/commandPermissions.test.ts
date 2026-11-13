@@ -21,6 +21,7 @@ import {
   ORCHESTRATION_V2_WS_METHODS,
   ScheduledTaskId,
   WS_METHODS,
+  TRICKET_RPC_METHODS,
   type AuthSessionState,
   type PeerLinkSummary,
 } from "@t3tools/contracts";
@@ -154,6 +155,10 @@ describe("command permissions", () => {
 
   it.effect.each([
     { method: WS_METHODS.serverRunStorageCleanup, scope: AuthSettingsWriteScope },
+    ...Object.values(TRICKET_RPC_METHODS).map((method) => ({
+      method,
+      scope: AuthSettingsWriteScope,
+    })),
     { method: WS_METHODS.serverReclaimDatabaseSpace, scope: AuthEnvironmentMaintainScope },
   ])("requires the destination $scope grant for $method", ({ method, scope }) =>
     Effect.gen(function* () {
