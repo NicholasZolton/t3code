@@ -2,7 +2,7 @@
 
 ## 2026-11-13
 
-- **Candidate integration**: [November 13 upstream merge](upstream-integration.md#november-13-candidate) incorporates 379 commits through `286eeea19f` on the integration branch, not yet fork `main`. Records shared Git/Jujutsu recovery, OpenCode process-aware recovery, and upstream per-window quota weighting. No live deployment occurred.
+- **Validated candidate**: [November 13 upstream merge](upstream-integration.md#november-13-candidate) incorporates 379 commits through `286eeea19f` on the integration branch, not yet fork `main`. Partitioned verification passes 12,901 tests; remaining failures reproduce on pinned upstream or fork main. Records shared Git/Jujutsu recovery, process-aware OpenCode recovery, quota weighting, and preserved launch/update fallbacks. No live deployment occurred.
 
 ## 2026-11-12
 
