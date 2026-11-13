@@ -6,18 +6,18 @@ tags: [upstream, fork, integration]
 status: stable
 generated:
   by: opencode/gpt-6.1-sol
-  at: 2026-11-13T18:13:52+00:00
+  at: 2026-11-13T18:16:03+00:00
 verified:
   - by: opencode/gpt-6.1-sol
-    at: 2026-11-13T18:13:52+00:00
+    at: 2026-11-13T18:16:03+00:00
 snapshot:
-  at: 2026-11-13T18:13:52+00:00
-  fork_main: a5f4dfdff860a0d5720d678b59e2eac0be2a5630
+  at: 2026-11-13T18:16:03+00:00
+  fork_main: 8843960553bb019be7cd203aa7965e5774cde4ed
   upstream_main: 286eeea19f8b9b06f84c61c6a2f46fba65c52313
-  shared_baseline: 371963ce0b4cfe8bac3911efd57ae3af90750b41
-  last_main_integration: f792c3302544dd6830f6f1e4e7472f8a0ec2dfb6
-  last_main_upstream: 371963ce0b4cfe8bac3911efd57ae3af90750b41
-  missing_upstream_on_main: 379
+  shared_baseline: 286eeea19f8b9b06f84c61c6a2f46fba65c52313
+  last_main_integration: 4e3eaf41faf1a967fd293715b34841ae69589ac2
+  last_main_upstream: 286eeea19f8b9b06f84c61c6a2f46fba65c52313
+  missing_upstream_on_main: 0
   missing_upstream_at_integrated_tip: 0
   branch_integration: 4e3eaf41faf1a967fd293715b34841ae69589ac2
   branch_parent: a5f4dfdff860a0d5720d678b59e2eac0be2a5630
@@ -26,13 +26,13 @@ snapshot:
 sources:
   - id: november-13-candidate
     resource: https://github.com/NicholasZolton/t3code/commit/4e3eaf41faf1a967fd293715b34841ae69589ac2
-    title: Ancestry-preserving November 13 candidate merge, not yet on main
+    title: Ancestry-preserving November 13 merge, now incorporated into main
   - id: november-13-git
-    resource: "Local Git verification at 2026-11-13T18:13:52+00:00: fork main a5f4dfdff860a0d5720d678b59e2eac0be2a5630 lacks 379 commits through upstream 286eeea19f8b9b06f84c61c6a2f46fba65c52313. Merge 4e3eaf41faf1a967fd293715b34841ae69589ac2 has those two revisions as parents. Code tip ccb63c2129a16b7d9894d32115266cbc26ceb101 has zero branch gap. Of 1036 incoming paths without prior fork changes, 1033 match upstream exactly; restoreMissingWorktree delegates to the mixed-backend recovery service, and two fixtures use the fork's composer and recovery APIs. All .repos content matches upstream. The candidate has not reached main and no live deployment occurred."
-    title: Separate candidate and main ancestry boundaries
+    resource: "Local Git verification at 2026-11-13T18:16:03+00:00: fetched origin/main equals 8843960553bb019be7cd203aa7965e5774cde4ed, with parents fork main a5f4dfdff860a0d5720d678b59e2eac0be2a5630 and PR tip 0e3a7ffb8bd8f7e6727b78931dceb8c60d953136. Integration 4e3eaf41faf1a967fd293715b34841ae69589ac2, final code tip ccb63c2129a16b7d9894d32115266cbc26ceb101, and pinned upstream 286eeea19f8b9b06f84c61c6a2f46fba65c52313 are ancestors of main. All 379 incoming commits are incorporated, the shared baseline equals pinned upstream, and zero upstream commits are missing on main. Of 1036 incoming paths without prior fork changes, 1033 match upstream exactly; restoreMissingWorktree delegates to the mixed-backend recovery service, and two fixtures use the fork's composer and recovery APIs. All .repos content matches upstream. PR 75 merged at 2026-11-13T18:15:36Z without GitHub checks or pending reviewers; Copilot could not review the file count. Local verification and limitations are recorded on the PR. No live deployment occurred."
+    title: Completed main ancestry and merge verification
   - id: november-13-verification
     resource: "Final candidate verification at 2026-11-13T18:13:52+00:00: changed-file static checks, 41 affected-package typechecks, production web/server/desktop builds, and 269-file React Compiler coverage pass. Partitioning the timed-out 556-file test selection and adding 76 fork regression files yields 12901 passing tests and eight inherited skips after focused repairs. Nine chat-browser timeouts reproduce on pristine pinned upstream; the sidebar shortcut failure and two SSH process timeouts reproduce on fork main. All desktop update and CLI-shim cases pass with temporary staging outside the host's quota-limited /tmp; that staging change was not retained. SQLite and recording cases pass under Node 26. Final repair checks pass 91 and 189 tests. Real-client Replay, Prompts, settings search, keep-awake, and Vim work. Native verification is blocked by device-hub startup. No GitHub checks or pending reviewers are registered; Copilot cannot review the file count. Paid evals and live deployment were not performed."
-    title: Verified candidate and reproduced baseline limitations
+    title: Verified candidate, now incorporated into main, and baseline limitations
   - id: november-13-pr
     resource: https://github.com/NicholasZolton/t3code/pull/75
     title: November 13 upstream integration and verification evidence
@@ -394,16 +394,15 @@ sources:
 
 # Upstream integration
 
-Fork `main` at `a5f4dfdff8` incorporates upstream through `371963ce0b`.
-The November 13 candidate merges all 379 newer commits through `286eeea19f`,
-but is not yet on `main`. Main's gap is 379; the candidate's gap is zero.
+Fork `main` at `8843960553` incorporates upstream through `286eeea19f`.
+PR #75 merged all 379 incoming commits with ancestry preserved and zero main gap.
 Remote deployment remains separate.[^november-13-git]
 
 This is a revision-pinned snapshot, not a claim about newer upstream work.
 Refresh it after the next review or integration using the
 [maintenance guidance](maintenance.md).
 
-## November 13 candidate
+## Completed November 13 sync
 
 Merge `4e3eaf41fa` combines fork `main` `a5f4dfdff8` and upstream `286eeea19f`.
 Of 1,036 incoming paths without prior fork changes, 1,033 match upstream exactly.

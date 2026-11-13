@@ -2,7 +2,7 @@
 
 ## 2026-11-13
 
-- **Validated candidate**: [November 13 upstream merge](upstream-integration.md#november-13-candidate) incorporates 379 commits through `286eeea19f` on the integration branch, not yet fork `main`. Partitioned verification passes 12,901 tests; remaining failures reproduce on pinned upstream or fork main. Records shared Git/Jujutsu recovery, process-aware OpenCode recovery, quota weighting, and preserved launch/update fallbacks. No live deployment occurred.
+- **Integration**: [PR #75](https://github.com/NicholasZolton/t3code/pull/75) reached fork `main` at `8843960553`. Refreshed [upstream integration](upstream-integration.md#completed-november-13-sync): all 379 commits through `286eeea19f` are incorporated with ancestry preserved and zero main gap. Partitioned verification passes 12,901 tests; remaining failures reproduce on pinned upstream or fork main. Shared Git/Jujutsu recovery, process-aware OpenCode recovery, quota weighting, and launch/update fallbacks remain. No live deployment occurred.
 
 ## 2026-11-12
 
