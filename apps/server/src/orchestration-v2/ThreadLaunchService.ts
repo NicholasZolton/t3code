@@ -4,6 +4,7 @@ import * as TerminalManager from "../terminal/Manager.ts";
 import { resolveProjectSettings } from "@t3tools/shared/projectSettings";
 import {
   CommandId,
+  DEFAULT_WORKTREE_BRANCH_PREFIX,
   type ChatAttachment,
   type MessageId,
   type ModelSelection,
@@ -492,7 +493,10 @@ const make = Effect.gen(function* () {
       );
 
       const requestedBranch = input.workspaceStrategy.branch;
-      const temporaryBranchPrefix = (yield* serverSettings.getSettings).worktreeBranchPrefix;
+      const temporaryBranchPrefix = yield* serverSettings.getSettings.pipe(
+        Effect.map((settings) => settings.worktreeBranchPrefix),
+        Effect.orElseSucceed(() => DEFAULT_WORKTREE_BRANCH_PREFIX),
+      );
       const generatedTemporaryBranch =
         input.workspaceStrategy.type === "worktree" && requestedBranch === undefined;
       let branch: string | null;

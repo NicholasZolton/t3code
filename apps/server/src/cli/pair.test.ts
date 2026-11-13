@@ -184,6 +184,15 @@ function makeTailscaleHarness(): {
     let stdout = "";
     if (args[0] === "status") {
       stdout = JSON.stringify({ Self: { DNSName: `${TAILNET_HOST}.` } });
+    } else if (args[0] === "serve" && args[1] === "status") {
+      stdout = JSON.stringify({
+        Web: Object.fromEntries(
+          [...mappings].map(([port, target]) => [
+            `${TAILNET_HOST}:${port}`,
+            { Handlers: { "/": { Proxy: target } } },
+          ]),
+        ),
+      });
     } else if (args[0] === "serve") {
       const servePort = Number(args.find((arg) => arg.startsWith("--https="))?.split("=")[1]);
       const target = args.at(-1);

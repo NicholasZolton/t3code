@@ -498,9 +498,7 @@ it.layer(
                 getById: () => Effect.succeedSome({ workspaceRoot: baseDir } as never),
               }),
               Layer.mock(GitWorkflowService.GitWorkflowService)({
-                pruneWorktrees: () => Effect.void,
-                listLocalBranchNames: () => Effect.succeed(["feature"]),
-                createWorktree: () =>
+                ensureWorkspace: () =>
                   Effect.gen(function* () {
                     creations++;
                     yield* fs.makeDirectory(cwd, { recursive: true }).pipe(Effect.orDie);
@@ -511,7 +509,6 @@ it.layer(
                       }),
                     ).pipe(Effect.forkChild({ startImmediately: true }));
                     yield* Deferred.succeed(cleanupQueued, cleanup);
-                    return {} as never;
                   }),
               }),
             ),
