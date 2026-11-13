@@ -1,5 +1,9 @@
 # Wiki update log
 
+## 2026-11-13
+
+- **Candidate integration**: [November 13 upstream merge](upstream-integration.md#november-13-candidate) incorporates 379 commits through `286eeea19f` on the integration branch, not yet fork `main`. Records shared Git/Jujutsu recovery, OpenCode process-aware recovery, and upstream per-window quota weighting. No live deployment occurred.
+
 ## 2026-11-12
 
 - **Compatibility**: Recorded the fork-only [Default app item](upstream-integration.md#default-app-in-the-open-in-picker) in the Open-in picker. Upstream offers only editors and the file manager.
