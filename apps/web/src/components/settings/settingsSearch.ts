@@ -18,6 +18,7 @@ import { commandLabel } from "./KeybindingsSettings.logic";
 import type { ResolvedSettingsScope } from "./settingsScope";
 
 export type SettingsPath =
+  | "/settings/tricket"
   | "/settings/projects"
   | "/settings/general"
   | "/settings/diagnostics"
@@ -95,6 +96,7 @@ export interface SettingsSearchAvailability {
 }
 
 export const SETTINGS_SECTION_LABELS: Readonly<Record<SettingsPath, string>> = {
+  "/settings/tricket": msg("Tricket"),
   "/settings/diagnostics": msg("Diagnostics"),
   "/settings/projects": msg("Projects"),
   "/settings/general": msg("General"),
@@ -149,6 +151,7 @@ export const SETTINGS_NAV_GROUPS: ReadonlyArray<{
       "/settings/browser",
       "/settings/devices",
       "/settings/scheduled-tasks",
+      "/settings/tricket",
     ],
   },
   {
@@ -232,6 +235,13 @@ const SOURCE_CONTROL_HOST_TERMS = sourceControlClients.definitions
   .join(" ");
 
 export const SETTINGS_SEARCH_ITEMS = [
+  {
+    id: "tricket",
+    title: "Tricket assignments",
+    to: "/settings/tricket",
+    scope: "environment",
+    searchTerms: ["tickets integration webhook workers assignment repository"],
+  },
   {
     id: "saved-prompts",
     title: "Reusable prompts",
@@ -1422,6 +1432,7 @@ export type SettingsSearchItemId = (typeof SETTINGS_SEARCH_ITEMS)[number]["id"];
 const SEARCH_ITEMS_BY_ID = new Map(SETTINGS_SEARCH_ITEMS.map((item) => [item.id, item] as const));
 
 const SETTINGS_CATEGORY_SCOPES: Readonly<Record<SettingsPath, SettingsSearchScope | null>> = {
+  "/settings/tricket": "environment",
   "/settings/diagnostics": "environment",
   "/settings/projects": "project",
   "/settings/general": null,

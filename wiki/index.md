@@ -12,6 +12,8 @@ Repository-local knowledge about maintaining this fork with a small upstream dif
 
 ## Maintaining this bundle
 
+- [Native Tricket integration](tricket-integration.md) - Fork isolation and environment-owned ticket execution; not deployed.
+
 - [Paired Android notifications](paired-notifications.md) - Direct-delivery authorization and payload privacy boundaries to preserve during upstream integration.
 - [Local macOS signing](local-macos-signing.md) - Persistent private signing identity and its separation from release signing.
 
