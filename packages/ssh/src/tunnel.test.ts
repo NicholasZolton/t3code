@@ -879,7 +879,7 @@ describe("ssh tunnel scripts", () => {
                 tunnelKills += 1;
               });
             if (args.includes("t3-portless-discovery")) return makeSuccessfulProcess("");
-            if (args.includes("-l")) {
+            if (launchStateKey(command)) {
               launches += 1;
               remoteRunning = true;
               return makeSuccessfulProcess('{"remotePort":3773,"serverKind":"managed"}\n');
@@ -926,7 +926,7 @@ describe("ssh tunnel scripts", () => {
             Effect.result(manager.ensureEnvironment(target)),
           );
           yield* Deferred.await(staleProbe);
-          yield* TestClock.adjust("2 seconds");
+          yield* TestClock.adjust("5 seconds");
           if (replacement === "unavailable") {
             yield* Deferred.await(replacementProbe);
             yield* TestClock.adjust("20 seconds");
@@ -969,7 +969,7 @@ describe("ssh tunnel scripts", () => {
         if (args.includes("t3-portless-discovery")) {
           return makeSuccessfulProcess("T3_PORTLESS_DEFAULT:58345\n");
         }
-        if (args.includes("-l")) {
+        if (launchStateKey(command)) {
           return makeSuccessfulProcess('{"remotePort":3773}\n');
         }
         if (args.includes("sh")) {
@@ -1054,7 +1054,7 @@ describe("ssh tunnel scripts", () => {
         }
         if (args.includes("t3-portless-discovery"))
           return makeSuccessfulProcess("T3_PORTLESS_DEFAULT:58345\n");
-        if (args.includes("-l")) return makeSuccessfulProcess('{"remotePort":3773}\n');
+        if (launchStateKey(command)) return makeSuccessfulProcess('{"remotePort":3773}\n');
         if (args.includes("sh")) return makeSuccessfulProcess("58345\n");
         return makeSuccessfulProcess("\n");
       }),
@@ -1111,7 +1111,7 @@ describe("ssh tunnel scripts", () => {
             return makeSuccessfulProcess(
               `one.localhost:49329\ntwo.localhost:58345\nT3_PORTLESS_DEFAULT:${defaultPort ?? ""}\n`,
             );
-          if (args.includes("-l")) return makeSuccessfulProcess('{"remotePort":3773}\n');
+          if (launchStateKey(command)) return makeSuccessfulProcess('{"remotePort":3773}\n');
           if (args.includes("sh")) {
             portLookups += 1;
             return makeSuccessfulProcess(portLookups === 2 ? "49329\n" : "");

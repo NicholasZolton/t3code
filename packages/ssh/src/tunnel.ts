@@ -804,7 +804,7 @@ elif [ -n "$DEFAULT_REMOTE_PORT" ]; then
     fi
     return 0
   else
-    if server_running "$DEFAULT_RUNTIME_PID"; then
+    if server_running "$DEFAULT_RUNTIME_PID" && [ -z "$(update_remaining 2>/dev/null || true)" ]; then
       existing_server_unavailable
     fi
     REMOTE_PID="$(cat "$PID_FILE" 2>/dev/null || true)"

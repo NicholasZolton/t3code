@@ -582,6 +582,10 @@ it.layer(layer)("OpenCodeDriver runtime selection", (it) => {
           case "/api/provider":
           case "/api/model":
             return afterScan('{"location":{"directory":"/work"},"data":[]}');
+          case "/api/model/default":
+            return Effect.succeed(
+              HttpClientResponse.fromWeb(request, new Response(null, { status: 404 })),
+            );
           case "/api/command":
             return json(OPENCODE_2_WORKSPACE_RESPONSES["/api/command"].body);
           case "/api/skill":

@@ -123,8 +123,8 @@ function ChatBeside({
     threadFindActive: false,
     composerRef: {
       current: {
-        insertTextAtEnd: (key: string) => {
-          composerKeys.push(key);
+        typeKey: (event: KeyboardEvent) => {
+          composerKeys.push(event.key);
           return true;
         },
       } as Partial<ChatComposerHandle> as ChatComposerHandle,
