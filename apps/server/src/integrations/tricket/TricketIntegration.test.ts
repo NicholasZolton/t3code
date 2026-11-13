@@ -8,9 +8,11 @@ import {
   EnvironmentId,
   ProjectId,
   ProviderInstanceId,
+  RunId,
   ThreadId,
   type OrchestrationV2ThreadProjection,
   type OrchestrationV2ThreadShell,
+  type OrchestrationV2ServerCommand,
   type TricketSettings,
 } from "@t3tools/contracts";
 import * as NodeSqliteClient from "@t3tools/shared/nodeSqliteClient";
@@ -27,6 +29,7 @@ import { HttpRouter, HttpServer, HttpServerRequest, HttpServerResponse } from "e
 import * as ServerSecretStore from "../../auth/ServerSecretStore.ts";
 import * as ServerEnvironment from "../../environment/ServerEnvironment.ts";
 import * as ThreadLaunchService from "../../orchestration-v2/ThreadLaunchService.ts";
+import * as Orchestrator from "../../orchestration-v2/Orchestrator.ts";
 import * as ThreadManagementService from "../../orchestration-v2/ThreadManagementService.ts";
 import * as ManagedProjectFolders from "../../project/ManagedProjectFolders.ts";
 import * as TricketClient from "./TricketClient.ts";
@@ -43,6 +46,24 @@ const signingKey = Buffer.alloc(32, 7);
 const signingSecret = `whsec_${signingKey.toString("base64")}`;
 const now = DateTime.makeUnsafe(0);
 const encodeEvent = Schema.encodeEffect(Schema.fromJsonString(Event));
+type UpdateMessage = Extract<OrchestrationV2ServerCommand, { readonly type: "message.dispatch" }>;
+
+const signedEvent = Effect.fn("test.tricket.signedEvent")(function* (event: Event) {
+  const body = new TextEncoder().encode(yield* encodeEvent(event));
+  const timestamp = Math.floor((yield* Clock.currentTimeMillis) / 1000).toString();
+  const signature = NodeCrypto.createHmac("sha256", signingKey)
+    .update(`${event.event_id}.${timestamp}.`)
+    .update(body)
+    .digest("base64");
+  return {
+    body,
+    headers: {
+      "webhook-id": event.event_id,
+      "webhook-timestamp": timestamp,
+      "webhook-signature": `v1,${signature}`,
+    },
+  };
+});
 
 interface Vendor {
   issue: Issue;
@@ -53,6 +74,7 @@ interface Vendor {
   loseIssuance: boolean;
   loseStart: boolean;
   failStart: boolean;
+  loseSend: boolean;
   issuanceCount: number;
   renewalCount: number;
   actors: Array<Actor>;
@@ -126,8 +148,20 @@ function poolEvent(id: string, targetId: string = issueId): Event {
     schema_version: 1,
     event_id: id,
     event_type: "issue.assignment_changed",
+    actor: { id: "human" },
     subject: { resource: "issue", id: targetId, revision: 1 },
     data: { assignee_id: "t3" },
+  };
+}
+
+function updateEvent(id: string, actorId: string, resource: string, revision: number): Event {
+  return {
+    ...poolEvent(id),
+    event_id: NodeCrypto.randomUUID(),
+    actor: { id: actorId },
+    event_type: `${resource}.updated`,
+    subject: { resource, id, revision },
+    data: { issue_id: issueId, body: `Update ${id}`, assignee_id: "agent-1" },
   };
 }
 
@@ -147,6 +181,8 @@ const withHarness = Effect.fn("test.tricket.withHarness")(function* <A, E>(
     readonly vendor: Vendor;
     readonly starts: Array<ThreadLaunchService.ThreadLaunchInput>;
     readonly stops: Array<ThreadId>;
+    readonly sends: Array<UpdateMessage>;
+    readonly finish: (id: ThreadId) => void;
     readonly secrets: Map<string, Uint8Array>;
     readonly repository: TricketRepository.TricketRepository["Service"];
   }) => Effect.Effect<A, E>,
@@ -171,6 +207,7 @@ const withHarness = Effect.fn("test.tricket.withHarness")(function* <A, E>(
     loseIssuance: false,
     loseStart: false,
     failStart: false,
+    loseSend: false,
     issuanceCount: 0,
     renewalCount: 0,
     actors: new Array<Actor>(),
@@ -178,6 +215,8 @@ const withHarness = Effect.fn("test.tricket.withHarness")(function* <A, E>(
   const secrets = new Map<string, Uint8Array>();
   const starts: Array<ThreadLaunchService.ThreadLaunchInput> = [];
   const stops: Array<ThreadId> = [];
+  const sends: Array<UpdateMessage> = [];
+  const busy = new Set<ThreadId>();
   const threadProjections = new Map<ThreadId, OrchestrationV2ThreadProjection>();
   const receipts = new Set<string>();
   const routes = HttpRouter.add(
@@ -199,6 +238,17 @@ const withHarness = Effect.fn("test.tricket.withHarness")(function* <A, E>(
           { id: "issue-completed", resource: "issue", category: "completed" },
         ]);
       if (url.pathname === "/v1/actors" && request.method === "GET") return reply(vendor.actors);
+      if (url.pathname === "/v1/activity")
+        return reply(
+          vendor.history
+            .filter(
+              (entry) =>
+                !url.searchParams.has("before") ||
+                entry.sequence < Number(url.searchParams.get("before")),
+            )
+            .toSorted((a, b) => b.sequence - a.sequence)
+            .slice(0, 200),
+        );
       if (url.pathname === "/v1/actors" && request.method === "POST") {
         expect(admin).toBe(true);
         expect(request.headers["idempotency-key"]).toBeUndefined();
@@ -329,6 +379,7 @@ const withHarness = Effect.fn("test.tricket.withHarness")(function* <A, E>(
               );
             if (!receipts.has(input.commandId)) starts.push(input);
             receipts.add(input.commandId);
+            busy.add(value.thread.id);
             if (vendor.loseStart) {
               vendor.loseStart = false;
               return Effect.fail(
@@ -348,12 +399,31 @@ const withHarness = Effect.fn("test.tricket.withHarness")(function* <A, E>(
       getThreadShell: (id) =>
         Effect.sync(() => {
           const value = threadProjections.get(id);
-          return value === undefined ? null : shell(value.thread);
+          return value === undefined
+            ? null
+            : {
+                ...shell(value.thread),
+                activeRunId: busy.has(id) ? RunId.make(`run:${id}`) : null,
+              };
         }),
       dispatch: (command) =>
-        Effect.sync(() => {
+        Effect.suspend(() => {
           if (command.type === "thread.stop") stops.push(command.threadId);
-          return { sequence: 1, storedEvents: [] };
+          if (command.type === "message.dispatch") {
+            if (!receipts.has(command.commandId)) sends.push(command);
+            receipts.add(command.commandId);
+            busy.add(command.threadId);
+            if (vendor.loseSend) {
+              vendor.loseSend = false;
+              return Effect.fail(
+                new Orchestrator.OrchestratorDispatchError({
+                  commandId: command.commandId,
+                  commandType: command.type,
+                }),
+              );
+            }
+          }
+          return Effect.succeed({ sequence: 1, storedEvents: [] });
         }),
     }),
   );
@@ -365,7 +435,19 @@ const withHarness = Effect.fn("test.tricket.withHarness")(function* <A, E>(
     );
     const context = yield* Effect.context<Effect.Services<typeof build>>();
     const open = build.pipe(Effect.provideContext(context));
-    return yield* body({ open, settings, vendor, starts, stops, secrets, repository });
+    return yield* body({
+      open,
+      settings,
+      vendor,
+      starts,
+      stops,
+      sends,
+      finish: (id) => {
+        busy.delete(id);
+      },
+      secrets,
+      repository,
+    });
   }).pipe(
     Effect.provide(
       Layer.mergeAll(
@@ -389,34 +471,180 @@ const enable = (
   settings: TricketSettings,
 ) => service.update({ settings, adminToken: "fixture-admin", signingSecret });
 
-it.live("limits ticket workers and releases a slot only after an explicit review request", () =>
-  withHarness(({ open, settings, vendor, starts }) =>
-    Effect.gen(function* () {
-      const integration = yield* open;
-      vendor.additionalIssues.push({ ...vendor.issue, id: deliveryId, identifier: "TRI-2" });
-      vendor.history.push({ sequence: 2, event: poolEvent(secondHandoff, deliveryId) });
-      yield* enable(integration, { ...settings, maxWorkers: 1 });
-      yield* integration.reconcile;
-      yield* integration.reconcile;
-      expect(starts).toHaveLength(1);
-      const first = starts[0]?.threadId;
-      if (first === undefined) return yield* Effect.die("Expected managed thread");
-      yield* integration.act(first, { action: "request_review", commandId: deliveryId });
-      yield* integration.reconcile;
-      expect(starts).toHaveLength(2);
-      expect(starts[1]?.title).toContain("TRI-2");
-    }),
-  ).pipe(Effect.scoped, Effect.provide(fixtureLayers)),
+it.live(
+  "counts active turns even in review, and releases idle workers without completing tickets",
+  () =>
+    withHarness(({ open, settings, vendor, starts, finish }) =>
+      Effect.gen(function* () {
+        const integration = yield* open;
+        vendor.additionalIssues.push({ ...vendor.issue, id: deliveryId, identifier: "TRI-2" });
+        vendor.history.push({ sequence: 2, event: poolEvent(secondHandoff, deliveryId) });
+        yield* enable(integration, { ...settings, maxWorkers: 1 });
+        yield* integration.reconcile;
+        yield* integration.reconcile;
+        expect(starts).toHaveLength(1);
+        const first = starts[0]?.threadId;
+        if (first === undefined) return yield* Effect.die("Expected managed thread");
+        yield* integration.act(first, { action: "request_review", commandId: deliveryId });
+        yield* integration.reconcile;
+        expect(starts).toHaveLength(1);
+        finish(first);
+        yield* integration.reconcile;
+        expect(starts).toHaveLength(2);
+        expect(starts[1]?.title).toContain("TRI-2");
+      }),
+    ).pipe(Effect.scoped, Effect.provide(fixtureLayers)),
+);
+
+it.live(
+  "replays missed external comments and edits into the owner, suppressing only its own actor and duplicate semantic events",
+  () =>
+    withHarness(({ open, settings, vendor, starts, sends }) =>
+      Effect.gen(function* () {
+        const integration = yield* open;
+        yield* enable(integration, settings);
+        yield* integration.reconcile;
+        const human = updateEvent(deliveryId, "human", "note", 1);
+        const other = updateEvent(secondHandoff, "another-agent", "note", 1);
+        const edit = {
+          ...updateEvent(issueId, "another-agent", "issue", 3),
+          event_id: "d86e0000-0000-4000-8000-000000000006",
+        };
+        vendor.history.push(
+          { sequence: 2, event: human },
+          { sequence: 3, event: other },
+          { sequence: 4, event: edit },
+          {
+            sequence: 5,
+            event: {
+              ...edit,
+              event_id: "d86e0000-0000-4000-8000-000000000007",
+              event_type: "issue.review_requested",
+            },
+          },
+          { sequence: 6, event: updateEvent(firstHandoff, "agent-1", "note", 1) },
+          {
+            sequence: 7,
+            event: {
+              ...human,
+              event_id: NodeCrypto.randomUUID(),
+              subject: { ...human.subject, revision: 2 },
+              data: { ...human.data, body: "Edited comment" },
+            },
+          },
+          {
+            sequence: 8,
+            event: {
+              ...updateEvent(issueId, "agent-1", "issue", 4),
+              data: { assignee_id: "agent-1", title: "Self edit" },
+            },
+          },
+          ...Array.from({ length: 200 }, (_, index) => ({
+            sequence: index + 9,
+            event: {
+              ...human,
+              event_id: NodeCrypto.randomUUID(),
+              subject: {
+                resource: "issue_relation",
+                id: `${issueId}:blocks:${deliveryId}`,
+                revision: 1,
+              },
+            },
+          })),
+        );
+        const restarted = yield* open;
+        const delivery = yield* signedEvent(human);
+        expect(yield* restarted.receive(delivery)).toBe("accepted");
+        expect(yield* restarted.receive(delivery)).toBe("accepted");
+        expect((yield* restarted.state).pendingDeliveries).toBe(1);
+        vendor.loseSend = true;
+        yield* restarted.reconcile.pipe(Effect.ignore);
+        vendor.history.push({
+          sequence: 209,
+          event: {
+            ...other,
+            event_id: NodeCrypto.randomUUID(),
+            subject: { ...other.subject, revision: 2 },
+            data: { ...other.data, body: "Later update" },
+          },
+        });
+        yield* (yield* open).reconcile;
+        expect(starts).toHaveLength(1);
+        expect(sends).toHaveLength(1);
+        expect(sends[0]?.threadId).toBe(starts[0]?.threadId);
+        expect(sends[0]?.dispatchMode).toEqual({ type: "queue_after_active" });
+        expect(sends[0]?.createdBy).toBe("agent");
+        expect(sends[0]?.notification?.source).toEqual({ kind: "system" });
+        expect(sends[0]?.text).toContain(`Update ${deliveryId}`);
+        expect(sends[0]?.text).toContain(`Update ${secondHandoff}`);
+        expect(sends[0]?.text).toContain("Edited comment");
+        expect(sends[0]?.text).not.toContain(`Update ${firstHandoff}`);
+        expect(sends[0]?.text).not.toContain("Self edit");
+        expect(sends[0]?.text.match(/issue\.updated/g)).toHaveLength(1);
+        expect(sends[0]?.text).not.toContain("issue.review_requested");
+        yield* restarted.reconcile;
+        expect(sends).toHaveLength(2);
+        expect(sends[1]?.text).toContain("Later update");
+        expect(sends[1]?.text).not.toContain("Edited comment");
+      }),
+    ).pipe(Effect.scoped, Effect.provide(fixtureLayers)),
+);
+
+it.live(
+  "holds an idle owner's updates while another worker is active, but queues updates for that active owner",
+  () =>
+    withHarness(({ open, settings, vendor, starts, sends, finish }) =>
+      Effect.gen(function* () {
+        const integration = yield* open;
+        yield* enable(integration, { ...settings, maxWorkers: 1 });
+        yield* integration.reconcile;
+        const first = starts[0]?.threadId;
+        if (first === undefined) return yield* Effect.die("Expected first owner");
+        finish(first);
+        vendor.additionalIssues.push({
+          ...vendor.issue,
+          id: deliveryId,
+          identifier: "TRI-2",
+          assignee_id: "t3",
+        });
+        vendor.history.push({ sequence: 2, event: poolEvent(secondHandoff, deliveryId) });
+        yield* integration.reconcile;
+        expect(starts).toHaveLength(2);
+        vendor.history.push({
+          sequence: 3,
+          event: updateEvent(firstHandoff, "another-agent", "note", 1),
+        });
+        yield* integration.reconcile;
+        expect(sends).toHaveLength(0);
+        const second = starts[1]?.threadId;
+        if (second === undefined) return yield* Effect.die("Expected second owner");
+        const secondUpdate = updateEvent(secondHandoff, "human", "note", 1);
+        vendor.history.push({
+          sequence: 4,
+          event: { ...secondUpdate, data: { ...secondUpdate.data, issue_id: deliveryId } },
+        });
+        yield* integration.reconcile;
+        expect(sends.map((input) => input.threadId)).toEqual([second]);
+        finish(second);
+        yield* (yield* open).reconcile;
+        expect(sends.map((input) => input.threadId)).toEqual([second, first]);
+        expect(vendor.issue.status_id).toBe("issue-started");
+      }),
+    ).pipe(Effect.scoped, Effect.provide(fixtureLayers)),
 );
 
 it.live.each(["archived", "deleted", "moved", "retired", "completed"] as const)(
   "stops %s work without starting a replacement",
   (reason) =>
-    withHarness(({ open, settings, vendor, starts, stops }) =>
+    withHarness(({ open, settings, vendor, starts, stops, sends }) =>
       Effect.gen(function* () {
         const integration = yield* open;
         yield* enable(integration, settings);
         yield* integration.reconcile;
+        vendor.history.push({
+          sequence: 2,
+          event: updateEvent(deliveryId, "another-agent", "note", 1),
+        });
         if (reason === "archived")
           vendor.issue = { ...vendor.issue, archived_at: "2026-01-01T00:00:00Z" };
         if (reason === "deleted")
@@ -432,6 +660,7 @@ it.live.each(["archived", "deleted", "moved", "retired", "completed"] as const)(
         yield* integration.reconcile;
         expect(stops).toEqual([starts[0]?.threadId]);
         expect(starts).toHaveLength(1);
+        expect(sends).toHaveLength(0);
       }),
     ).pipe(Effect.scoped, Effect.provide(fixtureLayers)),
 );
@@ -458,20 +687,7 @@ it.live(
         const integration = yield* open;
         yield* enable(integration, settings);
         const event = { ...poolEvent(deliveryId), event_type: "issue.agent_ready" };
-        const body = new TextEncoder().encode(yield* encodeEvent(event));
-        const timestamp = Math.floor((yield* Clock.currentTimeMillis) / 1000).toString();
-        const signature = NodeCrypto.createHmac("sha256", signingKey)
-          .update(`${deliveryId}.${timestamp}.`)
-          .update(body)
-          .digest("base64");
-        const input = {
-          body,
-          headers: {
-            "webhook-id": deliveryId,
-            "webhook-timestamp": timestamp,
-            "webhook-signature": `v1,${signature}`,
-          },
-        };
+        const input = yield* signedEvent(event);
         expect(yield* integration.receive(input)).toBe("accepted");
         expect(yield* integration.receive(input)).toBe("accepted");
         expect((yield* integration.state).pendingDeliveries).toBe(1);

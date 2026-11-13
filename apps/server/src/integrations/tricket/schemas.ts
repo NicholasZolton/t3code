@@ -34,8 +34,10 @@ export const Event = Schema.Struct({
   schema_version: Schema.Literal(1),
   event_id: Uuid,
   event_type: Schema.String,
-  subject: Schema.Struct({ resource: Schema.String, id: Uuid, revision: Schema.Int }),
-  data: Schema.Struct({ assignee_id: Schema.optional(Schema.NullOr(Schema.String)) }),
+  actor: Schema.Struct({ id: Schema.String }),
+  subject: Schema.Struct({ resource: Schema.String, id: Schema.String, revision: Schema.Int }),
+  data: Schema.JsonObject,
+  changes: Schema.optionalKey(Schema.JsonObject),
 });
 export type Event = typeof Event.Type;
 

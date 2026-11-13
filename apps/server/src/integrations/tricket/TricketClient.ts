@@ -35,6 +35,10 @@ export class TricketClient extends Context.Service<
       connection: Connection,
       issueId: string,
     ) => Effect.Effect<string | null, TricketApiError>;
+    readonly activity: (
+      connection: Connection,
+      after: number | string,
+    ) => Effect.Effect<ReadonlyArray<HistoryEntry>, TricketApiError>;
     readonly actors: (
       connection: Connection,
     ) => Effect.Effect<ReadonlyArray<Actor>, TricketApiError>;
@@ -167,6 +171,26 @@ const make = Effect.gen(function* () {
   });
 
   return TricketClient.of({
+    activity: Effect.fn("TricketClient.activity")(function* (connection, after) {
+      const entries: Array<HistoryEntry> = [];
+      let before: number | undefined;
+      do {
+        const page = yield* request(
+          connection,
+          `/activity${before === undefined ? "" : `?before=${before}`}`,
+          Schema.Array(HistoryEntry),
+        );
+        const boundary = page.findIndex((entry) =>
+          typeof after === "number" ? entry.sequence <= after : entry.event.event_id === after,
+        );
+        entries.push(...(boundary < 0 ? page : page.slice(0, boundary)));
+        if (boundary >= 0 || (page.length < 200 && typeof after === "number"))
+          return entries.reverse();
+        if (page.length < 200) return yield* new TricketApiError({ status: 0 });
+        before = page.at(-1)?.sequence;
+      } while (before !== undefined);
+      return entries.reverse();
+    }),
     issue: Effect.fn("TricketClient.issue")((connection, id) =>
       request(connection, `/issues/${encodeURIComponent(id)}`, Issue),
     ),

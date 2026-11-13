@@ -26,6 +26,7 @@ it.effect(
         actorId: null,
         status: "reserved",
         settings,
+        updates: { sequence: 42, message: "Persisted external ticket changes" },
       };
       const layer = TricketRepository.layer.pipe(
         Layer.provide(NodeSqliteClient.layer({ filename: database })),
