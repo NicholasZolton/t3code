@@ -629,11 +629,36 @@ it.live.each(["", "Inspect the frontend and create tickets."])(
         expect(leads).toHaveLength(1);
         expect(vendor.project.lead_id).toBe("agent-1");
         expect(starts).toHaveLength(brief ? 1 : 0);
+        const lead = leads[0];
+        if (lead === undefined) return yield* Effect.die("Expected native project lead");
+        expect(
+          yield* integration.executeManaged(lead.threadId, {
+            action: "show",
+            resource: "project",
+            id: "P-1",
+          }),
+        ).toMatchObject({ lead_id: "agent-1" });
         if (brief) {
+          expect(starts[0]?.runtimeMode).toBe("full-access");
           expect(starts[0]?.initialMessage?.text).toContain(brief);
           expect(starts[0]?.initialMessage?.text).toContain("otherwise wait");
+          expect(
+            yield* integration.executeManaged(lead.threadId, {
+              action: "create_issue",
+              project: "P-1",
+              title: "Polish navigation",
+              description: "Improve the navigation.",
+              assignee: "t3",
+              commandId: deliveryId,
+            }),
+          ).toMatchObject({ assignee_id: "t3", project_id: projectId });
         }
         vendor.project.lead_id = null;
+        expect(
+          (yield* integration
+            .executeManaged(lead.threadId, { action: "list", resource: "issue" })
+            .pipe(Effect.flip)).reason,
+        ).toBe("unmanaged_thread");
         yield* integration.reconcile;
         expect(stops).toEqual([leads[0]?.threadId]);
       }),
@@ -660,6 +685,11 @@ it.live(
           commandId: firstHandoff,
         });
         expect(vendor.project.lead_id).toBe("agent-1");
+        expect(
+          (yield* integration
+            .executeManaged(threadId, { action: "list", resource: "issue" })
+            .pipe(Effect.flip)).reason,
+        ).toBe("unmanaged_thread");
         const created = yield* integration.execute(threadId, {
           action: "create_issue",
           project: "P-1",
@@ -1061,10 +1091,18 @@ it.live(
         yield* restarted.reconcile;
         expect(starts).toHaveLength(1);
         expect(starts[0]?.projectId).toBe(settings.projectId);
+        expect(starts[0]?.runtimeMode).toBe("full-access");
         const threadId = starts[0]?.threadId;
         if (threadId === undefined) return yield* Effect.die("Expected managed thread");
         const savedCredentials = [...secrets.entries()];
         yield* restarted.execute(threadId, { action: "join" });
+        expect(
+          yield* restarted.executeManaged(threadId, {
+            action: "show",
+            resource: "issue",
+            id: "TRI-1",
+          }),
+        ).toMatchObject({ assignee_id: "agent-1" });
         expect([...secrets.entries()]).toEqual(savedCredentials);
         expect(vendor.issuanceCount).toBe(1);
         expect(vendor.renewalCount).toBe(0);

@@ -5,7 +5,7 @@ description: Keep the fork's Tricket coordination outside upstream orchestration
 status: stable
 generated:
   by: opencode/gpt-6.1-sol
-  at: 2026-11-14T00:50:00Z
+  at: 2026-11-14T01:45:00Z
 sources:
   - id: integration
     resource: ../apps/server/src/integrations/tricket/TricketIntegration.ts
@@ -51,6 +51,12 @@ turn. Keep enrollment separate from assignments: the on-demand `t3 tricket` CLI 
 the configured local server, never exposes API tokens, and adds no MCP schemas to
 ordinary threads. Existing threads retain their workspace and are not stopped merely
 because one attached assignment ends.[^usage]
+
+Native pool-created leads and workers use thread-bound Tricket MCP, not the opt-in
+CLI. MCP execution checks the active managed binding and current vendor ownership;
+an enrolled ordinary thread does not gain that native capability. New connector
+configurations default to full access for unattended execution, while explicit
+supervised settings remain supported. Enrollment does not elevate ordinary threads.[^integration]
 
 New project/attached assignment records stay outside the legacy ticket-handoff table
 so an older runtime cannot misinterpret them and stop unrelated existing work. Member

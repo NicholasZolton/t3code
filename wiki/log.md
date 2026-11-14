@@ -2,6 +2,8 @@
 
 ## 2026-11-14
 
+- **Tricket**: Corrected [native execution](tricket-integration.md) to use thread-bound MCP for leads and workers, with full-access defaults for unattended work; opt-in ordinary threads keep their existing permissions and CLI-only exposure.
+
 - **Tricket**: Recorded [project leads and opt-in CLI enrollment](tricket-integration.md): execute the brief only when instructed, keep existing threads and credentials, and avoid adding MCP context to ordinary agents. New assignment records remain isolated from the legacy ticket worker table for safe runtime rollback.
 
 ## 2026-11-13
