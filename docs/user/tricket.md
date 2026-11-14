@@ -9,7 +9,10 @@ T3 Code runs ordinary threads in that environment's repositories and worktrees.
 On web or desktop, open **Settings → Tricket** and choose the environment that
 should run the work. Configure its Tricket address, administrator token, webhook
 signing secret, and one Tricket-project-to-repository mapping. Choose a model,
-permissions, base ref, and worker count explicitly. The integration starts disabled.
+permissions, base ref, and worker count explicitly. New configurations default to
+full access so native leads and workers can run unattended; select a supervised
+mode if you want interactive approvals. The integration starts disabled. Existing
+thread enrollment never changes that thread's permissions.
 
 Create a Tricket webhook subscription for `issue.*`, `project.*`, and `note.*`, targeting the chosen
 environment's private origin plus `/api/integrations/tricket/webhook`. Copy the
@@ -37,6 +40,11 @@ instructions; otherwise it waits for you to ask for work. A blank brief creates 
 idle thread without running the model. The lead role alone does not trigger planning,
 ticket creation, or delegation. Repeated deliveries and restarts reuse that handoff.
 
+Native leads use the thread-bound `tricket` MCP tool to read projects and tickets,
+create tickets for the T3 pool, update owned records, and comment. They do not need
+the CLI, an explicit thread ID, enrollment, or an API token. This tool is not added
+to ordinary threads or delegated children.
+
 Assigning an enrolled agent as lead uses its existing thread instead. Project edits
 and project notes reach that owner, excluding its own writes. Clearing or changing
 the lead cancels a pool-created lead thread. For an enrolled existing thread, it
@@ -48,8 +56,8 @@ Assign an eligible ticket in the mapped project to Tricket's T3 pool. T3 claims 
 before starting the agent. Duplicate deliveries and server restarts reuse the same
 handoff. Reassigning to the pool requests a fresh identity and thread.
 
-Managed agents can read their assignment, comment, and explicitly request review
-through `tricket_issue`. A finished turn does not complete the ticket. Choosing a
+Native ticket workers use the same `tricket` MCP tool; `tricket_issue` remains
+available for existing ticket conversations. A finished turn does not complete the ticket. Choosing a
 reviewer and completing the ticket remain explicit actions in Tricket; there is
 no automatic reviewer assignment in this version. The worker limit counts active
 turns, including turns finishing a review request; idle owners release their slot

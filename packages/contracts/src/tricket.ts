@@ -31,7 +31,7 @@ export const DEFAULT_TRICKET_SETTINGS: TricketSettings = {
   projectId: null,
   modelSelection: null,
   baseRef: "origin/main",
-  runtimeMode: "approval-required",
+  runtimeMode: "full-access",
   maxWorkers: 2,
 };
 
