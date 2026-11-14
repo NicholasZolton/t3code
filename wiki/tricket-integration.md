@@ -2,14 +2,17 @@
 type: Decision
 title: Native Tricket integration boundary
 description: Keep the fork's Tricket coordination outside upstream orchestration and provider code.
-status: proposed
+status: stable
 generated:
   by: opencode/gpt-6.1-sol
-  at: 2026-11-13T20:30:00Z
+  at: 2026-11-13T23:54:00Z
 sources:
   - id: integration
     resource: ../apps/server/src/integrations/tricket/TricketIntegration.ts
-    title: Native integration implementation on the unmerged Tricket feature change
+    title: Native Tricket coordinator
+  - id: rollout
+    resource: https://github.com/NicholasZolton/t3code/pull/76
+    title: Initial integration merged at e417261f4fbdf5a53a7e1087adcb05c56cf54b00
   - id: usage
     resource: ../docs/user/tricket.md
     title: Tricket setup and assignment behavior
@@ -17,7 +20,8 @@ sources:
 
 # Native Tricket integration boundary
 
-This feature change is not a live deployment. Tricket-specific coordination lives
+The initial integration merged in PR #76 and was deployed to the existing OVH
+environment on November 13, 2026, using runtime 0.1.9.[^rollout] Tricket-specific coordination lives
 under `apps/server/src/integrations/tricket`; shared edits register the service,
 transports, contracts, capability, and settings page. Keep provider adapters and the
 core orchestrator free of Tricket branches when merging upstream.[^integration]
@@ -33,6 +37,15 @@ secret store: durable handoff identities and stable launch commands prevent dupl
 work after a restart. Do not replace these with prompt-level coordination or
 administrator credentials passed to agents.[^integration]
 
-[^integration]: [Native coordinator](../apps/server/src/integrations/tricket/TricketIntegration.ts) and [repository](../apps/server/src/integrations/tricket/TricketRepository.ts), unmerged feature implementation.
+External ticket edits and note changes continue the existing owner. Suppress only
+that owner's actor ID, not all agent actors. Webhooks wake reconciliation; committed
+activity supplies missed changes. Persist each pending message before dispatch and
+reuse its command ID after an ambiguous response. Keep automatic messages marked as
+notifications so they do not clear a user's snooze. Worker limits count active turns,
+not open tickets.[^integration]
+
+[^integration]: [Native coordinator](../apps/server/src/integrations/tricket/TricketIntegration.ts) and [repository](../apps/server/src/integrations/tricket/TricketRepository.ts).
+
+[^rollout]: [Merged initial integration](https://github.com/NicholasZolton/t3code/pull/76); deployment observed through the existing environment descriptor and TRI-2's claim → comment → review execution at 23:30 UTC on November 13, 2026. This initial rollout did not include automatic follow-ups.
 
 [^usage]: [Tricket assignments](../docs/user/tricket.md).

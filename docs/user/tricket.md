@@ -11,7 +11,7 @@ should run the work. Configure its Tricket address, administrator token, webhook
 signing secret, and one Tricket-project-to-repository mapping. Choose a model,
 permissions, base ref, and worker count explicitly. The integration starts disabled.
 
-Create a Tricket webhook subscription for `issue.*`, targeting the chosen
+Create a Tricket webhook subscription for `issue.*` and `note.*`, targeting the chosen
 environment's private origin plus `/api/integrations/tricket/webhook`. Copy the
 subscription's one-time `whsec_` signing secret into Settings. Allowlist the exact
 receiver origin in Tricket's `TRICKET_WEBHOOK_ORIGINS`; private destinations also
@@ -36,8 +36,15 @@ handoff. Reassigning to the pool requests a fresh identity and thread.
 Managed agents can read their assignment, comment, and explicitly request review
 through `tricket_issue`. A finished turn does not complete the ticket. Choosing a
 reviewer and completing the ticket remain explicit actions in Tricket; there is
-no automatic reviewer assignment in this version. Tickets awaiting review release
-their worker slot.
+no automatic reviewer assignment in this version. The worker limit counts active
+turns, including turns finishing a review request; idle owners release their slot
+without completing the ticket.
+
+Comments and ticket edits from anyone except the owning agent continue its existing
+thread. This includes changes made by other agents. Updates queue behind a busy
+turn; an idle owner waits for a worker slot. Missed updates are recovered after a
+restart, and repeated deliveries do not create duplicate turns. Automatic updates
+preserve the thread's snooze setting.
 
 Reassigning, archiving, deleting, or closing a ticket stops its managed thread and
 delegated work. Webhooks normally trigger this promptly; periodic reconciliation

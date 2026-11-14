@@ -24,6 +24,9 @@ export const Handoff = Schema.Struct({
   actorId: Schema.NullOr(Schema.String),
   status: TricketHandoffStatus,
   settings: TricketSettings,
+  updates: Schema.optionalKey(
+    Schema.Struct({ sequence: Schema.Int, message: Schema.NullOr(Schema.String) }),
+  ),
 });
 export type Handoff = typeof Handoff.Type;
 
