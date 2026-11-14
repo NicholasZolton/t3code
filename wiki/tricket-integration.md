@@ -5,7 +5,7 @@ description: Keep the fork's Tricket coordination outside upstream orchestration
 status: stable
 generated:
   by: opencode/gpt-6.1-sol
-  at: 2026-11-13T23:54:00Z
+  at: 2026-11-14T00:50:00Z
 sources:
   - id: integration
     resource: ../apps/server/src/integrations/tricket/TricketIntegration.ts
@@ -43,6 +43,19 @@ activity supplies missed changes. Persist each pending message before dispatch a
 reuse its command ID after an ambiguous response. Keep automatic messages marked as
 notifications so they do not clear a user's snooze. Worker limits count active turns,
 not open tickets.[^integration]
+
+Project lead assignment follows the same ownership model: the pool creates a lead
+thread; an enrolled agent retains its existing thread. Execute explicit instructions
+in the project brief, otherwise wait for the user. Empty briefs do not start a model
+turn. Keep enrollment separate from assignments: the on-demand `t3 tricket` CLI uses
+the configured local server, never exposes API tokens, and adds no MCP schemas to
+ordinary threads. Existing threads retain their workspace and are not stopped merely
+because one attached assignment ends.[^usage]
+
+New project/attached assignment records stay outside the legacy ticket-handoff table
+so an older runtime cannot misinterpret them and stop unrelated existing work. Member
+identities and these records still belong to the connector's separate database; old
+managed ticket credentials are reused rather than rotated during enrollment.[^integration]
 
 [^integration]: [Native coordinator](../apps/server/src/integrations/tricket/TricketIntegration.ts) and [repository](../apps/server/src/integrations/tricket/TricketRepository.ts).
 

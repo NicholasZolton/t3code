@@ -157,14 +157,20 @@ describe("command permissions", () => {
     { method: WS_METHODS.serverRunStorageCleanup, scope: AuthSettingsWriteScope },
     ...Object.values(TRICKET_RPC_METHODS).map((method) => ({
       method,
-      scope: AuthSettingsWriteScope,
+      scope:
+        method === TRICKET_RPC_METHODS.execute
+          ? AuthOrchestrationOperateScope
+          : AuthSettingsWriteScope,
     })),
     { method: WS_METHODS.serverReclaimDatabaseSpace, scope: AuthEnvironmentMaintainScope },
   ])("requires the destination $scope grant for $method", ({ method, scope }) =>
     Effect.gen(function* () {
       const registry = yield* setup;
       const command = createCommandPermissions(runtime, method);
-      registry.set(sessions(env), AsyncResult.success(grant(true)));
+      registry.set(
+        sessions(env),
+        AsyncResult.success(grant(scope !== AuthOrchestrationOperateScope)),
+      );
       expect(registry.get(command.permissionAtom(env))).toBe(false);
       expect((yield* command.authorize(registry, env).pipe(Effect.flip))._tag).toBe(
         "EnvironmentAuthorizationError",

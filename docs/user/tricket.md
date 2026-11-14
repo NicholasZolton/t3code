@@ -11,7 +11,7 @@ should run the work. Configure its Tricket address, administrator token, webhook
 signing secret, and one Tricket-project-to-repository mapping. Choose a model,
 permissions, base ref, and worker count explicitly. The integration starts disabled.
 
-Create a Tricket webhook subscription for `issue.*` and `note.*`, targeting the chosen
+Create a Tricket webhook subscription for `issue.*`, `project.*`, and `note.*`, targeting the chosen
 environment's private origin plus `/api/integrations/tricket/webhook`. Copy the
 subscription's one-time `whsec_` signing secret into Settings. Allowlist the exact
 receiver origin in Tricket's `TRICKET_WEBHOOK_ORIGINS`; private destinations also
@@ -28,6 +28,21 @@ selected environment. Each managed thread gets a separate, renewable Tricket age
 credential; the administrator token is never included in its prompt.
 
 ## Work and review
+
+### Project leads
+
+Assign the configured project's lead to the T3 pool to create a lead thread in the
+same environment and repository. The lead follows the project brief when it gives
+instructions; otherwise it waits for you to ask for work. A blank brief creates an
+idle thread without running the model. The lead role alone does not trigger planning,
+ticket creation, or delegation. Repeated deliveries and restarts reuse that handoff.
+
+Assigning an enrolled agent as lead uses its existing thread instead. Project edits
+and project notes reach that owner, excluding its own writes. Clearing or changing
+the lead cancels a pool-created lead thread. For an enrolled existing thread, it
+removes the assignment binding without stopping unrelated work in that thread.
+
+### Tickets
 
 Assign an eligible ticket in the mapped project to Tricket's T3 pool. T3 claims it
 before starting the agent. Duplicate deliveries and server restarts reuse the same
@@ -57,3 +72,41 @@ clears credentials unless you supply replacements.
 
 Threads are visible and controllable from every client, including mobile. Configure
 the integration from web or desktop; native mobile has no Tricket settings form yet.
+
+## Use Tricket from an existing thread
+
+Tell an agent running on the configured environment to use `t3 tricket --help`.
+Ordinary threads do not receive additional MCP tools or a copy of the administrator
+credential. Commands use T3's local connection, provision a separate thread-bound
+Tricket identity, and return public data only. Enrollment does not claim work,
+start a replacement thread, change the workspace, or increase permissions.
+
+The CLI uses `T3CODE_THREAD_ID` when available. Otherwise pass the existing T3 thread
+ID with `--thread`; it never guesses from a shared working directory. The examples
+use a placeholder thread ID:
+
+```sh
+t3 tricket join --thread <thread-id>
+t3 tricket show project P-1 --thread <thread-id>
+t3 tricket lead P-1 --thread <thread-id>
+t3 tricket create-issue --project P-1 --title "Improve navigation" --assignee t3 --thread <thread-id>
+t3 tricket claim TRI-3 --thread <thread-id>
+t3 tricket comment issue TRI-3 --body "Ready for review" --thread <thread-id>
+t3 tricket review TRI-3 --thread <thread-id>
+```
+
+Use `list issue` or `list project` to discover records. Display identifiers and UUIDs
+are accepted. `update` requires the revision from `show` and a JSON `--data` object.
+Description, patch, and comment inputs accept `-` to read stdin. For retryable writes,
+provide a unique `--command-id` and reuse it only for the exact same operation.
+
+Taking ownership is explicit and refuses another owner's assignment, unavailable
+work, or a resource outside the configured project. Updates require ownership;
+comments may target someone else's assignment. Agents still cannot bypass Tricket's
+independent-review policy. Retired identities remain revoked rather than being
+silently replaced.
+
+This version supports threads hosted by the configured environment, even when you
+open them from another client. It does not route enrollment or notifications to a
+thread running on a different environment. Project lead threads are visible through
+their Tricket actor's thread link and in T3's thread list.

@@ -4,6 +4,7 @@ import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
 import * as NodePlatformCrypto from "@effect/platform-node/NodeCrypto";
 import { expect, it } from "@effect/vitest";
 import {
+  CommandId,
   DEFAULT_TRICKET_SETTINGS,
   EnvironmentId,
   ProjectId,
@@ -66,11 +67,24 @@ const signedEvent = Effect.fn("test.tricket.signedEvent")(function* (event: Even
 });
 
 interface Vendor {
+  project: {
+    id: string;
+    identifier: string;
+    name: string;
+    summary: string;
+    description: string;
+    revision: number;
+    lead_id: string | null;
+    status_id: string;
+    archived_at: string | null;
+    deleted_at: string | null;
+  };
   issue: Issue;
   additionalIssues: Array<Issue>;
   history: Array<HistoryEntry>;
   blocked: boolean;
   claimStatus: number;
+  allowAdminClaim: boolean;
   loseIssuance: boolean;
   loseStart: boolean;
   failStart: boolean;
@@ -172,7 +186,23 @@ const RequestBody = Schema.Struct({
   status_id: Schema.optional(Schema.String),
   body: Schema.optional(Schema.String),
   issue_id: Schema.optional(Schema.String),
+  project_id: Schema.optional(Schema.String),
+  lead_id: Schema.optional(Schema.String),
+  title: Schema.optional(Schema.String),
+  description: Schema.optional(Schema.String),
 });
+const decodeJsonBody = Schema.decodeUnknownEffect(Schema.JsonObject);
+const isJsonObject = Schema.is(Schema.JsonObject);
+function matchesFilter(record: Schema.JsonObject, filter: Schema.Json | undefined): boolean {
+  if (!isJsonObject(filter)) return true;
+  if (Array.isArray(filter.all)) return filter.all.every((child) => matchesFilter(record, child));
+  if (typeof filter.field !== "string") return false;
+  const value = record[filter.field];
+  if (filter.op === "eq") return JSON.stringify(value) === JSON.stringify(filter.value);
+  if (filter.op === "in") return Array.isArray(filter.value) && filter.value.includes(value);
+  if (filter.op === "not_in") return Array.isArray(filter.value) && !filter.value.includes(value);
+  return false;
+}
 
 const withHarness = Effect.fn("test.tricket.withHarness")(function* <A, E>(
   body: (fixture: {
@@ -183,11 +213,24 @@ const withHarness = Effect.fn("test.tricket.withHarness")(function* <A, E>(
     readonly stops: Array<ThreadId>;
     readonly sends: Array<UpdateMessage>;
     readonly finish: (id: ThreadId) => void;
+    readonly registerThread: (id: ThreadId) => void;
     readonly secrets: Map<string, Uint8Array>;
     readonly repository: TricketRepository.TricketRepository["Service"];
   }) => Effect.Effect<A, E>,
 ) {
   const vendor: Vendor = {
+    project: {
+      id: projectId,
+      identifier: "P-1",
+      name: "Fixture project",
+      summary: "",
+      description: "",
+      revision: 1,
+      lead_id: null,
+      status_id: "project-started",
+      archived_at: null,
+      deleted_at: null,
+    },
     additionalIssues: [],
     issue: {
       id: issueId,
@@ -204,6 +247,7 @@ const withHarness = Effect.fn("test.tricket.withHarness")(function* <A, E>(
     history: [{ sequence: 1, event: poolEvent(firstHandoff) }],
     blocked: false,
     claimStatus: 200,
+    allowAdminClaim: false,
     loseIssuance: false,
     loseStart: false,
     failStart: false,
@@ -236,6 +280,8 @@ const withHarness = Effect.fn("test.tricket.withHarness")(function* <A, E>(
           { id: "issue-started", resource: "issue", category: "started" },
           { id: "issue-review", resource: "issue", category: "review" },
           { id: "issue-completed", resource: "issue", category: "completed" },
+          { id: "project-started", resource: "project", category: "started" },
+          { id: "project-completed", resource: "project", category: "completed" },
         ]);
       if (url.pathname === "/v1/actors" && request.method === "GET") return reply(vendor.actors);
       if (url.pathname === "/v1/activity")
@@ -276,13 +322,69 @@ const withHarness = Effect.fn("test.tricket.withHarness")(function* <A, E>(
         vendor.renewalCount += 1;
         return reply({ actor, token: `token-${actor?.id}`, expires_at: null }, { status: 201 });
       }
-      if (url.pathname === "/v1/issues/query")
+      if (url.pathname === "/v1/issues/query" || url.pathname === "/v1/projects/query") {
+        const input = yield* request.json.pipe(Effect.flatMap(decodeJsonBody));
+        const records =
+          url.pathname === "/v1/issues/query"
+            ? [vendor.issue, ...vendor.additionalIssues]
+            : [vendor.project];
         return reply({
-          items: [vendor.issue, ...vendor.additionalIssues].filter(
-            (issue) => issue.assignee_id === "t3" && !vendor.blocked,
+          items: records.filter((record) =>
+            matchesFilter(
+              {
+                ...record,
+                blocked: vendor.blocked,
+                status_category: record.status_id.split("-").at(-1) ?? "started",
+              },
+              input.filter,
+            ),
           ),
           next_cursor: null,
         });
+      }
+      if (url.pathname === `/v1/projects/${projectId}`) {
+        if (request.method === "GET") return reply(vendor.project);
+        const input = yield* request.json.pipe(
+          Effect.flatMap(Schema.decodeUnknownEffect(RequestBody)),
+        );
+        expect(request.headers["if-match"]).toBe(`"${vendor.project.revision}"`);
+        const old = vendor.project;
+        vendor.project = {
+          ...old,
+          lead_id: input.lead_id ?? old.lead_id,
+          revision: old.revision + 1,
+        };
+        vendor.history.push({
+          sequence: Math.max(...vendor.history.map((entry) => entry.sequence)) + 1,
+          event: {
+            schema_version: 1,
+            event_id: NodeCrypto.randomUUID(),
+            event_type: "project.updated",
+            actor: { id: authenticatedActor?.id ?? "human" },
+            subject: { resource: "project", id: projectId, revision: vendor.project.revision },
+            data: vendor.project,
+            changes: { lead_id: { old: old.lead_id, new: vendor.project.lead_id } },
+          },
+        });
+        return reply(vendor.project);
+      }
+      if (url.pathname === "/v1/issues" && request.method === "POST") {
+        expect(admin).toBe(false);
+        const input = yield* request.json.pipe(
+          Effect.flatMap(Schema.decodeUnknownEffect(RequestBody)),
+        );
+        const issue: Issue = {
+          ...vendor.issue,
+          id: deliveryId,
+          identifier: "TRI-2",
+          title: input.title ?? "",
+          description: input.description ?? "",
+          assignee_id: input.assignee_id ?? null,
+          project_id: input.project_id ?? null,
+        };
+        vendor.additionalIssues.push(issue);
+        return reply(issue, { status: 201 });
+      }
       if (url.pathname.endsWith("/history"))
         return reply(
           vendor.history
@@ -298,13 +400,14 @@ const withHarness = Effect.fn("test.tricket.withHarness")(function* <A, E>(
       );
       if (target !== undefined) {
         if (request.method === "GET") return reply(target);
-        expect(admin).toBe(false);
+        if (!vendor.allowAdminClaim) expect(admin).toBe(false);
         expect(request.headers["if-match"]).toBe(`"${target.revision}"`);
         if (vendor.claimStatus !== 200) return reply({}, { status: vendor.claimStatus });
         const input = yield* request.json.pipe(
           Effect.flatMap(Schema.decodeUnknownEffect(RequestBody)),
         );
-        if (input.assignee_id !== undefined) expect(input.assignee_id).toBe(authenticatedActor?.id);
+        if (input.assignee_id !== undefined && !admin)
+          expect(input.assignee_id).toBe(authenticatedActor?.id);
         const updated: Issue = {
           ...target,
           assignee_id: input.assignee_id ?? target.assignee_id,
@@ -316,6 +419,16 @@ const withHarness = Effect.fn("test.tricket.withHarness")(function* <A, E>(
           vendor.additionalIssues = vendor.additionalIssues.map((issue) =>
             issue.id === target.id ? updated : issue,
           );
+        if (admin)
+          vendor.history.push({
+            sequence: Math.max(...vendor.history.map((entry) => entry.sequence)) + 1,
+            event: {
+              ...poolEvent(NodeCrypto.randomUUID(), updated.id),
+              actor: { id: "human" },
+              subject: { resource: "issue", id: updated.id, revision: updated.revision },
+              data: updated,
+            },
+          });
         return reply(updated);
       }
       if (url.pathname === "/v1/notes") {
@@ -367,7 +480,9 @@ const withHarness = Effect.fn("test.tricket.withHarness")(function* <A, E>(
           const value = projection(input);
           threadProjections.set(value.thread.id, value);
           if (input.initialMessage !== undefined) {
-            expect(vendor.issue.assignee_id).toMatch(/^agent-/);
+            expect(
+              input.title.startsWith("P-1") ? vendor.project.lead_id : vendor.issue.assignee_id,
+            ).toMatch(/^agent-/);
             if (vendor.failStart)
               return Effect.fail(
                 new ThreadLaunchService.ThreadLaunchError({
@@ -445,6 +560,22 @@ const withHarness = Effect.fn("test.tricket.withHarness")(function* <A, E>(
       finish: (id) => {
         busy.delete(id);
       },
+      registerThread: (id) => {
+        const value = projection({
+          threadId: id,
+          projectId: ProjectId.make("other-local-repository"),
+          modelSelection: { instanceId: ProviderInstanceId.make("fixture"), model: "free" },
+          runtimeMode: "approval-required",
+          interactionMode: "default",
+          title: "Existing work",
+          createdBy: "user",
+          creationSource: "web",
+          commandId: CommandId.make("fixture-existing"),
+          workspaceStrategy: { type: "root" },
+        });
+        threadProjections.set(id, value);
+        busy.add(id);
+      },
       secrets,
       repository,
     });
@@ -470,6 +601,237 @@ const enable = (
   service: TricketIntegration.TricketIntegration["Service"],
   settings: TricketSettings,
 ) => service.update({ settings, adminToken: "fixture-admin", signingSecret });
+
+it.live.each(["", "Inspect the frontend and create tickets."])(
+  "takes a pool project lead and executes only its brief (%j)",
+  (brief) =>
+    withHarness(({ open, settings, vendor, starts, stops, repository }) =>
+      Effect.gen(function* () {
+        vendor.issue = { ...vendor.issue, assignee_id: "human" };
+        vendor.project = { ...vendor.project, lead_id: "t3", description: brief };
+        vendor.history.push({
+          sequence: 2,
+          event: {
+            ...poolEvent(secondHandoff, projectId),
+            event_type: "project.updated",
+            subject: { resource: "project", id: projectId, revision: 1 },
+            data: vendor.project,
+            changes: { lead_id: { old: null, new: "t3" } },
+          },
+        });
+        const integration = yield* open;
+        yield* enable(integration, settings);
+        yield* integration.reconcile;
+        yield* (yield* open).reconcile;
+        const leads = (yield* repository.handoffs).filter(
+          (handoff) => handoff.identifier === "P-1",
+        );
+        expect(leads).toHaveLength(1);
+        expect(vendor.project.lead_id).toBe("agent-1");
+        expect(starts).toHaveLength(brief ? 1 : 0);
+        if (brief) {
+          expect(starts[0]?.initialMessage?.text).toContain(brief);
+          expect(starts[0]?.initialMessage?.text).toContain("otherwise wait");
+        }
+        vendor.project.lead_id = null;
+        yield* integration.reconcile;
+        expect(stops).toEqual([leads[0]?.threadId]);
+      }),
+    ).pipe(Effect.scoped, Effect.provide(fixtureLayers)),
+);
+
+it.live(
+  "enrolls an existing thread without launching or exposing a token, then lets it lead and create pool tickets",
+  () =>
+    withHarness(({ open, settings, vendor, starts, stops, sends, registerThread }) =>
+      Effect.gen(function* () {
+        vendor.issue = { ...vendor.issue, assignee_id: "human" };
+        const threadId = ThreadId.make("existing-thread");
+        registerThread(threadId);
+        const integration = yield* open;
+        yield* enable(integration, { ...settings, maxWorkers: 1 });
+        const joined = yield* integration.execute(threadId, { action: "join" });
+        expect(JSON.stringify(joined)).not.toContain("token-");
+        yield* (yield* open).execute(threadId, { action: "join" });
+        expect(vendor.issuanceCount).toBe(1);
+        yield* integration.execute(threadId, {
+          action: "lead",
+          id: "P-1",
+          commandId: firstHandoff,
+        });
+        expect(vendor.project.lead_id).toBe("agent-1");
+        const created = yield* integration.execute(threadId, {
+          action: "create_issue",
+          project: "P-1",
+          title: "Polish navigation",
+          description: "Improve the navigation.",
+          assignee: "t3",
+          commandId: secondHandoff,
+        });
+        expect(created).toMatchObject({
+          title: "Polish navigation",
+          assignee_id: "t3",
+          project_id: projectId,
+        });
+        vendor.history.push({
+          sequence: 4,
+          event: {
+            ...updateEvent(deliveryId, "human", "note", 1),
+            data: { project_id: projectId, body: "Update the project plan" },
+          },
+        });
+        yield* integration.reconcile;
+        expect(sends.map((send) => send.threadId)).toEqual([threadId]);
+        expect(starts).toHaveLength(0);
+        vendor.project.lead_id = null;
+        yield* integration.reconcile;
+        expect(stops).toHaveLength(0);
+      }),
+    ).pipe(Effect.scoped, Effect.provide(fixtureLayers)),
+);
+
+it.live(
+  "claims available work in an enrolled thread without stealing another actor's assignment",
+  () =>
+    withHarness(({ open, settings, vendor, starts, registerThread }) =>
+      Effect.gen(function* () {
+        const threadId = ThreadId.make("existing-worker");
+        registerThread(threadId);
+        const integration = yield* open;
+        yield* enable(integration, settings);
+        yield* integration.execute(threadId, { action: "join" });
+        vendor.issue = { ...vendor.issue, assignee_id: "human" };
+        expect(
+          (yield* integration
+            .execute(threadId, { action: "claim", id: issueId, commandId: firstHandoff })
+            .pipe(Effect.result))._tag,
+        ).toBe("Failure");
+        expect(vendor.issue.assignee_id).toBe("human");
+        vendor.issue = { ...vendor.issue, assignee_id: "t3" };
+        vendor.allowAdminClaim = true;
+        yield* integration.execute(threadId, {
+          action: "claim",
+          id: issueId,
+          commandId: secondHandoff,
+        });
+        expect(vendor.issue.assignee_id).toBe("agent-1");
+        expect(
+          yield* integration.execute(threadId, { action: "show", resource: "issue", id: "TRI-1" }),
+        ).toMatchObject({ assignee_id: "agent-1" });
+        yield* integration.reconcile;
+        const competitor = ThreadId.make("other-existing-worker");
+        registerThread(competitor);
+        expect(
+          (yield* integration
+            .execute(competitor, { action: "claim", id: issueId, commandId: deliveryId })
+            .pipe(Effect.result))._tag,
+        ).toBe("Failure");
+        expect(vendor.issue.assignee_id).toBe("agent-1");
+        expect(starts).toHaveLength(0);
+        expect(
+          (yield* integration
+            .execute(ThreadId.make("missing-thread"), { action: "join" })
+            .pipe(Effect.result))._tag,
+        ).toBe("Failure");
+        expect(vendor.issuanceCount).toBe(2);
+      }),
+    ).pipe(Effect.scoped, Effect.provide(fixtureLayers)),
+);
+
+it.live.each(["issue", "project"] as const)(
+  "adopts a direct %s assignment in the enrolled thread and routes external edits without stopping it on release",
+  (resource) =>
+    withHarness(({ open, settings, vendor, starts, stops, sends, registerThread, repository }) =>
+      Effect.gen(function* () {
+        vendor.issue = { ...vendor.issue, assignee_id: "human" };
+        const threadId = ThreadId.make("direct-assignment");
+        registerThread(threadId);
+        const integration = yield* open;
+        yield* enable(integration, settings);
+        yield* integration.execute(threadId, { action: "join" });
+        expect(yield* repository.handoffs).toHaveLength(0);
+        expect(sends).toHaveLength(0);
+        const id = resource === "issue" ? issueId : projectId;
+        if (resource === "issue") vendor.issue = { ...vendor.issue, assignee_id: "agent-1" };
+        else
+          vendor.project = {
+            ...vendor.project,
+            lead_id: "agent-1",
+            description: "Inspect the frontend.",
+          };
+        const assignment: Event = {
+          ...poolEvent(secondHandoff, id),
+          event_type: resource === "issue" ? "issue.assignment_changed" : "project.updated",
+          subject: { resource, id, revision: 2 },
+          data: resource === "issue" ? vendor.issue : vendor.project,
+          changes: {
+            [resource === "issue" ? "assignee_id" : "lead_id"]: { old: null, new: "agent-1" },
+          },
+        };
+        vendor.history.push({ sequence: 2, event: assignment });
+        expect(yield* integration.receive(yield* signedEvent(assignment))).toBe("accepted");
+        expect((yield* integration.state).pendingDeliveries).toBe(1);
+        yield* integration.reconcile;
+        yield* (yield* open).reconcile;
+        expect(starts).toHaveLength(0);
+        expect(sends.map((send) => send.threadId)).toEqual([threadId]);
+        expect(sends[0]?.text).toContain(
+          resource === "issue" ? vendor.issue.description : vendor.project.description,
+        );
+        expect((yield* integration.state).pendingDeliveries).toBe(0);
+        vendor.history.push({
+          sequence: 3,
+          event: {
+            ...assignment,
+            event_id: NodeCrypto.randomUUID(),
+            actor: { id: "agent-1" },
+            subject: { resource, id, revision: 3 },
+            changes: {},
+          },
+        });
+        yield* integration.reconcile;
+        expect(sends).toHaveLength(1);
+        const note: Event = {
+          ...updateEvent(deliveryId, "another-agent", "note", 1),
+          data: { [`${resource}_id`]: id, body: "Please adjust the plan." },
+        };
+        vendor.history.push(
+          { sequence: 4, event: note },
+          {
+            sequence: 5,
+            event: {
+              ...assignment,
+              event_id: NodeCrypto.randomUUID(),
+              actor: { id: "human" },
+              subject: { resource, id, revision: 4 },
+              changes: {},
+              data: { ...assignment.data, description: "Revised scope" },
+            },
+          },
+        );
+        yield* integration.reconcile;
+        expect(sends).toHaveLength(2);
+        expect(sends[1]?.text).toContain("Please adjust the plan.");
+        expect(sends[1]?.text).toContain("Revised scope");
+        if (resource === "issue") vendor.issue = { ...vendor.issue, assignee_id: "human" };
+        else vendor.project.lead_id = null;
+        yield* integration.reconcile;
+        expect(stops).toHaveLength(0);
+        expect((yield* repository.handoffs).every((handoff) => handoff.status === "stopped")).toBe(
+          true,
+        );
+        vendor.actors = vendor.actors.map((actor) => ({
+          ...actor,
+          retired_at: "2026-01-01T00:00:00Z",
+        }));
+        expect(
+          (yield* integration.execute(threadId, { action: "join" }).pipe(Effect.flip)).reason,
+        ).toBe("identity_retired");
+        expect(vendor.issuanceCount).toBe(1);
+        expect(vendor.renewalCount).toBe(0);
+      }),
+    ).pipe(Effect.scoped, Effect.provide(fixtureLayers)),
+);
 
 it.live(
   "counts active turns even in review, and releases idle workers without completing tickets",
@@ -682,7 +1044,7 @@ it.live("never carries administrator credentials to a changed Tricket origin", (
 it.live(
   "claims with a separate agent before starting, deduplicates deliveries and restarts, and keeps credentials out of public state and prompts",
   () =>
-    withHarness(({ open, settings, starts, vendor }) =>
+    withHarness(({ open, settings, starts, vendor, secrets }) =>
       Effect.gen(function* () {
         const integration = yield* open;
         yield* enable(integration, settings);
@@ -699,7 +1061,13 @@ it.live(
         yield* restarted.reconcile;
         expect(starts).toHaveLength(1);
         expect(starts[0]?.projectId).toBe(settings.projectId);
+        const threadId = starts[0]?.threadId;
+        if (threadId === undefined) return yield* Effect.die("Expected managed thread");
+        const savedCredentials = [...secrets.entries()];
+        yield* restarted.execute(threadId, { action: "join" });
+        expect([...secrets.entries()]).toEqual(savedCredentials);
         expect(vendor.issuanceCount).toBe(1);
+        expect(vendor.renewalCount).toBe(0);
         const visible = [yield* restarted.state, ...starts];
         expect(JSON.stringify(visible)).not.toContain("fixture-admin");
         expect(JSON.stringify(visible)).not.toContain("token-agent");

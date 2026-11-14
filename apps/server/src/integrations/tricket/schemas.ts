@@ -16,6 +16,21 @@ export const Issue = Schema.Struct({
 });
 export type Issue = typeof Issue.Type;
 
+export const Project = Schema.Struct({
+  id: Uuid,
+  identifier: Schema.String,
+  name: Schema.String,
+  summary: Schema.String,
+  description: Schema.String,
+  revision: Schema.Int,
+  lead_id: Schema.NullOr(Schema.String),
+  status_id: Schema.String,
+  archived_at: Schema.NullOr(Schema.String),
+  deleted_at: Schema.NullOr(Schema.String),
+});
+export type Project = typeof Project.Type;
+export type Resource = "issue" | "project";
+
 export const Actor = Schema.Struct({
   id: Schema.String,
   thread_ref: Schema.NullOr(Schema.String),

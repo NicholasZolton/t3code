@@ -20,6 +20,7 @@ const RPC_AGGREGATES = {
   [TRICKET_RPC_METHODS.get]: "tricket",
   [TRICKET_RPC_METHODS.update]: "tricket",
   [TRICKET_RPC_METHODS.reconcile]: "tricket",
+  [TRICKET_RPC_METHODS.execute]: "tricket",
   [ORCHESTRATION_V2_WS_METHODS.getWorkflowScript]: "orchestration",
   [ORCHESTRATION_V2_WS_METHODS.getNativeChildWork]: "orchestration",
   [ORCHESTRATION_V2_WS_METHODS.stopWorkflow]: "orchestration",

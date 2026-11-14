@@ -6,6 +6,7 @@ import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
+import * as SqlClient from "effect/sql/SqlClient";
 
 import * as TricketRepository from "./TricketRepository.ts";
 
@@ -29,18 +30,42 @@ it.effect(
         updates: { sequence: 42, message: "Persisted external ticket changes" },
       };
       const layer = TricketRepository.layer.pipe(
-        Layer.provide(NodeSqliteClient.layer({ filename: database })),
+        Layer.provideMerge(NodeSqliteClient.layer({ filename: database })),
       );
+      const member: TricketRepository.Member = {
+        id: "member",
+        threadId: handoff.threadId,
+        apiUrl: settings.apiUrl,
+        actorId: "agent",
+      };
+      const lead: TricketRepository.Handoff = {
+        id: "lead",
+        resource: "project",
+        projectId: "project",
+        identifier: "P-1",
+        threadId: handoff.threadId,
+        actorId: member.actorId,
+        status: "running",
+        managed: false,
+        settings,
+      };
       yield* Effect.gen(function* () {
         const repository = yield* TricketRepository.TricketRepository;
         yield* repository.saveSettings(settings);
         yield* repository.accept(settings.apiUrl, "event", handoff.issueId);
         yield* repository.saveHandoff(handoff);
+        yield* repository.saveMember(member);
+        yield* repository.saveHandoff(lead);
       }).pipe(Effect.provide(Layer.fresh(layer)));
       yield* Effect.gen(function* () {
         const repository = yield* TricketRepository.TricketRepository;
         expect(yield* repository.settings).toEqual(settings);
-        expect(yield* repository.handoffs).toEqual([handoff]);
+        expect(yield* repository.handoffs).toEqual([lead, handoff]);
+        expect(yield* repository.members).toEqual([member]);
+        const sql = yield* SqlClient.SqlClient;
+        expect((yield* sql`SELECT id FROM tricket_handoffs`).map((row) => row.id)).toEqual([
+          handoff.id,
+        ]);
         expect(yield* repository.pending(settings.apiUrl)).toEqual([
           { eventId: "event", issueId: "issue" },
         ]);

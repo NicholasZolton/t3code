@@ -14,5 +14,9 @@ export function handlers(integration: TricketIntegration["Service"]) {
       integration.update(input).pipe(Effect.mapError(publicError)),
     [TRICKET_RPC_METHODS.reconcile]: () =>
       integration.reconcile.pipe(Effect.andThen(integration.state), Effect.mapError(publicError)),
+    [TRICKET_RPC_METHODS.execute]: (input: {
+      readonly threadId: Parameters<TricketIntegration["Service"]["execute"]>[0];
+      readonly command: Parameters<TricketIntegration["Service"]["execute"]>[1];
+    }) => integration.execute(input.threadId, input.command).pipe(Effect.mapError(publicError)),
   };
 }
