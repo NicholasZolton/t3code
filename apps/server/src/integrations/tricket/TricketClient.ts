@@ -7,7 +7,18 @@ import * as HttpClientRequest from "effect/http/HttpClientRequest";
 import * as HttpClientResponse from "effect/http/HttpClientResponse";
 import * as FetchHttpClient from "effect/http/FetchHttpClient";
 
-import { Actor, Credential, HistoryEntry, Issue, Status } from "./schemas.ts";
+import {
+  Actor,
+  Credential,
+  HistoryEntry,
+  Issue,
+  Project,
+  Status,
+  Uuid,
+  type Resource,
+} from "./schemas.ts";
+
+const isUuid = Schema.is(Uuid);
 
 export class TricketApiError extends Schema.TaggedError<TricketApiError>()("TricketApiError", {
   status: Schema.Number,
@@ -27,6 +38,46 @@ export class TricketClient extends Context.Service<
   TricketClient,
   {
     readonly issue: (connection: Connection, id: string) => Effect.Effect<Issue, TricketApiError>;
+    readonly project: (
+      connection: Connection,
+      id: string,
+    ) => Effect.Effect<Project, TricketApiError>;
+    readonly list: (
+      connection: Connection,
+      resource: Resource,
+      filter?: Schema.JsonObject,
+    ) => Effect.Effect<ReadonlyArray<Issue | Project>, TricketApiError>;
+    readonly resolve: (
+      connection: Connection,
+      resource: Resource,
+      id: string,
+    ) => Effect.Effect<Issue | Project, TricketApiError>;
+    readonly assignment: (
+      connection: Connection,
+      resource: Resource,
+      id: string,
+      actorId: string,
+    ) => Effect.Effect<HistoryEntry | null, TricketApiError>;
+    readonly updateResource: (
+      connection: Connection,
+      resource: Resource,
+      id: string,
+      revision: number,
+      patch: Schema.JsonObject,
+      commandId: string,
+    ) => Effect.Effect<Issue | Project, TricketApiError>;
+    readonly createIssue: (
+      connection: Connection,
+      body: Schema.JsonObject,
+      commandId: string,
+    ) => Effect.Effect<Issue, TricketApiError>;
+    readonly note: (
+      connection: Connection,
+      resource: Resource,
+      id: string,
+      body: string,
+      commandId: string,
+    ) => Effect.Effect<Schema.JsonObject, TricketApiError>;
     readonly ready: (
       connection: Connection,
       projectId: string,
@@ -144,33 +195,116 @@ const make = Effect.gen(function* () {
     return items;
   });
 
-  const handoff = Effect.fn("TricketClient.handoff")(function* (
+  const assignment = Effect.fn("TricketClient.assignment")(function* (
     connection: Connection,
-    issueId: string,
-  ) {
+    resource: Resource,
+    id: string,
+    actorId: string,
+  ): Effect.fn.Return<HistoryEntry | null, TricketApiError> {
     let after = 0;
-    let latest: string | null = null;
+    let latest: HistoryEntry | null = null;
     let page: ReadonlyArray<HistoryEntry>;
     do {
       page = yield* request(
         connection,
-        `/issues/${encodeURIComponent(issueId)}/history?after=${after}`,
+        `/${resource}s/${encodeURIComponent(id)}/history?after=${after}`,
         Schema.Array(HistoryEntry),
       );
-      page.forEach(({ sequence, event }) => {
-        after = sequence;
-        if (
-          (event.event_type === "issue.created" ||
-            event.event_type === "issue.assignment_changed") &&
-          event.data.assignee_id === "t3"
-        )
-          latest = event.event_id;
-      });
+      after = page.at(-1)?.sequence ?? after;
+      latest =
+        page.findLast(
+          ({ event }) =>
+            (event.event_type === `${resource}.created` ||
+              event.event_type === "issue.assignment_changed" ||
+              (resource === "project" && event.changes?.lead_id !== undefined)) &&
+            event.data[resource === "issue" ? "assignee_id" : "lead_id"] === actorId,
+        ) ?? latest;
     } while (page.length === 200);
     return latest;
   });
 
+  const list = Effect.fn("TricketClient.list")(function* (
+    connection: Connection,
+    resource: Resource,
+    filter?: Schema.JsonObject,
+  ) {
+    const result: Array<Issue | Project> = [];
+    let cursor: string | null = null;
+    do {
+      const page: {
+        readonly items: ReadonlyArray<Issue | Project>;
+        readonly next_cursor: string | null;
+      } = yield* request(
+        connection,
+        `/${resource}s/query`,
+        Schema.Struct({
+          items: Schema.Array(Schema.Union([Issue, Project])),
+          next_cursor: Schema.NullOr(Schema.String),
+        }),
+        {
+          method: "POST",
+          body: {
+            ...(filter === undefined ? {} : { filter }),
+            limit: 200,
+            ...(cursor === null ? {} : { cursor }),
+          },
+        },
+      );
+      result.push(...page.items);
+      cursor = page.next_cursor;
+    } while (cursor !== null);
+    return result;
+  });
+
   return TricketClient.of({
+    list,
+    assignment,
+    resolve: Effect.fn("TricketClient.resolve")(function* (connection, resource, id) {
+      if (isUuid(id))
+        return yield* request(
+          connection,
+          `/${resource}s/${encodeURIComponent(id)}`,
+          Schema.Union([Issue, Project]),
+        );
+      const records = yield* list(connection, resource, {
+        field: "identifier",
+        op: "eq",
+        value: id,
+      });
+      const record = records.find((candidate) => candidate.identifier === id);
+      if (record === undefined) return yield* new TricketApiError({ status: 404 });
+      return record;
+    }),
+    project: Effect.fn("TricketClient.project")((connection, id) =>
+      request(connection, `/projects/${encodeURIComponent(id)}`, Project),
+    ),
+    updateResource: Effect.fn("TricketClient.updateResource")(
+      (connection, resource, id, revision, patch, commandId) =>
+        request(
+          connection,
+          `/${resource}s/${encodeURIComponent(id)}`,
+          Schema.Union([Issue, Project]),
+          {
+            method: "PATCH",
+            body: patch,
+            headers: { "if-match": `"${revision}"`, "idempotency-key": commandId },
+          },
+        ),
+    ),
+    createIssue: Effect.fn("TricketClient.createIssue")((connection, body, commandId) =>
+      request(connection, "/issues", Issue, {
+        method: "POST",
+        body,
+        headers: { "idempotency-key": commandId },
+      }),
+    ),
+    note: Effect.fn("TricketClient.note")((connection, resource, id, body, commandId) =>
+      request(connection, "/notes", Schema.JsonObject, {
+        method: "POST",
+        body: { [`${resource}_id`]: id, kind: "comment", body },
+        headers: { "idempotency-key": commandId },
+      }),
+    ),
     activity: Effect.fn("TricketClient.activity")(function* (connection, after) {
       const entries: Array<HistoryEntry> = [];
       let before: number | undefined;
@@ -227,7 +361,11 @@ const make = Effect.gen(function* () {
       request(connection, "/statuses", Schema.Array(Status)),
     ),
     ready,
-    handoff,
+    handoff: Effect.fn("TricketClient.handoff")((connection, id) =>
+      assignment(connection, "issue", id, "t3").pipe(
+        Effect.map((entry) => entry?.event.event_id ?? null),
+      ),
+    ),
   });
 });
 

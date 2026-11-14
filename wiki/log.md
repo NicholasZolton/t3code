@@ -1,5 +1,9 @@
 # Wiki update log
 
+## 2026-11-14
+
+- **Tricket**: Recorded [project leads and opt-in CLI enrollment](tricket-integration.md): execute the brief only when instructed, keep existing threads and credentials, and avoid adding MCP context to ordinary agents. New assignment records remain isolated from the legacy ticket worker table for safe runtime rollback.
+
 ## 2026-11-13
 
 - **Tricket**: Corrected the [native integration](tricket-integration.md) record: PR #76 merged and its initial assignment path is deployed. Recorded the follow-up boundary: replay committed activity into the same owner, suppress only its own actor, preserve snooze, and count active turns rather than open tickets.

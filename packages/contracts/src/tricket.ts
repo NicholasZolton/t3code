@@ -1,7 +1,11 @@
 import * as Schema from "effect/Schema";
 import * as Rpc from "effect/rpc/Rpc";
 import * as RpcGroup from "effect/rpc/RpcGroup";
-import { EnvironmentAuthorizationError, AuthSettingsWriteScope } from "./auth.ts";
+import {
+  EnvironmentAuthorizationError,
+  AuthSettingsWriteScope,
+  AuthOrchestrationOperateScope,
+} from "./auth.ts";
 import { ProjectId, ThreadId } from "./baseSchemas.ts";
 import { ModelSelection } from "./modelSelection.ts";
 import { RuntimeMode } from "./providerPolicy.ts";
@@ -38,6 +42,40 @@ export const TricketUpdateInput = Schema.Struct({
 });
 export type TricketUpdateInput = typeof TricketUpdateInput.Type;
 
+const Resource = Schema.Literals(["issue", "project"]);
+const Id = Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(256));
+const Write = { commandId: Id };
+export const TricketCommand = Schema.Union([
+  Schema.Struct({ action: Schema.Literal("join") }),
+  Schema.Struct({ action: Schema.Literal("list"), resource: Resource }),
+  Schema.Struct({ action: Schema.Literal("show"), resource: Resource, id: Id }),
+  Schema.Struct({ action: Schema.Literals(["lead", "claim", "review"]), id: Id, ...Write }),
+  Schema.Struct({
+    action: Schema.Literal("create_issue"),
+    project: Id,
+    title: Schema.String.check(Schema.isMinLength(1)),
+    description: Schema.String,
+    assignee: Schema.NullOr(Schema.Literals(["t3", "self"])),
+    ...Write,
+  }),
+  Schema.Struct({
+    action: Schema.Literal("update"),
+    resource: Resource,
+    id: Id,
+    revision: Schema.Int,
+    patch: Schema.JsonObject,
+    ...Write,
+  }),
+  Schema.Struct({
+    action: Schema.Literal("comment"),
+    resource: Resource,
+    id: Id,
+    body: Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(20_000)),
+    ...Write,
+  }),
+]);
+export type TricketCommand = typeof TricketCommand.Type;
+
 export class TricketError extends Schema.TaggedError<TricketError>()("TricketError", {
   reason: Schema.Literals([
     "configuration",
@@ -45,6 +83,8 @@ export class TricketError extends Schema.TaggedError<TricketError>()("TricketErr
     "connection",
     "conflict",
     "unmanaged_thread",
+    "assignment_conflict",
+    "identity_retired",
   ]),
   cause: Schema.optional(Schema.Defect()),
 }) {
@@ -60,6 +100,10 @@ export class TricketError extends Schema.TaggedError<TricketError>()("TricketErr
         return "Disable Tricket and stop its managed work before changing its connection or repository.";
       case "unmanaged_thread":
         return "This thread does not own an active Tricket assignment.";
+      case "assignment_conflict":
+        return "This assignment is unavailable, belongs to someone else, or is outside the configured Tricket project.";
+      case "identity_retired":
+        return "This thread's Tricket identity was retired. Use another thread; a retired identity will not be replaced automatically.";
     }
   }
 }
@@ -88,12 +132,14 @@ export const TRICKET_RPC_METHODS = {
   get: "tricket.get",
   update: "tricket.update",
   reconcile: "tricket.reconcile",
+  execute: "tricket.execute",
 } as const;
 
 export const TRICKET_RPC_SCOPES = {
   [TRICKET_RPC_METHODS.get]: AuthSettingsWriteScope,
   [TRICKET_RPC_METHODS.update]: AuthSettingsWriteScope,
   [TRICKET_RPC_METHODS.reconcile]: AuthSettingsWriteScope,
+  [TRICKET_RPC_METHODS.execute]: AuthOrchestrationOperateScope,
 } as const;
 
 const error = Schema.Union([TricketError, EnvironmentAuthorizationError]);
@@ -107,6 +153,11 @@ export const TricketRpcGroup = RpcGroup.make(
   Rpc.make(TRICKET_RPC_METHODS.reconcile, {
     payload: Schema.Struct({}),
     success: TricketState,
+    error,
+  }),
+  Rpc.make(TRICKET_RPC_METHODS.execute, {
+    payload: Schema.Struct({ threadId: ThreadId, command: TricketCommand }),
+    success: Schema.Json,
     error,
   }),
 );
