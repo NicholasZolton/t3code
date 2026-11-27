@@ -2,7 +2,7 @@
 
 ## 2026-11-27
 
-- Recorded the [upstream candidate](upstream-integration.md) through `f771ee89a4` and the Jujutsu checkpoint, mobile branch, and shortcut-search compatibility decisions.
+- Recorded the [upstream candidate](upstream-integration.md) through `2c019f21ec` and the Jujutsu checkpoint, mobile branch, and shortcut-search compatibility decisions.
 
 ## 2026-11-26
 
