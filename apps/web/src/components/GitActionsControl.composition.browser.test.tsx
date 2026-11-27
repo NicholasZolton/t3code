@@ -55,7 +55,7 @@ vi.mock("~/state/query", () => ({
 vi.mock("~/state/sourceControlActions", () => ({
   useGitStackedAction: () => ({ run: commit.run }),
   useSourceControlActionRunning: vi.fn(),
-  useVcsInitAction: vi.fn(),
+  useVcsInitAction: () => ({ isPending: false }),
   useVcsPullAction: vi.fn(),
   useSourceControlPublishRepositoryAction: () => ({
     isAllowed: true,
