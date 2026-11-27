@@ -1,5 +1,9 @@
 # Wiki update log
 
+## 2026-11-27
+
+- Recorded the [upstream candidate](upstream-integration.md) through `2c019f21ec` and the Jujutsu checkpoint, mobile branch, and shortcut-search compatibility decisions.
+
 ## 2026-11-26
 
 - Recorded the [upstream candidate](upstream-integration.md) through `f28ced81b3` and the Git/Jujutsu status boundary.

@@ -90,7 +90,7 @@ describe("Vim composer integration", () => {
     await screen.rerender(composer(true));
     await paste(editableIn(screen.container), pasted);
     snapshots.push(editorRef.current.readSnapshot());
-    expect(snapshots[0]?.value).toBe(`Please \n${pasted}`);
+    expect(snapshots[0]?.value).toBe(`Please ${pasted}`);
     expect(snapshots[1]?.value).toBe(snapshots[0]?.value);
     expect(snapshots[1]?.contextIds).toEqual(["test-id"]);
     expect(snapshots[1]?.contextIds).toEqual(snapshots[0]?.contextIds);

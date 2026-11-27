@@ -6,20 +6,20 @@ tags: [upstream, fork, integration]
 status: stable
 generated:
   by: opencode/gpt-6.2-astra
-  at: 2026-11-26T17:03:30+00:00
+  at: 2026-11-27T17:35:19+00:00
 verified:
   - by: opencode/gpt-6.2-astra
-    at: 2026-11-26T17:03:30+00:00
+    at: 2026-11-27T17:35:19+00:00
 snapshot:
-  at: 2026-11-26T17:03:30+00:00
-  fork_main: 39099df5656ab9088f2e62ff9c943be0ba81a136
-  upstream_main: f28ced81b36027597c2fe45a1cc271e880975451
-  shared_baseline: 6bb4e3d9d647cc5bf8ea15751a0caab931ae064f
-  last_main_integration: 39099df5656ab9088f2e62ff9c943be0ba81a136
-  last_main_upstream: 6bb4e3d9d647cc5bf8ea15751a0caab931ae064f
-  missing_upstream_on_main: 289
-  branch_integration: 48a275bf16681aa270bcb02018641531ad40434e
-  branch_code_tip: bc223ada7bb1ece462a6a2ded6d401c6f0257300
+  at: 2026-11-27T17:35:19+00:00
+  fork_main: abb5cd695b146401da7a6b9596571a0615803e0f
+  upstream_main: 2c019f21ecbdf4b6cae9dfbfe13a3b002f28eba6
+  shared_baseline: f28ced81b36027597c2fe45a1cc271e880975451
+  last_main_integration: abb5cd695b146401da7a6b9596571a0615803e0f
+  last_main_upstream: f28ced81b36027597c2fe45a1cc271e880975451
+  missing_upstream_on_main: 330
+  branch_integration: 4cde281300615cb8f40f7e36648039acebbddb21
+  branch_code_tip: 4cde281300615cb8f40f7e36648039acebbddb21
   missing_upstream_on_branch: 0
 sources:
   - id: upstream-nov23-policy
@@ -446,7 +446,11 @@ sources:
 
 # Upstream integration
 
-The November 26 candidate merges [upstream `f28ced81b3`](https://github.com/pingdotgg/t3code/commit/f28ced81b36027597c2fe45a1cc271e880975451) into fork main `39099df565`. It incorporates 289 commits. Git uses upstream’s new status polling; Jujutsu continues through its own status service.
+The [November 27 candidate (PR #95)](https://github.com/NicholasZolton/t3code/pull/95) merges [upstream `2c019f21ec`](https://github.com/pingdotgg/t3code/commit/2c019f21ecbdf4b6cae9dfbfe13a3b002f28eba6) into fork main `abb5cd695b`, incorporating 330 commits. Jujutsu can reuse a captured baseline after a steered message, while workspaces with submodules fall back to a fresh snapshot. Mobile uses upstream’s paginated branch list but distinguishes a project checkout from an explicitly selected worktree. Shortcut search retains ranked results and recognizes upstream’s displayed platform labels.
+
+## November 26 sync
+
+[Fork PR #94](https://github.com/NicholasZolton/t3code/pull/94) merged all 289 commits through upstream `f28ced81b3`. Git uses upstream’s status polling; Jujutsu continues through its own status service.
 
 ## November 25 sync
 
