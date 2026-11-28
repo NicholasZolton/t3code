@@ -899,6 +899,26 @@ function ProjectScopeRowIcon(props: { isSelected: boolean; children: ReactNode }
   );
 }
 
+function sidebarThreadsForKeys(
+  keys: readonly string[],
+  threadByKey: ReadonlyMap<string, SidebarThreadSummary>,
+) {
+  return keys.flatMap((key) => {
+    const thread = threadByKey.get(key);
+    return thread ? [thread] : [];
+  });
+}
+
+function canSnoozeThreads(
+  threads: readonly SidebarThreadSummary[],
+  serverConfigs: ReadonlyMap<EnvironmentId, EnvironmentServerConfig>,
+  now: string,
+) {
+  return threads.every(
+    (thread) => serverConfigs.has(thread.environmentId) && canSnooze(thread, { now }),
+  );
+}
+
 function canOperateThreads(
   threads: ReadonlyArray<Pick<SidebarThreadSummary, "environmentId">>,
   triage = false,
@@ -1405,6 +1425,16 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     keepEmptyFolders: (group) =>
       scopedProjectGroups.length > 0 || (group.pinned && !group.archived),
   });
+
+  const selection = useThreadSelectionStore((state) => state.selectedThreadKeys);
+  const selectedThreadKeys = [...selection];
+  const selectedThreads = sidebarThreadsForKeys(selectedThreadKeys, threadByKey);
+  const visibleSelectedKeys = selectedThreads.map(threadShellKey);
+  const selectedSnoozeKeys =
+    canSnoozeThreads(selectedThreads, serverConfigs, snoozeNow) &&
+    canOperateThreads(selectedThreads, true)
+      ? visibleSelectedKeys
+      : [];
 
   // Ranked across environments as the palette ranks them, so one
   // environment's list does not sit above another's better matches; rows
@@ -2354,25 +2384,62 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     }
     return { status: "success" } as const;
   };
+  const snoozeSelection = useStableCallback(
+    async (keys: readonly string[], preset: Pick<SnoozePreset, "snoozedUntil">) => {
+      const targets = sidebarThreadsForKeys(keys, threadByKeyRef.current);
+      if (
+        targets.length !== keys.length ||
+        !canSnoozeThreads(targets, serverConfigs, new Date().toISOString())
+      ) {
+        toastManager.add({ type: "error", title: gt("Failed to snooze threads") });
+        return;
+      }
+      if (!checkThreadOperations(targets, true)) return;
+      removeFromSelection(keys);
+      const coSnoozingKeys = new Set(keys);
+      const outcomes = await Promise.all(
+        targets.map((thread) =>
+          performSnooze(scopeThreadRef(thread.environmentId, thread.id), preset, {
+            coSnoozingKeys,
+          }),
+        ),
+      );
+      const failures = outcomes.flatMap((outcome) =>
+        outcome.status === "failure" ? [outcome.error] : [],
+      );
+      if (failures.length > 0) {
+        toastManager.add(
+          stackedThreadToast({
+            type: "error",
+            title: outcomes.some((outcome) => outcome.status === "success")
+              ? gt(
+                  "{count, plural, one {Failed to snooze {count} thread} other {Failed to snooze {count} threads}}",
+                  { count: failures.length },
+                )
+              : gt("Failed to snooze threads"),
+            description: thrownErrorMessage(failures[0], m) ?? gt("An error occurred."),
+          }),
+        );
+      }
+    },
+  );
   const attemptSnooze = useStableCallback(
-    (
+    async (
       threadRef: ScopedThreadRef,
       preset: Pick<SnoozePreset, "snoozedUntil">,
-      opts: { coSnoozingKeys?: ReadonlySet<string> } = {},
+      selectionKeys: readonly string[] | null = null,
     ) => {
-      void (async () => {
-        const outcome = await performSnooze(threadRef, preset, opts);
-        if (outcome.status === "failure") {
-          toastManager.add(
-            stackedThreadToast({
-              type: "error",
-              title: gt("Failed to snooze thread"),
-              description: thrownErrorMessage(outcome.error, m) ?? gt("An error occurred."),
-            }),
-          );
-          return;
-        }
-      })();
+      if (selectionKeys !== null) return snoozeSelection(selectionKeys, preset);
+      const outcome = await performSnooze(threadRef, preset);
+      if (outcome.status === "failure") {
+        toastManager.add(
+          stackedThreadToast({
+            type: "error",
+            title: gt("Failed to snooze thread"),
+            description: thrownErrorMessage(outcome.error, m) ?? gt("An error occurred."),
+          }),
+        );
+      }
     },
   );
 
@@ -2380,24 +2447,15 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     async (position: { x: number; y: number }, source: ContextMenuSource) => {
       const api = readLocalApi();
       if (!api) return;
-      const selectedThreadKeys = [...useThreadSelectionStore.getState().selectedThreadKeys];
-      const threadKeys = selectedThreadKeys.filter((threadKey) =>
-        threadByKeyRef.current.has(threadKey),
-      );
-      if (threadKeys.length === 0) return;
-      const count = threadKeys.length;
-      const selectionNow = new Date();
-      const selectedThreads = threadKeys.flatMap((threadKey) => {
-        const thread = threadByKeyRef.current.get(threadKey);
-        return thread ? [thread] : [];
-      });
+      const count = selectedThreads.length;
+      if (count === 0) return;
       const settlingThreads = selectedThreads.filter(
         (thread) => thread.settledOverride !== "settled",
       );
-      const canSnoozeSelection = selectedThreads.every(
-        (thread) =>
-          serverConfigs.has(thread.environmentId) &&
-          canSnooze(thread, { now: selectionNow.toISOString() }),
+      const canSnoozeSelection = canSnoozeThreads(
+        selectedThreads,
+        serverConfigs,
+        new Date().toISOString(),
       );
       const titleRegenerationThreads = selectedThreads.filter((thread) =>
         serverConfigs.has(thread.environmentId),
@@ -2520,40 +2578,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                 timestampFormat,
                 selectedThreads[0]!.environmentId,
               );
-        if (preset) {
-          const coSnoozingKeys = new Set(threadKeys);
-          clearSelection();
-          const outcomes = await Promise.all(
-            selectedThreads.map(async (thread) => {
-              const threadRef = scopeThreadRef(thread.environmentId, thread.id);
-              const outcome = await performSnooze(threadRef, preset, { coSnoozingKeys });
-              return { outcome, threadRef };
-            }),
-          );
-          const snoozedThreadRefs = outcomes.flatMap(({ outcome, threadRef }) =>
-            outcome.status === "success" ? [threadRef] : [],
-          );
-          const failures = outcomes.flatMap(({ outcome }) =>
-            outcome.status === "failure" ? [outcome.error] : [],
-          );
-
-          if (failures.length > 0) {
-            const firstError = failures[0];
-            toastManager.add(
-              stackedThreadToast({
-                type: "error",
-                title:
-                  snoozedThreadRefs.length > 0
-                    ? gt(
-                        "{count, plural, one {Failed to snooze {count} thread} other {Failed to snooze {count} threads}}",
-                        { count: failures.length },
-                      )
-                    : gt("Failed to snooze threads"),
-                description: thrownErrorMessage(firstError, m) ?? gt("An error occurred."),
-              }),
-            );
-          }
-        }
+        if (preset) await snoozeSelection(visibleSelectedKeys, preset);
         return;
       }
       if (clicked.value === "unpin") {
@@ -2611,7 +2636,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
       }
       if (
         !checkThreadOperations(
-          threadKeys.flatMap((threadKey) => {
+          visibleSelectedKeys.flatMap((threadKey) => {
             const thread = threadByKeyRef.current.get(threadKey);
             return thread ? [thread] : [];
           }),
@@ -2619,7 +2644,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
       )
         return;
       const { deletedThreadKeys, firstFailure } = await deleteSelectedThreadEntries({
-        entries: threadKeys.map((threadKey) => ({ threadKey })),
+        entries: visibleSelectedKeys.map((threadKey) => ({ threadKey })),
         delete: async ({ threadKey }, deletedThreadKeys) => {
           const thread = threadByKeyRef.current.get(threadKey);
           if (!thread) return null;
@@ -3542,6 +3567,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                       const threadKey = scopedThreadKey(
                         scopeThreadRef(thread.environmentId, thread.id),
                       );
+                      const isSelected = selection.has(threadKey);
                       const isCard =
                         section === "active" || section === "pinned" || section === "working";
                       const rowVariant = folderRow
@@ -3633,6 +3659,10 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                           onSettle={attemptSettle}
                           onActionSweepStart={startActionSweep}
                           onUnsettle={attemptUnsettle}
+                          isSelected={isSelected}
+                          snoozeSelectionKeys={
+                            isSelected && selectedThreads.length > 1 ? selectedSnoozeKeys : null
+                          }
                           onSnooze={attemptSnooze}
                           onUnsnooze={attemptUnsnooze}
                           onUnpin={attemptUnpin}

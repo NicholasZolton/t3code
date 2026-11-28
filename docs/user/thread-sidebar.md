@@ -72,6 +72,8 @@ Enable **Settings → Labs → Boring sidebar (group by project)** on web/deskto
 
 ### Snooze options
 
+On web and desktop, Shift-click to select a range of threads, then click the clock on any selected card. The number beside the clock shows how many threads will share the wake time.
+
 Customize presets in **Settings → Threads → Snooze options** (durations like `3 hours` or times like `9:00 PM tomorrow`), or pick **Snooze → Custom…** for an exact date/time or duration. Choose **Wake thread** to bring a thread back early.
 
 ## Link a pull request
