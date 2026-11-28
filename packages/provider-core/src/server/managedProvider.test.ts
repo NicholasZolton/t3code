@@ -1176,7 +1176,9 @@ describe("makeManagedServerProvider", () => {
               Effect.andThen(Ref.modify(probeResults, ([head, ...rest]) => [head, rest] as const)),
             ),
             enrichSnapshot: ({ snapshot, publishSnapshot }) =>
-              Deferred.succeed(staleEnrichment, () => publishSnapshot(snapshot)),
+              Deferred.succeed(staleEnrichment, () =>
+                publishSnapshot({ ...snapshot, version: "1.2.3" }),
+              ),
             refreshOnInterval: false,
           });
           yield* Stream.take(provider.streamChanges, 1).pipe(Stream.runDrain);
@@ -1187,12 +1189,17 @@ describe("makeManagedServerProvider", () => {
           assert.deepStrictEqual(sameAccount.usageLimits, updatedLimits);
           assert.deepStrictEqual(sameAccount.usageLimitAccounts, accounts);
           assert.strictEqual(sameAccount.auth.label, "Pro");
+          const publishEnrichment = yield* Deferred.await(staleEnrichment);
+          yield* publishEnrichment();
+          const enriched = yield* provider.getSnapshot;
+          assert.strictEqual(enriched.version, "1.2.3");
+          assert.deepStrictEqual(enriched.usageLimitAccounts, accounts);
           yield* provider.refreshUsage!;
           const switched = yield* provider.getSnapshot;
           assert.strictEqual(switched.auth.email, "b@example.com");
           assert.deepStrictEqual(switched.usageLimits, switchedFailure);
           assert.deepStrictEqual(switched.usageLimitAccounts, []);
-          yield* (yield* Deferred.await(staleEnrichment))();
+          yield* publishEnrichment();
           assert.strictEqual((yield* provider.getSnapshot).auth.email, "b@example.com");
         }),
       ).pipe(Effect.provide(layerAlwaysRunTest)),

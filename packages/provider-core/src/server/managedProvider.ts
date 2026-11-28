@@ -143,11 +143,15 @@ export const makeManagedServerProvider = Effect.fn("makeManagedServerProvider")(
         return [null, state] as const;
       }
       // Enrichment must not revert usage updates newer than its input snapshot.
+      const snapshotWithCurrentAccounts =
+        nextSnapshot.usageLimitAccounts === state.snapshot.usageLimitAccounts
+          ? nextSnapshot
+          : { ...nextSnapshot, usageLimitAccounts: state.snapshot.usageLimitAccounts };
       const merged = withUsageLimits(
         state.usageAuthLabel === undefined
-          ? nextSnapshot
+          ? snapshotWithCurrentAccounts
           : {
-              ...nextSnapshot,
+              ...snapshotWithCurrentAccounts,
               auth: { ...nextSnapshot.auth, label: state.usageAuthLabel ?? undefined },
             },
         state.snapshot.usageLimits,
@@ -430,9 +434,8 @@ export const makeManagedServerProvider = Effect.fn("makeManagedServerProvider")(
       if (Equal.equals(state.snapshot, snapshot) && usageAuthLabel === state.usageAuthLabel) {
         return [null, state] as const;
       }
-      // Enrichment still running for the previous account must not republish its auth or limits.
-      const enrichmentGeneration =
-        state.enrichmentGeneration + (probedSwitched || accountsChanged ? 1 : 0);
+      // Enrichment still running for the previous account must not republish its auth.
+      const enrichmentGeneration = state.enrichmentGeneration + (probedSwitched ? 1 : 0);
       return [snapshot, { ...state, snapshot, usageAuthLabel, enrichmentGeneration }] as const;
     });
     if (next !== null) {
