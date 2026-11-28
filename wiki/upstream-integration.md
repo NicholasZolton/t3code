@@ -5,23 +5,26 @@ description: Main and branch integration boundaries and fork compatibility excep
 tags: [upstream, fork, integration]
 status: stable
 generated:
-  by: opencode/gpt-6.2-astra
-  at: 2026-11-27T17:35:19+00:00
+  by: opencode/gpt-6.2-sol
+  at: 2026-11-28T03:55:00+00:00
 verified:
-  - by: opencode/gpt-6.2-astra
-    at: 2026-11-27T17:35:19+00:00
+  - by: opencode/gpt-6.2-sol
+    at: 2026-11-28T03:55:00+00:00
 snapshot:
-  at: 2026-11-27T17:35:19+00:00
-  fork_main: abb5cd695b146401da7a6b9596571a0615803e0f
-  upstream_main: 2c019f21ecbdf4b6cae9dfbfe13a3b002f28eba6
-  shared_baseline: f28ced81b36027597c2fe45a1cc271e880975451
-  last_main_integration: abb5cd695b146401da7a6b9596571a0615803e0f
-  last_main_upstream: f28ced81b36027597c2fe45a1cc271e880975451
-  missing_upstream_on_main: 330
-  branch_integration: 4cde281300615cb8f40f7e36648039acebbddb21
-  branch_code_tip: 4cde281300615cb8f40f7e36648039acebbddb21
+  at: 2026-11-28T03:55:00+00:00
+  fork_main: 78652ff272a042fa645dbce0ec4f59a5ca9e3ea2
+  upstream_main: a91808a108efa4ff121d29c80ddab72c4699d980
+  shared_baseline: 2c019f21ecbdf4b6cae9dfbfe13a3b002f28eba6
+  last_main_integration: 6b24ab644b8afb0c9f191eb1928ca40302775589
+  last_main_upstream: 2c019f21ecbdf4b6cae9dfbfe13a3b002f28eba6
+  missing_upstream_on_main: 188
+  branch_integration: 985216ee39e634eb06bde0da6e77f25460e8be9f
+  branch_code_tip: 985216ee39e634eb06bde0da6e77f25460e8be9f
   missing_upstream_on_branch: 0
 sources:
+  - id: november-28-upstream
+    resource: https://github.com/pingdotgg/t3code/commit/a91808a108efa4ff121d29c80ddab72c4699d980
+    title: Pinned upstream tip for the November 28 integration
   - id: upstream-nov23-policy
     resource: https://github.com/pingdotgg/t3code/blob/700a4644a44afc1b127a4df323e7d833abd8779b/apps/server/src/provider/model-manifest.json
     title: Version-scoped OpenCode advisories
@@ -446,7 +449,18 @@ sources:
 
 # Upstream integration
 
-The [November 27 candidate (PR #95)](https://github.com/NicholasZolton/t3code/pull/95) merges [upstream `2c019f21ec`](https://github.com/pingdotgg/t3code/commit/2c019f21ecbdf4b6cae9dfbfe13a3b002f28eba6) into fork main `abb5cd695b`, incorporating 330 commits. Jujutsu can reuse a captured baseline after a steered message, while workspaces with submodules fall back to a fresh snapshot. Mobile uses upstream’s paginated branch list but distinguishes a project checkout from an explicitly selected worktree. Shortcut search retains ranked results and recognizes upstream’s displayed platform labels.
+The November 28 candidate preserves upstream ancestry and combines all 188 commits through
+`a91808a108` with the [native Jujutsu retirement](#jujutsu-retirement). Merge `fba52d2a05`
+incorporates `22cd21bad5`; merge `985216ee39` adds the last five commits. At the snapshot above,
+fork `main` has not incorporated the candidate.[^november-28-upstream]
+
+## November 27 sync
+
+[PR #95](https://github.com/NicholasZolton/t3code/pull/95) merged 330 commits through
+[`2c019f21ec`](https://github.com/pingdotgg/t3code/commit/2c019f21ecbdf4b6cae9dfbfe13a3b002f28eba6).
+Mobile uses upstream’s paginated branch list but distinguishes a project checkout from an
+explicitly selected worktree. Shortcut search retains ranked results and recognizes upstream’s
+displayed platform labels.
 
 ## November 26 sync
 
@@ -1102,21 +1116,20 @@ retired. The fork now restores only the selected ChatGPT/Codex subscription in t
 shared Limits view: OpenCode's authenticated API owns connection selection, and T3
 reads the subscription without rotating tokens or activating credentials. Keep this
 account separate from OpenCode Go limits; it must not change routing or apply Codex
-exhaustion to unrelated OpenCode models. Preserve this read-only boundary during syncs.
+exhaustion to unrelated OpenCode models. Limits-only refresh includes the subscription;
+automatic Go usage recovery does not start an OpenCode server to look up the Codex account.
 [^november-4-opencode-usage-removal][^opencode-codex-limits-restoration]
 
 ## Jujutsu retirement
 
-The November 28 retirement change is local and has not shipped. It removes the native backend
+The November 28 retirement removes the native backend
 ported from [upstream #13816](https://github.com/pingdotgg/t3code/pull/13816). Keep `jj` as a CLI
 workflow. T3 uses Git for new worktree threads.[^upstream-jujutsu][^fork-jujutsu]
 
-The local follow-ups pick up Git, worktree, and other independent fixes from
-[`4765c96485`](https://github.com/pingdotgg/t3code/commit/4765c96485a08e5c7c0832381f67b76c646b4dd2)
-without merging that revision. Custom temporary branch prefixes, folder grouping, and opt-in PR
-approval waits remain. Keep the Effect process upgrade with its lockfile and runner changes, and
-the limits-only refresh with its provider and RPC changes; don't copy individual files from
-either bundle.
+Use upstream Git recovery, worktree management, and menus. Keep the fork's temporary branch
+prefixes, folder grouping, and opt-in PR approval waits. The full sync includes the Effect
+process upgrade with its lockfile and runner changes, and the limits-only refresh with its
+provider and RPC changes.
 
 The model pickers and skill reload follow upstream. Fork-only
 [weighted menu search](../packages/shared/src/weightedSearch.ts) and
@@ -1366,7 +1379,9 @@ git log --reverse --oneline origin/main..upstream/main
 
 [^upstream-jujutsu]: Original upstream support, used as the selective-port source.
 
-[^fork-jujutsu]: Durable backend ownership, recovery behavior, and supported Jujutsu baseline.
+[^fork-jujutsu]: The original fork port and its historical mixed-backend behavior.
+
+[^november-28-upstream]: The upstream revision incorporated by the November 28 candidate.
 
 [^private-android-signing]: Fork signing policy and the fnox-backed APK signing helper.
 

@@ -2,6 +2,7 @@
 
 ## 2026-11-28
 
+- Recorded the [integration candidate](upstream-integration.md) through `a91808a108`, with all 188 incoming commits and the native Jujutsu retirement in one branch.
 - Separated fork menu and skill ranking from upstream search and skill reload while [reconciling overlapping files](upstream-integration.md#jujutsu-retirement).
 - Recorded the [Jujutsu retirement](upstream-integration.md#jujutsu-retirement): normal Git removal can delete registered worktrees; Git checkpoint restore still protects legacy Jujutsu files.
 
