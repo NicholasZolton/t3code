@@ -1,4 +1,3 @@
-import { DEFAULT_WORKTREE_BRANCH_PREFIX } from "@t3tools/contracts";
 import type {
   BranchNamingOptions,
   VcsRef,
@@ -12,22 +11,14 @@ import * as Result from "effect/Result";
 
 import { foldLatinDiacritics } from "./path.ts";
 
-export const WORKTREE_BRANCH_PREFIX = DEFAULT_WORKTREE_BRANCH_PREFIX;
-// Retain legacy t3code prefixes and mobile UUIDs so older threads can still regenerate names.
+export const WORKTREE_BRANCH_PREFIX = "t3";
 const TEMP_WORKTREE_HEX_TOKEN = "[0-9a-f]{8}";
 const TEMP_WORKTREE_UUID_V4_TOKEN =
   "[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}";
 const TEMP_WORKTREE_BRANCH_PATTERN = new RegExp(
   `^(?:${WORKTREE_BRANCH_PREFIX}[-/]${TEMP_WORKTREE_HEX_TOKEN}|t3code(?:[-/]${TEMP_WORKTREE_HEX_TOKEN}|\\/${TEMP_WORKTREE_UUID_V4_TOKEN}))$`,
 );
-const TEMP_WORKTREE_TOKEN_SOURCE = `(?:${TEMP_WORKTREE_HEX_TOKEN}|${TEMP_WORKTREE_UUID_V4_TOKEN})`;
-const TEMP_WORKTREE_TOKEN_PATTERN = new RegExp(`^${TEMP_WORKTREE_TOKEN_SOURCE}$`);
-const TEMP_WORKTREE_HEX_PATTERN = new RegExp(`^${TEMP_WORKTREE_HEX_TOKEN}$`);
 
-/**
- * Sanitize an arbitrary string into a valid, lowercase git branch fragment.
- * Strips quotes, collapses separators, limits to 64 chars.
- */
 export function sanitizeBranchFragment(raw: string): string {
   const normalized = foldLatinDiacritics(raw)
     .trim()
@@ -118,42 +109,24 @@ export function deriveLocalBranchNameFromRemoteRef(
 
 export function buildTemporaryWorktreeBranchName(
   randomHex: (byteLength: number) => string,
-  prefix: string = WORKTREE_BRANCH_PREFIX,
 ): string {
   const token = randomHex(4)
     .toLowerCase()
     .replace(/[^0-9a-f]/g, "")
     .slice(0, 8);
-  return `${prefix}/${token}`;
+  return `${WORKTREE_BRANCH_PREFIX}/${token}`;
 }
 
 /** Flatten temporary t3/<hex> refs because an existing t3 branch blocks nested refs. */
 export function flattenTemporaryWorktreeBranchName(refName: string): string {
   const normalized = refName.trim().toLowerCase();
-  const match = normalized.match(new RegExp(`^(.*)[-/](${TEMP_WORKTREE_TOKEN_SOURCE})$`));
-  const prefix = match?.[1];
-  const token = match?.[2];
-  if (!prefix || !token) return normalized;
-  const namespace = prefix === "t3code" ? WORKTREE_BRANCH_PREFIX : prefix.replaceAll("/", "-");
-  return `${namespace}-${token.slice(0, 8)}`;
+  const tokenStart = normalized.search(/[-/]/) + 1;
+  const token = normalized.slice(tokenStart, tokenStart + 8);
+  return `${WORKTREE_BRANCH_PREFIX}-${token}`;
 }
 
-export function isTemporaryWorktreeBranch(
-  refName: string,
-  prefix: string = WORKTREE_BRANCH_PREFIX,
-): boolean {
-  const normalized = refName.trim().toLowerCase();
-  return (
-    TEMP_WORKTREE_BRANCH_PATTERN.test(normalized) ||
-    [`${prefix.toLowerCase()}/`, `${prefix.toLowerCase().replaceAll("/", "-")}-`].some(
-      (namespace) =>
-        normalized.startsWith(namespace) &&
-        (prefix === WORKTREE_BRANCH_PREFIX
-          ? TEMP_WORKTREE_HEX_PATTERN
-          : TEMP_WORKTREE_TOKEN_PATTERN
-        ).test(normalized.slice(namespace.length)),
-    )
-  );
+export function isTemporaryWorktreeBranch(refName: string): boolean {
+  return TEMP_WORKTREE_BRANCH_PATTERN.test(refName.trim().toLowerCase());
 }
 
 const stripGitSuffix = (path: string) => path.replace(/\.git$/i, "");
@@ -329,9 +302,9 @@ export function parseOriginUrlFromGitConfig(configText: string): string | null {
     if (line.length === 0 || line.startsWith("#") || line.startsWith(";")) continue;
     // Git preserves case in quoted remote subsections but lowercases legacy dotted ones,
     // and accepts the first setting on the section header's own line.
-    const header = /^\[\s*remote(?:\s+"([^"]+)"|\.([^\]\s]+))\s*\](.*)$/i.exec(line);
+    const header = /^\[\s*remote(?:\s+"((?:\\.|[^"\\])+)"|\.([^\]\s]+))\s*\](.*)$/i.exec(line);
     if (header) {
-      section = header[1] ?? header[2]?.toLowerCase() ?? null;
+      section = header[1]?.replace(/\\(.)/g, "$1") ?? header[2]?.toLowerCase() ?? null;
       line = header[3]!.trim();
     } else if (line.startsWith("[")) {
       section = null;

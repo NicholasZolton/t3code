@@ -1,5 +1,5 @@
 import type { ServerProviderSkill } from "@t3tools/contracts";
-import { scoreProviderSkill } from "@t3tools/client-runtime/providerSkills";
+import { scoreProviderSkill } from "@t3tools/client-runtime/providerSkillSearch";
 
 export function scoreSlashSkillQuery(skill: ServerProviderSkill, query: string): number | null {
   if (!skill.enabled || skill.userInvocable === false) return null;

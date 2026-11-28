@@ -1,6 +1,6 @@
 import { ProjectMonogramText } from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
-import { searchItems } from "@t3tools/shared/searchRanking";
+import { searchItems } from "@t3tools/shared/weightedSearch";
 import { msg } from "gt-react";
 import { lucideIconNames } from "./lib/lucideIconByName";
 export { PROJECT_ICON_COLORS, projectIconColorClassName } from "./projectIconColors";

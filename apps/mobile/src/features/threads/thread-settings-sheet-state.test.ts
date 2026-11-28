@@ -14,7 +14,6 @@ import {
 import {
   canCommitPendingModel,
   favoritesFirst,
-  scoreModelCatalogQuery,
   pendingModelAfterPress,
   visibleCatalogModels,
 } from "./thread-settings-sheet-state";
@@ -107,43 +106,8 @@ describe("thread settings sheet state", () => {
         isDisplayed: () => false,
       }).map((model) => model.selection.model);
     expect(visible("codex")).toEqual(["first", "third", "second", "fourth"]);
-    expect(visible("frt")).toEqual(["first", "fourth"]);
+    expect(visible("fir")).toEqual(["first"]);
     expect(visible("codex", true)).toEqual(["first", "third"]);
-  });
-
-  it("matches visible model and provider terms", () => {
-    const model = modelOption("gpt-next");
-
-    expect(scoreModelCatalogQuery({ model, providerLabel: "Codex", query: "NEXT" })).not.toBeNull();
-    expect(
-      scoreModelCatalogQuery({ model, providerLabel: "Codex", query: "codex" }),
-    ).not.toBeNull();
-    expect(scoreModelCatalogQuery({ model, providerLabel: "Codex", query: "claude" })).toBeNull();
-  });
-
-  it("treats whitespace-only catalog searches as empty", () => {
-    expect(
-      scoreModelCatalogQuery({
-        model: modelOption("gpt-next"),
-        providerLabel: "Codex",
-        query: "   ",
-      }),
-    ).toBe(0);
-  });
-
-  it("matches the upstream provider's display name", () => {
-    const model = {
-      ...modelOption("opencode/claude-fable-5"),
-      label: "Claude Fable 5",
-      subtitle: "OpenCode Zen",
-    };
-
-    expect(
-      scoreModelCatalogQuery({ model, providerLabel: "OpenCode", query: " ZEN " }),
-    ).not.toBeNull();
-    expect(
-      scoreModelCatalogQuery({ model, providerLabel: "OpenCode", query: "copilot" }),
-    ).toBeNull();
   });
 
   it("clears staging when the applied model is pressed", () => {

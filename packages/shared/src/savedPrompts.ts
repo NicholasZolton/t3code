@@ -1,4 +1,4 @@
-import { searchItems } from "./searchRanking.ts";
+import { searchItems } from "./weightedSearch.ts";
 
 const VARIABLE = /\{\{(clipboard|env\.([a-zA-Z_][a-zA-Z0-9_]*))\}\}/g;
 

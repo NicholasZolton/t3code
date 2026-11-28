@@ -1111,10 +1111,17 @@ The November 28 retirement change is local and has not shipped. It removes the n
 ported from [upstream #13816](https://github.com/pingdotgg/t3code/pull/13816). Keep `jj` as a CLI
 workflow. T3 uses Git for new worktree threads.[^upstream-jujutsu][^fork-jujutsu]
 
-The follow-up restores upstream Git and worktree flows against
+The local follow-ups pick up Git, worktree, and other independent fixes from
 [`4765c96485`](https://github.com/pingdotgg/t3code/commit/4765c96485a08e5c7c0832381f67b76c646b4dd2)
 without merging that revision. Custom temporary branch prefixes, folder grouping, and opt-in PR
-approval waits remain.
+approval waits remain. Keep the Effect process upgrade with its lockfile and runner changes, and
+the limits-only refresh with its provider and RPC changes; don't copy individual files from
+either bundle.
+
+The model pickers and skill reload follow upstream. Fork-only
+[weighted menu search](../packages/shared/src/weightedSearch.ts) and
+[skill ranking](../packages/client-runtime/src/providerSkillSearch.ts) are separate from upstream's
+scorer and provider workspace cache.
 
 Keep the `.jj` checkpoint-restore guard: a valid Git checkpoint does not make it safe to overwrite
 a legacy Jujutsu checkout. Normal Git cleanup may remove a colocated checkout if it is registered

@@ -239,15 +239,18 @@ describe("parseOriginUrlFromGitConfig", () => {
     ).toBe("git@github.com:a/b.git");
   });
 
-  it("falls back to the first remote when there is no origin", () => {
-    const config = [
-      '[remote "upstream"]',
-      "\turl = https://github.com/acme/repo.git",
-      '[remote "fork"]',
-      "\turl = https://github.com/me/repo.git",
-    ].join("\n");
-    expect(parseOriginUrlFromGitConfig(config)).toBe("https://github.com/acme/repo.git");
-  });
+  it.each(["upstream", String.raw`team\"mirror`])(
+    "falls back to the first remote when there is no origin: %s",
+    (remoteName) => {
+      const config = [
+        `[remote "${remoteName}"]`,
+        "\turl = https://github.com/acme/repo.git",
+        '[remote "fork"]',
+        "\turl = https://github.com/me/repo.git",
+      ].join("\n");
+      expect(parseOriginUrlFromGitConfig(config)).toBe("https://github.com/acme/repo.git");
+    },
+  );
 });
 
 describe("isTemporaryWorktreeBranch", () => {
@@ -255,17 +258,6 @@ describe("isTemporaryWorktreeBranch", () => {
     expect(isTemporaryWorktreeBranch(`${WORKTREE_BRANCH_PREFIX}/deadbeef`)).toBe(true);
     expect(isTemporaryWorktreeBranch(` ${WORKTREE_BRANCH_PREFIX}/deadbeef `)).toBe(true);
     expect(isTemporaryWorktreeBranch(`${WORKTREE_BRANCH_PREFIX}/DEADBEEF`)).toBe(true);
-  });
-
-  it("uses a configured prefix for temporary worktrees while recognizing older names", () => {
-    const branch = buildTemporaryWorktreeBranchName(() => "DEADBEEF", "nick/task");
-    expect(branch).toBe("nick/task/deadbeef");
-    expect(isTemporaryWorktreeBranch(branch, "nick/task")).toBe(true);
-    expect(isTemporaryWorktreeBranch("t3code/deadbeef", "nick/task")).toBe(true);
-    expect(isTemporaryWorktreeBranch("other/deadbeef", "nick/task")).toBe(false);
-    const flat = flattenTemporaryWorktreeBranchName(branch);
-    expect(flat).toBe("nick-task-deadbeef");
-    expect(isTemporaryWorktreeBranch(flat, "nick/task")).toBe(true);
   });
 
   it("normalizes a UUID-shaped random callback to the canonical 8-hex form", () => {

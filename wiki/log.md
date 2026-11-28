@@ -2,6 +2,7 @@
 
 ## 2026-11-28
 
+- Separated fork menu and skill ranking from upstream search and skill reload while [reconciling overlapping files](upstream-integration.md#jujutsu-retirement).
 - Recorded the [Jujutsu retirement](upstream-integration.md#jujutsu-retirement): normal Git removal can delete registered worktrees; Git checkpoint restore still protects legacy Jujutsu files.
 
 ## 2026-11-27

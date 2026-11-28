@@ -8,7 +8,7 @@ import {
   isMonospaceFamily,
   queryInstalledFontFamilies,
 } from "../../appearanceFonts";
-import { searchItems } from "@t3tools/shared/searchRanking";
+import { searchItems } from "@t3tools/shared/weightedSearch";
 import {
   Combobox,
   ComboboxEmpty,

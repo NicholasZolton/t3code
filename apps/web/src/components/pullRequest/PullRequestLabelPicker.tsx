@@ -3,7 +3,7 @@ import type { EnvironmentId, PullRequestLabelCandidate, PullRequestRef } from "@
 import { CheckIcon, TagIcon } from "lucide-react";
 import { msg, useGT, useMessages } from "gt-react";
 import { useState } from "react";
-import { searchItems, SEARCH_SECONDARY_FIELD_WEIGHT } from "@t3tools/shared/searchRanking";
+import { searchItems, SEARCH_SECONDARY_FIELD_WEIGHT } from "@t3tools/shared/weightedSearch";
 
 import { m } from "~/i18n/messages";
 

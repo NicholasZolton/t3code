@@ -1,4 +1,4 @@
-import { searchItems } from "@t3tools/shared/searchRanking";
+import { searchItems } from "@t3tools/shared/weightedSearch";
 import {
   STATIC_KEYBINDING_COMMANDS,
   type ClientSettings,

@@ -195,6 +195,10 @@
       "types": "./src/providerSkills.ts",
       "default": "./src/providerSkills.ts"
     },
+    "./providerSkillSearch": {
+      "types": "./src/providerSkillSearch.ts",
+      "default": "./src/providerSkillSearch.ts"
+    },
     "./providerUpdateRequiredModels": {
       "types": "./src/providerUpdateRequiredModels.ts",
       "default": "./src/providerUpdateRequiredModels.ts"
