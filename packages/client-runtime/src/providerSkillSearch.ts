@@ -7,7 +7,7 @@ import {
   SEARCH_SECONDARY_FIELD_WEIGHT,
   type SearchField,
 } from "@t3tools/shared/weightedSearch";
-import { getProviderSkillsForSlashMenu } from "./providerSkills.ts";
+import { dedupeProviderSkillsByName, isProviderSkillUserInvocable } from "./providerSkills.ts";
 
 function providerSkillSearchFields(skill: ServerProviderSkill): readonly SearchField[] {
   return [
@@ -28,7 +28,7 @@ export function searchProviderSkills(
   query: string,
   limit = Number.POSITIVE_INFINITY,
 ): ServerProviderSkill[] {
-  const visibleSkills = getProviderSkillsForSlashMenu(skills, true);
+  const visibleSkills = dedupeProviderSkillsByName(skills.filter(isProviderSkillUserInvocable));
   const normalizedQuery = normalizeSearchQuery(query, { trimLeadingPattern: /^\p{Sc}+/u });
   return searchItems(visibleSkills, normalizedQuery, providerSkillSearchFields, limit);
 }

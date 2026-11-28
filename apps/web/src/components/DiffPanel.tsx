@@ -916,6 +916,7 @@ export default function DiffPanel({
       )?.cwd,
     };
   };
+  // Only uncommitted and branch changes end at the working tree, the one version that can be shown.
   const workingTreeImagePath = (filePath: string) => {
     if (
       !isGitSelection ||
