@@ -28,6 +28,7 @@ import type { WorktreeSetupCardProps } from "./worktree-setup-card";
 import type { ComposerTextPaste } from "../../native/T3ComposerEditor.types";
 import { type EnvironmentConnectionPhase } from "@t3tools/client-runtime/connection";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
+import type { RunOutputRates } from "@t3tools/client-runtime/fork/run-output-rate";
 import type { HandoffEndpoints } from "@t3tools/client-runtime/handoff";
 import { queuedRunEditBlockedReason } from "@t3tools/client-runtime/queued-run-edit";
 import {
@@ -250,6 +251,7 @@ export interface ThreadDetailScreenProps {
   readonly feedbackSubmissions: ReadonlyArray<CodexFeedbackSubmission>;
   readonly onDismissFeedback: (id: MessageId) => void;
   readonly selectedThreadFeed: ReadonlyArray<ThreadFeedEntry>;
+  readonly runOutputRates?: RunOutputRates | undefined;
   readonly pendingHandoff?: HandoffEndpoints | null;
   readonly activityRun: ThreadFeedLatestRun | null;
   readonly activeWorkStartedAt: string | null;
@@ -1557,6 +1559,7 @@ function ThreadDetailBody(
                   detailRef={props.selectedThreadDetailRef}
                   workspaceRoot={props.threadCwd}
                   feed={props.selectedThreadFeed}
+                  runOutputRates={props.runOutputRates}
                   pendingHandoff={props.pendingHandoff}
                   statusLines={statusLines}
                   worktreeSetup={props.worktreeSetup}

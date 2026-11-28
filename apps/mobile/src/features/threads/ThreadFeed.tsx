@@ -65,6 +65,7 @@ import {
   resolveUserMessagePresentation,
 } from "@t3tools/client-runtime/user-message";
 import { canForkProjectedAssistantItem } from "@t3tools/client-runtime/state/thread-workflows";
+import type { RunOutputRates } from "@t3tools/client-runtime/fork/run-output-rate";
 import type { WorkflowOpening } from "@t3tools/client-runtime/state/subagentRuntime";
 import {
   AuthFilesystemReadScope,
@@ -394,6 +395,7 @@ export interface ThreadFeedProps {
   readonly threadTitle: string;
   readonly workspaceRoot?: string | null;
   readonly feed: ReadonlyArray<ThreadFeedEntry>;
+  readonly runOutputRates?: RunOutputRates | undefined;
   readonly pendingHandoff?: HandoffEndpoints | null;
   /** Thread states that close the feed: background work, then snooze or settle. */
   readonly statusLines?: ReadonlyArray<ThreadStatusLineModel>;
@@ -3012,7 +3014,11 @@ function useThreadFeedPresentation(
       props.activeWorkStartedAt,
       props.runlessWorkActive ?? false,
       feedCache,
-      { toolCallVisibility: props.toolCallVisibility ?? "showAll", revealedMessageId },
+      {
+        toolCallVisibility: props.toolCallVisibility ?? "showAll",
+        revealedMessageId,
+        runOutputRates: props.runOutputRates,
+      },
       messages,
       locale,
     ),

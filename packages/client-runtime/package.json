@@ -3,6 +3,10 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./fork/run-output-rate": {
+      "types": "./src/fork/runOutputRate.ts",
+      "default": "./src/fork/runOutputRate.ts"
+    },
     "./pull-request-diff-fold": {
       "types": "./src/pullRequestDiffFold.ts",
       "default": "./src/pullRequestDiffFold.ts"

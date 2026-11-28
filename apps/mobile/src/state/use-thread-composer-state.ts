@@ -6,6 +6,7 @@ import { AuthOrchestrationOperateScope } from "@t3tools/contracts";
 import { readEnvironmentScope } from "./session";
 import { useAtomValue } from "@effect/atom-react";
 import { compactBeforeSendTokens } from "@t3tools/client-runtime/state/context-window";
+import { deriveRunOutputRates } from "@t3tools/client-runtime/fork/run-output-rate";
 import { threadRuntimeIsActive } from "@t3tools/client-runtime/state/shell";
 import {
   runStopRequested,
@@ -1050,6 +1051,11 @@ export function useThreadComposerState(input: {
     feedbackSubmissions,
     dismissFeedback,
     selectedThreadFeed,
+    runOutputRates: deriveRunOutputRates(
+      selectedThreadProjection?.projection.runs,
+      selectedThreadProjection?.projection.attempts,
+      selectedThreadProjection?.projection.providerTurns,
+    ),
     selectedThreadActivityRun,
     selectedThreadAnnouncedRun,
     selectedThreadDetailBehindShell,

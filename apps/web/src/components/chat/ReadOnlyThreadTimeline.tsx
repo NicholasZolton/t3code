@@ -1,4 +1,5 @@
 import type { LegendListRef } from "@legendapp/list/react";
+import { deriveRunOutputRates } from "@t3tools/client-runtime/fork/run-output-rate";
 import {
   deriveRunlessWorkStartedAt,
   deriveThreadActivityRun,
@@ -101,6 +102,11 @@ export function ReadOnlyThreadTimeline(props: {
             isWorking={isWorking}
             activeTurnStartedAt={workStartedAt}
             latestRun={activityRun}
+            runOutputRates={deriveRunOutputRates(
+              projection.runs,
+              projection.attempts,
+              projection.providerTurns,
+            )}
             runningRunId={runningRunId}
             turnDiffSummaries={NO_TURN_DIFFS}
             runs={projection.runs}

@@ -144,6 +144,13 @@ Most code changes do not need an internal documentation change. Agents can read 
 - `packages/client-runtime` - client connection and domain state shared by web and mobile.
 - `.repos/` - vendored read-only references. Never edit or import from them (`vpr sync:repos` updates them; if sparse-checked-out, read via `git show origin/main:.repos/<path>`).
 
+### Keep fork features easy to merge
+
+- Put fork-only behavior and its tests in new files in the owning package, under `src/fork/` when practical. If multiple clients need the same behavior, implement it once in `packages/client-runtime` and expose a narrow subpath.
+- In upstream-owned files, add only the wiring the feature needs: imports, inputs, call sites, and cache invalidation. Reuse existing data and keep the upstream fallback in place. Don't move or rewrite unrelated upstream code to make room for a fork feature.
+- On an upstream merge, adapt the small call sites to upstream's current interfaces rather than restoring the fork's old copies of those files. If upstream now provides the feature, remove the fork module and its wiring.
+- For example, [run output rate](packages/client-runtime/src/fork/runOutputRate.ts) derives and formats tokens per second from the existing thread projection. Web and mobile pass the optional rate into their existing work rows; without a rate, the upstream duration label stays unchanged.
+
 ### Internal docs by area
 
 Read the matching doc before changing code in that area; code review enforces them.
