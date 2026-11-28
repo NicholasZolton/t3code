@@ -20,7 +20,6 @@ import {
   type SourceControlProviderKind,
   type SourceControlRepositoryVisibility,
   type ThreadId,
-  type VcsDriverKind,
 } from "@t3tools/contracts";
 import * as Cause from "effect/Cause";
 import { AsyncResult } from "effect/reactivity";
@@ -162,7 +161,7 @@ export function useSourceControlActionRunning(
 
 export function useVcsInitAction(scope: SourceControlActionScope) {
   const init = useAtomCommand(vcsEnvironment.init, { reportFailure: false });
-  const action = async (kind?: VcsDriverKind) => {
+  const action = async () => {
     const target = resolveScope(scope);
     if (target === null) {
       return AsyncResult.failure<never, VcsActionUnavailableError>(
@@ -177,7 +176,7 @@ export function useVcsInitAction(scope: SourceControlActionScope) {
     }
     return init({
       environmentId: target.environmentId,
-      input: { cwd: target.cwd, ...(kind ? { kind } : {}) },
+      input: { cwd: target.cwd },
     });
   };
   return useAction({ kind: "init", label: msg("Initializing repository"), scope, action });

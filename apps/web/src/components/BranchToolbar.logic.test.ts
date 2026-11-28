@@ -1,9 +1,4 @@
 import {
-  DEFAULT_VCS_TERMINOLOGY,
-  JJ_VCS_TERMINOLOGY,
-  JJ_WORKING_COPY_REVISION,
-} from "@t3tools/shared/vcs";
-import {
   EnvironmentId,
   GitCommandError,
   ProviderInstanceId,
@@ -22,12 +17,6 @@ import {
   resolveConfirmedSelectedRef,
   resolveDefaultWorktreeBaseBranch,
   resolveLocalCheckoutBranchMismatch,
-  resolvePreviousWorktreeSeed,
-  resolvePreviousWorktreeLabel,
-  resolveBranchToolbarValue,
-  resolveBranchTriggerLabel,
-  resolveEnvModeLabel,
-  resolveCurrentWorkspaceLabel,
   resolveLockedWorkspaceLabel,
   sanitizeNewRefName,
   shouldIncludeBranchPickerItem,
@@ -35,94 +24,6 @@ import {
   offersWorkspaceModes,
   toBranchActionErrorMessage,
 } from "./BranchToolbar.logic";
-
-describe("resolvePreviousWorktreeSeed", () => {
-  it("picks the most recently updated worktree thread", () => {
-    expect(
-      resolvePreviousWorktreeSeed({
-        threads: [
-          {
-            branch: "t3/older",
-            worktreePath: "/repo/.t3/worktrees/older",
-            updatedAt: "2026-07-20T00:00:00.000Z",
-          },
-          {
-            branch: "t3/newer",
-            worktreePath: "/repo/.t3/worktrees/newer",
-            updatedAt: "2026-07-22T00:00:00.000Z",
-          },
-          { branch: "main", worktreePath: null, updatedAt: "2026-07-23T00:00:00.000Z" },
-        ],
-        currentWorktreePath: null,
-      }),
-    ).toEqual({ branch: "t3/newer", worktreePath: "/repo/.t3/worktrees/newer" });
-  });
-
-  it("skips the worktree the composer already points at", () => {
-    expect(
-      resolvePreviousWorktreeSeed({
-        threads: [
-          {
-            branch: "t3/current",
-            worktreePath: "/repo/.t3/worktrees/current",
-            updatedAt: "2026-07-22T00:00:00.000Z",
-          },
-        ],
-        currentWorktreePath: "/repo/.t3/worktrees/current",
-      }),
-    ).toBeNull();
-  });
-
-  it("returns null when no thread has a worktree", () => {
-    expect(
-      resolvePreviousWorktreeSeed({
-        threads: [{ branch: "main", worktreePath: null, updatedAt: "2026-07-22T00:00:00.000Z" }],
-        currentWorktreePath: null,
-      }),
-    ).toBeNull();
-  });
-
-  it("ignores archived threads and threads with unparseable timestamps", () => {
-    expect(
-      resolvePreviousWorktreeSeed({
-        threads: [
-          {
-            branch: "t3/archived",
-            worktreePath: "/repo/.t3/worktrees/archived",
-            updatedAt: "2026-07-23T00:00:00.000Z",
-            archivedAt: "2026-07-23T01:00:00.000Z",
-          },
-          {
-            branch: "t3/garbage-timestamp",
-            worktreePath: "/repo/.t3/worktrees/garbage",
-            updatedAt: "not-a-date",
-          },
-          {
-            branch: "t3/live",
-            worktreePath: "/repo/.t3/worktrees/live",
-            updatedAt: "2026-07-21T00:00:00.000Z",
-            archivedAt: null,
-          },
-        ],
-        currentWorktreePath: null,
-      }),
-    ).toEqual({ branch: "t3/live", worktreePath: "/repo/.t3/worktrees/live" });
-  });
-});
-
-describe("resolvePreviousWorktreeLabel", () => {
-  it("includes the branch when known", () => {
-    expect(
-      resolvePreviousWorktreeLabel(
-        { branch: "t3/fix-thing", worktreePath: "/wt" },
-        DEFAULT_VCS_TERMINOLOGY,
-      ),
-    ).toBe("Previous worktree (t3/fix-thing)");
-    expect(
-      resolvePreviousWorktreeLabel({ branch: null, worktreePath: "/wt" }, DEFAULT_VCS_TERMINOLOGY),
-    ).toBe("Previous worktree");
-  });
-});
 
 describe("toBranchActionErrorMessage", () => {
   it("shows a Git failure's detail without the operation and cwd", () => {
@@ -159,181 +60,6 @@ describe("resolveDraftEnvModeAfterBranchChange", () => {
         effectiveEnvMode: "local",
       }),
     ).toBe("worktree");
-  });
-});
-
-describe("resolveBranchToolbarValue", () => {
-  it("defaults new-worktree mode to current git ref when no explicit base ref is set", () => {
-    expect(
-      resolveBranchToolbarValue({
-        envMode: "worktree",
-        activeWorktreePath: null,
-        activeThreadBranch: null,
-        currentGitBranch: "main",
-      }),
-    ).toBe("main");
-  });
-
-  it("keeps an explicitly selected worktree base ref", () => {
-    expect(
-      resolveBranchToolbarValue({
-        envMode: "worktree",
-        activeWorktreePath: null,
-        activeThreadBranch: "feature/base",
-        currentGitBranch: "main",
-      }),
-    ).toBe("feature/base");
-  });
-
-  it("shows the actual checked-out ref when not selecting a new worktree base", () => {
-    expect(
-      resolveBranchToolbarValue({
-        envMode: "local",
-        activeWorktreePath: null,
-        activeThreadBranch: "feature/base",
-        currentGitBranch: "main",
-      }),
-    ).toBe("main");
-  });
-});
-
-describe("resolveBranchTriggerLabel", () => {
-  it("labels the working-copy base without applying the origin default", () => {
-    expect(
-      resolveBranchTriggerLabel({
-        activeWorktreePath: null,
-        effectiveEnvMode: "worktree",
-        resolvedActiveBranch: JJ_WORKING_COPY_REVISION,
-        resolvedActiveBranchIsRemote: false,
-        startFromOrigin: true,
-        terminology: JJ_VCS_TERMINOLOGY,
-      }),
-    ).toBe("From current working copy");
-    expect(
-      shouldIncludeBranchPickerItem({
-        itemValue: JJ_WORKING_COPY_REVISION,
-        normalizedQuery: "working copy",
-        createBranchItemValue: null,
-        checkoutPullRequestItemValue: null,
-      }),
-    ).toBe(true);
-  });
-
-  it("names the empty state with the project's ref noun", () => {
-    const input = {
-      activeWorktreePath: null,
-      effectiveEnvMode: "worktree" as const,
-      resolvedActiveBranch: null,
-      resolvedActiveBranchIsRemote: null,
-      startFromOrigin: true,
-    };
-    expect(resolveBranchTriggerLabel({ ...input, terminology: DEFAULT_VCS_TERMINOLOGY })).toBe(
-      "Select branch",
-    );
-    expect(resolveBranchTriggerLabel({ ...input, terminology: JJ_VCS_TERMINOLOGY })).toBe(
-      "Select bookmark",
-    );
-  });
-
-  it("leaves the tracked remote name to the server", () => {
-    expect(
-      resolveBranchTriggerLabel({
-        activeWorktreePath: null,
-        effectiveEnvMode: "worktree",
-        resolvedActiveBranch: "main",
-        resolvedActiveBranchIsRemote: false,
-        startFromOrigin: true,
-        terminology: DEFAULT_VCS_TERMINOLOGY,
-      }),
-    ).toBe("From main (remote)");
-  });
-
-  it("marks local branch names containing slashes as remote bases", () => {
-    expect(
-      resolveBranchTriggerLabel({
-        activeWorktreePath: null,
-        effectiveEnvMode: "worktree",
-        resolvedActiveBranch: "feature/demo",
-        resolvedActiveBranchIsRemote: false,
-        startFromOrigin: true,
-        terminology: DEFAULT_VCS_TERMINOLOGY,
-      }),
-    ).toBe("From feature/demo (remote)");
-  });
-
-  it("shows the local ref when start from origin is disabled", () => {
-    expect(
-      resolveBranchTriggerLabel({
-        activeWorktreePath: null,
-        effectiveEnvMode: "worktree",
-        resolvedActiveBranch: "main",
-        resolvedActiveBranchIsRemote: false,
-        startFromOrigin: false,
-        terminology: DEFAULT_VCS_TERMINOLOGY,
-      }),
-    ).toBe("From main");
-  });
-
-  it("does not duplicate the origin prefix for an explicit remote ref", () => {
-    expect(
-      resolveBranchTriggerLabel({
-        activeWorktreePath: null,
-        effectiveEnvMode: "worktree",
-        resolvedActiveBranch: "origin/feature/demo",
-        resolvedActiveBranchIsRemote: true,
-        startFromOrigin: true,
-        terminology: DEFAULT_VCS_TERMINOLOGY,
-      }),
-    ).toBe("From origin/feature/demo");
-  });
-
-  it("preserves an explicit ref from a non-origin remote", () => {
-    expect(
-      resolveBranchTriggerLabel({
-        activeWorktreePath: null,
-        effectiveEnvMode: "worktree",
-        resolvedActiveBranch: "upstream/feature/demo",
-        resolvedActiveBranchIsRemote: true,
-        startFromOrigin: true,
-        terminology: DEFAULT_VCS_TERMINOLOGY,
-      }),
-    ).toBe("From upstream/feature/demo");
-  });
-
-  it("keeps current-checkout labels and empty state unchanged", () => {
-    expect(
-      resolveBranchTriggerLabel({
-        activeWorktreePath: null,
-        effectiveEnvMode: "local",
-        resolvedActiveBranch: "main",
-        resolvedActiveBranchIsRemote: false,
-        startFromOrigin: true,
-        terminology: DEFAULT_VCS_TERMINOLOGY,
-      }),
-    ).toBe("main");
-    expect(
-      resolveBranchTriggerLabel({
-        activeWorktreePath: null,
-        effectiveEnvMode: "worktree",
-        resolvedActiveBranch: null,
-        resolvedActiveBranchIsRemote: null,
-        startFromOrigin: true,
-        terminology: DEFAULT_VCS_TERMINOLOGY,
-      }),
-    ).toBe("Select branch");
-  });
-
-  it("does not fabricate an origin ref while branch metadata is loading", () => {
-    expect(
-      resolveBranchTriggerLabel({
-        activeWorktreePath: null,
-        effectiveEnvMode: "worktree",
-        resolvedActiveBranch: "upstream/feature/demo",
-        resolvedActiveBranchIsRemote: null,
-        startFromOrigin: true,
-        terminology: DEFAULT_VCS_TERMINOLOGY,
-      }),
-    ).toBe("From upstream/feature/demo");
   });
 });
 
@@ -413,25 +139,6 @@ describe("resolveEffectiveEnvMode", () => {
   });
 });
 
-describe("resolveEnvModeLabel", () => {
-  it("uses explicit workspace labels", () => {
-    expect(resolveEnvModeLabel("local", DEFAULT_VCS_TERMINOLOGY)).toBe("Current checkout");
-    expect(resolveEnvModeLabel("worktree", DEFAULT_VCS_TERMINOLOGY)).toBe("New worktree");
-  });
-});
-
-describe("resolveCurrentWorkspaceLabel", () => {
-  it("describes the main repo checkout when no worktree path is active", () => {
-    expect(resolveCurrentWorkspaceLabel(null, DEFAULT_VCS_TERMINOLOGY)).toBe("Current checkout");
-  });
-
-  it("describes the active checkout as a worktree when one is attached", () => {
-    expect(
-      resolveCurrentWorkspaceLabel("/repo/.t3/worktrees/feature-a", DEFAULT_VCS_TERMINOLOGY),
-    ).toBe("Current worktree");
-  });
-});
-
 describe("offersWorkspaceModes", () => {
   it("offers worktrees from a repository or tracked repositories, never in No project", () => {
     const folder = { isScratchProject: false, isGitRepo: false, tracksGitRepositories: false };
@@ -446,14 +153,6 @@ describe("offersWorkspaceModes", () => {
 });
 
 describe("resolveLockedWorkspaceLabel", () => {
-  it("uses a shorter label for the main repo checkout", () => {
-    expect(resolveLockedWorkspaceLabel(null, "local")).toBe("Local checkout");
-  });
-
-  it("describes a worktree that is still being created as a new worktree", () => {
-    expect(resolveLockedWorkspaceLabel(null, "worktree")).toBe("New worktree");
-  });
-
   it.each([
     ["/home/me/.t3/worktrees/app/t3-ff466c42", "t3-ff466c42"],
     ["/home/me/.t3/worktrees/app/t3-ff466c42/", "t3-ff466c42"],

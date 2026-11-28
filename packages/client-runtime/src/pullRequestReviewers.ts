@@ -2,7 +2,7 @@ import type {
   PullRequestReviewerCandidate,
   PullRequestReviewerCandidateList,
 } from "@t3tools/contracts";
-import { searchItems } from "@t3tools/shared/searchRanking";
+import { searchItems } from "@t3tools/shared/weightedSearch";
 
 // Loaded rows retain the request state updated by mutations.
 export function mergeReviewerCandidates(

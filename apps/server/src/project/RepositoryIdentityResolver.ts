@@ -1,9 +1,3 @@
-// @effect-diagnostics nodeBuiltinImport:off - the marker walk is a handful of sync stats beside a
-// subprocess this resolver already spawns, and the module deliberately takes no FileSystem or Path
-// dependency: its layer is constructed in three places this workstream does not own.
-import * as NodeFS from "node:fs";
-import * as NodePath from "node:path";
-
 import type { RepositoryIdentity, SourceControlProviderError } from "@t3tools/contracts";
 import { parseGitRemoteHost } from "@t3tools/source-control-core/shared/definition";
 import { repositoryPathFromRemoteUrl } from "@t3tools/source-control-core/server/SourceControlProvider";
@@ -20,7 +14,6 @@ import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
 
-import { mainWorkspaceRootFromRepoPointer } from "../vcs/JjRepo.ts";
 import * as ProcessRunner from "../processRunner.ts";
 import { sourceControlDefinitions } from "../sourceControl/sourceControlDefinitions.ts";
 import { explicitBareRepositoryEnv, unsetInheritedRepositoryEnv } from "../vcs/VcsProcess.ts";
@@ -252,62 +245,6 @@ function buildRepositoryIdentity(input: {
   };
 }
 
-function statMarker(candidate: string): NodeFS.Stats | null {
-  try {
-    return NodeFS.statSync(candidate);
-  } catch (error) {
-    if (
-      error instanceof Error &&
-      "code" in error &&
-      (error.code === "ENOENT" || error.code === "ENOTDIR")
-    ) {
-      return null;
-    }
-    throw error;
-  }
-}
-
-/**
- * The root of the repository `cwd` belongs to, resolved from the nearest `.jj` or `.git` marker.
- * A secondary Jujutsu workspace has no `.git` at all, so `git rev-parse --show-toplevel` returns
- * nothing there, and every consumer of the repository identity (pull-request sync, the projector,
- * the decider) goes dark with no error surfaced anywhere.
- */
-function resolveRepositoryRootFromMarkers(cwd: string): string | null {
-  let current = cwd;
-  for (;;) {
-    if (statMarker(NodePath.join(current, ".jj"))?.isDirectory()) {
-      const repoPointer = NodePath.join(current, ".jj", "repo");
-      if (statMarker(repoPointer)?.isDirectory()) {
-        return current;
-      }
-      const pointerContents = NodeFS.readFileSync(repoPointer, "utf8");
-      try {
-        return mainWorkspaceRootFromRepoPointer(current, pointerContents);
-      } catch {
-        return current;
-      }
-    }
-    if (statMarker(NodePath.join(current, ".git")) !== null) {
-      return null;
-    }
-    const parent = NodePath.dirname(current);
-    if (parent === current) {
-      return null;
-    }
-    current = parent;
-  }
-}
-
-function resolveRepositoryRootFromReadableMarkers(cwd: string): string | null {
-  try {
-    return resolveRepositoryRootFromMarkers(cwd);
-  } catch {
-    // A marker is unreadable; let git resolve the repository from cwd.
-    return null;
-  }
-}
-
 class RepositoryIdentityCacheKey extends Data.Class<{
   readonly rootPath: string;
   readonly isBare: boolean;
@@ -332,11 +269,6 @@ const resolveRepositoryIdentityCacheKey = Effect.fn("RepositoryIdentityResolver.
       Effect.orElseSucceed(() => true),
     );
     if (!isFolder) return null;
-
-    const jjRoot = resolveRepositoryRootFromReadableMarkers(cwd);
-    if (jjRoot !== null) {
-      return new RepositoryIdentityCacheKey({ rootPath: jjRoot, isBare: false });
-    }
 
     // git is always a real executable; cmd shell mode would split spaced paths on re-tokenization.
     const topLevelResult = yield* processRunner

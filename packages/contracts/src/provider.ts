@@ -12,8 +12,6 @@ import { SignInUrl } from "./providerSetup.ts";
 
 export const ProviderSendTurnInput = Schema.Struct({
   threadId: ThreadId,
-  /** Server-resolved context; null clears the hint on existing and resumed sessions. */
-  vcsAgentHint: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
   /** Internal recovery: permits empty turns only for adapters supporting promptless continuation. */
   continuation: Schema.optional(Schema.Boolean),
   input: Schema.optional(

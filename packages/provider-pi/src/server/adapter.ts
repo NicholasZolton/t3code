@@ -1,6 +1,5 @@
 // Preserve Pi's own extensions and sessions. Only agent_settled, confirmed idle,
 // terminates a turn; agent_end can precede compaction or queued continuations.
-import { buildVcsAgentContext } from "@t3tools/provider-core/server/runtimeInstructions";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import * as NodeUtil from "node:util";
 import { AgentScope } from "@t3tools/shared/AgentScope";
@@ -3548,11 +3547,7 @@ export const makePiAdapterV2 = Effect.fn("makePiAdapterV2")(function* (
               : parsePiCompactCommand(turnInput.message.text);
             const payload =
               !continuation && compactCommand === null
-                ? yield* resolvePromptPayload(
-                    turnInput.message.text +
-                      buildVcsAgentContext(turnInput.runtimePolicy.vcsAgentHint),
-                    turnInput.message.attachments,
-                  )
+                ? yield* resolvePromptPayload(turnInput.message.text, turnInput.message.attachments)
                 : null;
             const startedAt = yield* DateTime.now;
             const syntheticNativeTurnId = `${state.providerThread.id}:attempt:${turnInput.attemptId}`;

@@ -1,9 +1,3 @@
-import {
-  DEFAULT_VCS_TERMINOLOGY,
-  JJ_WORKING_COPY_LABEL,
-  JJ_WORKING_COPY_REVISION,
-  type VcsTerminology,
-} from "@t3tools/shared/vcs";
 import { NativeScrollView } from "../../native/NativeScrollViewMarker";
 import { errorDisplayMessage } from "@t3tools/client-runtime/errors";
 import { Button } from "../../components/ui/Button";
@@ -320,16 +314,7 @@ export function NewTaskBranchPickerRouteScreen() {
 
   return (
     <BranchPickerScreen
-      title={
-        flow.vcsTerminology.systemName === "Jujutsu"
-          ? flow.workspaceMode === "worktree"
-            ? gt("Base {refNoun}", { refNoun: flow.vcsTerminology.refNoun })
-            : flow.vcsTerminology.refNounTitle
-          : flow.workspaceMode === "worktree"
-            ? gt("Base branch")
-            : gt("Branch")
-      }
-      terminology={flow.vcsTerminology}
+      title={flow.workspaceMode === "worktree" ? gt("Base branch") : gt("Branch")}
       project={flow.selectedProject}
       branches={filterNewTaskBranches(branchState.refs, branchQuery)}
       selectedBranchName={
@@ -348,17 +333,6 @@ export function NewTaskBranchPickerRouteScreen() {
       onLoadMore={branchState.loadNext}
       selectionDisabled={switchingBranchName !== null}
       onSelect={selectBranch}
-      workingCopy={
-        flow.canSelectWorkingCopy
-          ? {
-              onSelect: () => {
-                flow.selectWorkingCopy();
-                setBranchQuery("");
-                navigation.goBack();
-              },
-            }
-          : undefined
-      }
       worktree={
         flow.workspaceMode === "worktree"
           ? {
@@ -470,7 +444,6 @@ export function NewTaskRepositoriesPickerRouteScreen() {
 }
 
 export function BranchPickerScreen(props: {
-  readonly terminology?: VcsTerminology;
   readonly title: string;
   readonly project: EnvironmentProject | null;
   readonly branches: readonly VcsRef[];
@@ -485,7 +458,6 @@ export function BranchPickerScreen(props: {
   readonly onLoadMore: () => void;
   readonly selectionDisabled?: boolean;
   readonly onSelect: (branch: VcsRef) => void;
-  readonly workingCopy?: { readonly onSelect: () => void } | undefined;
   readonly worktree?: {
     readonly startFromOrigin: boolean;
     readonly onChangeStartFromOrigin: (value: boolean) => void;
@@ -495,19 +467,12 @@ export function BranchPickerScreen(props: {
   const m = useMessages();
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
-  const terminology = props.terminology ?? DEFAULT_VCS_TERMINOLOGY;
   useRefreshBranchesOnFocus(props.project?.environmentId, props.project?.workspaceRoot);
   const search: AppBarSearch = {
     value: props.query,
     onChangeText: props.onQueryChange,
-    placeholder:
-      terminology.systemName === "Jujutsu"
-        ? gt("Find a {refNoun}", { refNoun: terminology.refNoun })
-        : gt("Find a branch"),
-    clearAccessibilityLabel:
-      terminology.systemName === "Jujutsu"
-        ? gt("Clear {refNoun} search", { refNoun: terminology.refNoun })
-        : gt("Clear branch search"),
+    placeholder: gt("Find a branch"),
+    clearAccessibilityLabel: gt("Clear branch search"),
     mode: "inline",
     compactToolbar: true,
   };
@@ -540,38 +505,20 @@ export function BranchPickerScreen(props: {
     />
   );
 
-  const showWorkingCopy =
-    props.workingCopy !== undefined &&
-    JJ_WORKING_COPY_LABEL.toLowerCase().includes(props.query.trim().toLowerCase());
-  const branchListHeader = (
-    <>
-      {showWorkingCopy ? (
-        <View className="mb-3 overflow-hidden rounded-2xl">
-          <SelectionRow
-            title={JJ_WORKING_COPY_LABEL}
-            selected={selectedBranchName === JJ_WORKING_COPY_REVISION}
-            disabled={props.selectionDisabled}
-            onPress={() => props.workingCopy?.onSelect()}
-            isLast
-          />
-        </View>
-      ) : null}
-      {props.worktree && selectedBranchName !== JJ_WORKING_COPY_REVISION ? (
-        <View
-          className={cn(
-            "mb-3 overflow-hidden",
-            Platform.OS === "android" ? "rounded-[28px]" : "rounded-2xl",
-          )}
-        >
-          <ToggleRow
-            onValueChange={props.worktree.onChangeStartFromOrigin}
-            title={gt("Start from remote")}
-            value={props.worktree.startFromOrigin}
-          />
-        </View>
-      ) : null}
-    </>
-  );
+  const branchListHeader = props.worktree ? (
+    <View
+      className={cn(
+        "mb-3 overflow-hidden",
+        Platform.OS === "android" ? "rounded-[28px]" : "rounded-2xl",
+      )}
+    >
+      <ToggleRow
+        onValueChange={props.worktree.onChangeStartFromOrigin}
+        title={gt("Start from remote")}
+        value={props.worktree.startFromOrigin}
+      />
+    </View>
+  ) : null;
 
   const branchContent =
     props.branches.length === 0 ? (
@@ -592,22 +539,12 @@ export function BranchPickerScreen(props: {
           {props.loading ? <AppActivityIndicator /> : null}
           <Text className="text-center text-sm text-foreground-muted">
             {props.loading
-              ? terminology.systemName === "Jujutsu"
-                ? gt("Loading {refNounPlural}…", { refNounPlural: terminology.refNounPlural })
-                : gt("Loading branches…")
+              ? gt("Loading branches…")
               : props.error
                 ? props.error
                 : props.query
-                  ? terminology.systemName === "Jujutsu"
-                    ? gt("No matching {refNounPlural}", {
-                        refNounPlural: terminology.refNounPlural,
-                      })
-                    : gt("No matching branches")
-                  : terminology.systemName === "Jujutsu"
-                    ? gt("No {refNounPlural} available", {
-                        refNounPlural: terminology.refNounPlural,
-                      })
-                    : gt("No branches available")}
+                  ? gt("No matching branches")
+                  : gt("No branches available")}
           </Text>
           {!props.loading && props.error ? (
             <View className="self-center">

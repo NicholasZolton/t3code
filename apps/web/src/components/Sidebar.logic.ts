@@ -4,7 +4,7 @@ import { resolveThreadWorkingStartedAt } from "@t3tools/client-runtime/state/mod
 import { isShownUnderParent } from "@t3tools/client-runtime/state/threads";
 import { backgroundWorkHoldsCompletion } from "@t3tools/shared/orchestrationV2PendingBackgroundWork";
 import { threadPullRequestSearchTerms } from "@t3tools/shared/threadPullRequests";
-import { searchItems } from "@t3tools/shared/searchRanking";
+import { searchItems } from "@t3tools/shared/weightedSearch";
 import * as React from "react";
 import { msg } from "gt-react";
 import { m, type MessageResolver } from "../i18n/messages";

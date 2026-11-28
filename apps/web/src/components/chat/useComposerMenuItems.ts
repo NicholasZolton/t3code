@@ -34,8 +34,8 @@ import { basenameOfPath } from "../../pierre-icons";
 import {
   getProviderSkillsForSlashMenu,
   getProviderSlashCommandsForSlashMenu,
-  searchProviderSkills,
 } from "@t3tools/client-runtime/providerSkills";
+import { searchProviderSkills } from "@t3tools/client-runtime/providerSkillSearch";
 import { useVisibleThreadShells } from "~/state/entities";
 import { useEnvironmentIdentities, useEnvironmentMachines } from "~/state/environments";
 import { offersLinkedEnvironmentsAtom } from "~/state/peerLinks";

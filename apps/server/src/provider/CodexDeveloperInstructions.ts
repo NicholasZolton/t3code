@@ -1,9 +1,6 @@
 import type { AgentFeedbackMode } from "@t3tools/contracts";
 import type { V2TurnStartParams__AdditionalContextEntry } from "effect-codex-app-server/schema";
-import {
-  buildRuntimeInstructions,
-  buildVcsAgentContext,
-} from "@t3tools/provider-core/server/runtimeInstructions";
+import { buildRuntimeInstructions } from "@t3tools/provider-core/server/runtimeInstructions";
 
 import {
   T3_CODE_BROWSER_TOOL_INSTRUCTIONS,
@@ -35,7 +32,6 @@ const toolInstructions = (tools: T3CodeToolAvailability): string =>
     .join("\n\n");
 
 export interface CodexRuntimeInfo {
-  readonly vcsAgentHint?: string | null | undefined;
   readonly agentFeedback?: AgentFeedbackMode;
   readonly model: string;
   readonly modelName?: string | undefined;
@@ -59,23 +55,8 @@ export function buildCodexAdditionalContext(
     ),
     t3_code_runtime: {
       kind: "application",
-      value: buildRuntimeInstructions({
-        harness: "Codex",
-        model: runtime.model,
-        modelName: runtime.modelName,
-        reasoningEffort: runtime.reasoningEffort,
-        agentFeedback: runtime.agentFeedback ?? "off",
-      }),
+      value: buildRuntimeInstructions({ harness: "Codex", ...runtime }),
     },
     ...(tools ? { t3_code_tools: { kind: "application", value: tools } } : {}),
-    ...codexVcsContext(runtime.vcsAgentHint),
   };
-}
-
-function codexVcsContext(
-  hint: string | null | undefined,
-): Record<string, V2TurnStartParams__AdditionalContextEntry> {
-  return hint
-    ? { t3_vcs_context: { kind: "application", value: buildVcsAgentContext(hint).trim() } }
-    : {};
 }

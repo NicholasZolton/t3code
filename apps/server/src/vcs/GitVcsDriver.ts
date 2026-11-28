@@ -51,7 +51,7 @@ import {
 import * as CheckoutCloner from "./CheckoutCloner.ts";
 import * as CheckpointCaptureIndex from "./checkpointCaptureIndex.ts";
 import * as VcsDriver from "./VcsDriver.ts";
-import { chunkPathsForCheckIgnore } from "./VcsPathCodecs.ts";
+import { isLegacyJjWorkspace, legacyJjWorkspaceMessage } from "./JjRepo.ts";
 import * as VcsProcess from "./VcsProcess.ts";
 
 export interface ExecuteGitInput {
@@ -579,6 +579,7 @@ const WORKSPACE_FILES_MAX_OUTPUT_BYTES = 16 * 1024 * 1024;
 const FLAGGED_INDEX_ENTRIES_MAX_BYTES = 1024 * 1024;
 const CHECKPOINT_RECOVERY_MAX_CANDIDATES = 64;
 const CHECKPOINT_RECOVERY_TIMEOUT = "5 seconds";
+const GIT_CHECK_IGNORE_MAX_STDIN_BYTES = 256 * 1024;
 // Reflog subjects that only point a ref at an existing commit. Anything else counts as creating
 // one, so an unknown subject keeps its commit attributed.
 const REF_MOVE_REFLOG_SUBJECT =
@@ -612,6 +613,36 @@ const nowFreshness = Effect.fn("GitVcsDriver.nowFreshness")(function* () {
     expiresAt: Option.none(),
   };
 });
+
+function chunkPathsForGitCheckIgnore(relativePaths: ReadonlyArray<string>): string[][] {
+  const chunks: string[][] = [];
+  let chunk: string[] = [];
+  let chunkBytes = 0;
+
+  for (const relativePath of relativePaths) {
+    const relativePathBytes = Buffer.byteLength(relativePath) + 1;
+    if (chunk.length > 0 && chunkBytes + relativePathBytes > GIT_CHECK_IGNORE_MAX_STDIN_BYTES) {
+      chunks.push(chunk);
+      chunk = [];
+      chunkBytes = 0;
+    }
+
+    chunk.push(relativePath);
+    chunkBytes += relativePathBytes;
+
+    if (chunkBytes >= GIT_CHECK_IGNORE_MAX_STDIN_BYTES) {
+      chunks.push(chunk);
+      chunk = [];
+      chunkBytes = 0;
+    }
+  }
+
+  if (chunk.length > 0) {
+    chunks.push(chunk);
+  }
+
+  return chunks;
+}
 
 function parseGitRemoteVerboseOutput(
   output: string,
@@ -705,6 +736,18 @@ export const makeVcsDriverShape = Effect.fn("makeGitVcsDriverShape")(function* (
   const vcsProcess = yield* VcsProcess.VcsProcess;
   const random = yield* SecureRandom.SecureRandom;
   const hostPlatform = yield* HostProcess.Platform;
+  const ensureNotJjWorkspace = Effect.fn("GitVcsDriver.ensureNotJjWorkspace")(function* (
+    operation: string,
+    cwd: string,
+  ) {
+    if (yield* isLegacyJjWorkspace(fileSystem, path, cwd)) {
+      return yield* new VcsUnsupportedOperationError({
+        operation,
+        kind: "jj",
+        detail: legacyJjWorkspaceMessage,
+      });
+    }
+  });
   // Returns stdout, or null when there is no work tree. A non-repository exits 128 like a broken
   // one, so only Git's message (pinned to the C locale) or a missing cwd tells them apart.
   const probeWorkTree = Effect.fn("GitVcsDriver.probeWorkTree")(function* (
@@ -784,6 +827,7 @@ export const makeVcsDriverShape = Effect.fn("makeGitVcsDriverShape")(function* (
   const detectRepository: VcsDriver.VcsDriver["Service"]["detectRepository"] = Effect.fn(
     "detectRepository",
   )(function* (cwd) {
+    if (yield* isLegacyJjWorkspace(fileSystem, path, cwd)) return null;
     // One spawn answers all three; outside a work tree it exits non-zero or prints "false".
     const stdout = yield* probeWorkTree(
       "GitVcsDriver.detectRepository",
@@ -917,7 +961,7 @@ export const makeVcsDriverShape = Effect.fn("makeGitVcsDriverShape")(function* (
 
     const ignoredPaths = new Set<string>();
     // ./ avoids leading : pathspec magic; check-ignore rejects --literal-pathspecs.
-    const chunks = chunkPathsForCheckIgnore(
+    const chunks = chunkPathsForGitCheckIgnore(
       relativePaths.map((relativePath) => `./${relativePath}`),
     );
 
@@ -958,11 +1002,16 @@ export const makeVcsDriverShape = Effect.fn("makeGitVcsDriverShape")(function* (
     return relativePaths.filter((relativePath) => !ignoredPaths.has(relativePath));
   });
 
-  const initRepository: VcsDriver.VcsDriver["Service"]["initRepository"] = (input) =>
-    gitCommand(vcsProcess, "GitVcsDriver.initRepository", input.cwd, ["init"], {
+  const initRepository: VcsDriver.VcsDriver["Service"]["initRepository"] = Effect.fn(
+    "GitVcsDriver.initRepository",
+  )(function* (input) {
+    const operation = "GitVcsDriver.initRepository";
+    yield* ensureNotJjWorkspace(operation, input.cwd);
+    yield* gitCommand(vcsProcess, operation, input.cwd, ["init"], {
       timeoutMs: 10_000,
       maxOutputBytes: 64 * 1024,
-    }).pipe(Effect.asVoid);
+    });
+  });
 
   const resolveHeadCommit = (cwd: string) =>
     execute({
@@ -2237,6 +2286,7 @@ export const makeVcsDriverShape = Effect.fn("makeGitVcsDriverShape")(function* (
 
     restoreCheckpoint: Effect.fn("GitVcsDriver.checkpoints.restoreCheckpoint")(function* (input) {
       const operation = "GitVcsDriver.checkpoints.restoreCheckpoint";
+      yield* ensureNotJjWorkspace(operation, input.cwd);
 
       let commitOid = yield* resolveCheckpointCommit(input.cwd, input.checkpointRef);
 
@@ -2827,14 +2877,6 @@ export const makeVcsDriverShape = Effect.fn("makeGitVcsDriverShape")(function* (
   };
 
   return {
-    capabilities: {
-      kind: "git" as const,
-      supportsWorktrees: true,
-      supportsBookmarks: false,
-      supportsAtomicSnapshot: false,
-      supportsPushDefaultRemote: true,
-      ignoreClassifier: "native" as const,
-    },
     execute,
     checkpoints,
     detectRepository,

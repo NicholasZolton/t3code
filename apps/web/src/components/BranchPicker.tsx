@@ -1,4 +1,3 @@
-import { DEFAULT_VCS_TERMINOLOGY, type VcsTerminology } from "@t3tools/shared/vcs";
 import { useLegendListRef } from "~/hooks/useLegendListRef";
 import type { VcsRef } from "@t3tools/contracts";
 import { LegendList, type LegendListRef } from "@legendapp/list/react";
@@ -22,7 +21,6 @@ import {
 import { SharedTooltipTrigger } from "./ui/shared-tooltip";
 
 export function BranchPicker({
-  terminology = DEFAULT_VCS_TERMINOLOGY,
   items,
   filteredItems,
   value,
@@ -42,7 +40,6 @@ export function BranchPicker({
   getItemType,
   children,
 }: {
-  terminology?: VcsTerminology;
   items: string[];
   filteredItems: string[];
   value: string | null;
@@ -178,22 +175,18 @@ export function BranchPicker({
                     id={startFromOriginSwitchId}
                     checked={originControl.checked}
                     size="sm"
-                    aria-label={gt("Start {workspaceNoun} from origin", {
-                      workspaceNoun: terminology.workspaceNoun,
-                    })}
+                    aria-label={gt("Start worktree from remote")}
                     onCheckedChange={(checked) => originControl.onCheckedChange(Boolean(checked))}
                   />
                 </label>
               }
               label={
                 <>
-                  {terminology.systemName === "Git"
-                    ? gt(
-                        "Creates the worktree from the latest matching branch on origin instead of your local branch.",
-                      )
-                    : gt(
-                        "Creates the workspace from the latest matching bookmark on origin instead of your local bookmark.",
-                      )}
+                  <T>
+                    Uses the latest commit of the base branch’s tracked remote branch, even if its
+                    name differs. Otherwise uses the same-named branch on origin. Uses your local
+                    branch if that remote branch is missing.
+                  </T>
                 </>
               }
               className="max-w-72 whitespace-normal"
@@ -208,7 +201,6 @@ export function BranchPicker({
 }
 
 export function BranchPickerRefItem({
-  terminology = DEFAULT_VCS_TERMINOLOGY,
   branch: refName,
   projectCwd: activeProjectCwd,
   index,
@@ -217,7 +209,6 @@ export function BranchPickerRefItem({
   onClick,
   onContextMenu,
 }: {
-  terminology?: VcsTerminology;
   branch: VcsRef;
   projectCwd: string | null;
   index: number;
@@ -233,9 +224,7 @@ export function BranchPickerRefItem({
   const badge = refName.current
     ? gt("current", { $context: "git ref badge, the checked-out branch" })
     : hasSecondaryWorktree
-      ? terminology.systemName === "Jujutsu"
-        ? terminology.workspaceNoun
-        : gt("worktree", { $context: "git ref badge, checked out in another worktree" })
+      ? gt("worktree", { $context: "git ref badge, checked out in another worktree" })
       : refName.isRemote
         ? gt("remote", { $context: "git ref badge, a remote branch" })
         : refName.isDefault

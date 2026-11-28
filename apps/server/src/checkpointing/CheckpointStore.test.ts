@@ -141,6 +141,27 @@ it.layer(layerTest)("CheckpointStore.layer", (it) => {
       expect(yield* checkpointStore.supportsCheckpoints(nested)).toBe(true);
     }),
   );
+
+  it.effect("refuses to restore a Git checkpoint over a colocated Jujutsu workspace", () =>
+    Effect.gen(function* () {
+      const cwd = yield* makeTmpDir();
+      yield* initRepoWithCommit(cwd);
+      const fileSystem = yield* FileSystem.FileSystem;
+      const checkpointStore = yield* CheckpointStore.CheckpointStore;
+      const checkpointRef = checkpointRefForThreadTurn(ThreadId.make("legacy-jj"), 1);
+      yield* checkpointStore.captureCheckpoint({ cwd, checkpointRef });
+      const readme = NodePath.join(cwd, "README.md");
+      yield* writeTextFile(readme, "keep my local edits\n");
+      yield* fileSystem.makeDirectory(NodePath.join(cwd, ".jj"));
+
+      expect(yield* checkpointStore.supportsCheckpoints(cwd)).toBe(false);
+      const failure = yield* checkpointStore
+        .restoreCheckpoint({ cwd, checkpointRef })
+        .pipe(Effect.flip);
+      expect(failure.message).toContain("Jujutsu");
+      expect(yield* fileSystem.readFileString(readme)).toBe("keep my local edits\n");
+    }),
+  );
   it.effect("fails the repository probe that other callers read as no repository", () =>
     Effect.gen(function* () {
       const tmp = yield* makeTmpDir();

@@ -1,4 +1,4 @@
-import { searchItems } from "./searchRanking.ts";
+import { searchItems } from "./weightedSearch.ts";
 
 import { mFallback, msg } from "gt-i18n";
 import type { MFunctionType } from "gt-i18n/types";

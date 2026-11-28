@@ -1,5 +1,4 @@
 import type { ModelOption, ProviderGroup } from "../../lib/modelOptions";
-import { SEARCH_FAVORITE_SCORE_BOOST, scoreSearchFields } from "@t3tools/shared/searchRanking";
 import type { ModelSelection, ProviderInstanceId } from "@t3tools/contracts";
 
 export function modelFavoriteKey(provider: ProviderInstanceId, model: string): string {
@@ -18,21 +17,22 @@ export function favoritesFirst(
   return [...favorites, ...others];
 }
 
-/** Rank the terms a user can actually see or recognize in the model picker. */
-export function scoreModelCatalogQuery(input: {
+export function modelMatchesCatalogQuery(input: {
   readonly model: ModelOption;
   readonly providerLabel: string;
   readonly query: string;
-}): number | null {
-  return scoreSearchFields(
-    [
-      input.model.label,
-      input.model.selection.model,
-      { value: input.model.subtitle, weight: 20 },
-      { value: input.providerLabel, weight: 30 },
-    ],
-    input.query,
-  );
+}): boolean {
+  const query = input.query.trim().toLocaleLowerCase();
+  if (query.length === 0) {
+    return true;
+  }
+
+  return [
+    input.model.label,
+    input.model.subtitle,
+    input.model.selection.model,
+    input.providerLabel,
+  ].some((value) => value.toLocaleLowerCase().includes(query));
 }
 
 export function visibleCatalogModels(input: {
@@ -51,24 +51,18 @@ export function visibleCatalogModels(input: {
           (model) =>
             !model.isLegacy || input.isDisplayed(model) || input.favoriteKeys.has(model.key),
         );
-  const favoriteOrderedModels = favoritesFirst(
-    catalogModels.filter((model) => !input.favoritesOnly || input.favoriteKeys.has(model.key)),
+  return favoritesFirst(
+    catalogModels.filter(
+      (model) =>
+        (!input.favoritesOnly || input.favoriteKeys.has(model.key)) &&
+        modelMatchesCatalogQuery({
+          model,
+          providerLabel: input.providerLabel,
+          query: input.query,
+        }),
+    ),
     input.favoriteKeys,
   );
-  return favoriteOrderedModels
-    .flatMap((model, index) => {
-      const score = scoreModelCatalogQuery({
-        model,
-        providerLabel: input.providerLabel,
-        query: input.query,
-      });
-      if (score === null) return [];
-      const boost =
-        input.query.trim() && input.favoriteKeys.has(model.key) ? SEARCH_FAVORITE_SCORE_BOOST : 0;
-      return [{ model, index, score: score - boost }];
-    })
-    .sort((left, right) => left.score - right.score || left.index - right.index)
-    .map(({ model }) => model);
 }
 
 export function pendingModelAfterPress(input: {

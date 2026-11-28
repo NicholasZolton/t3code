@@ -1,4 +1,4 @@
-import { searchItems, SEARCH_SECONDARY_FIELD_WEIGHT } from "@t3tools/shared/searchRanking";
+import { searchItems, SEARCH_SECONDARY_FIELD_WEIGHT } from "@t3tools/shared/weightedSearch";
 import type { EnvironmentId, ThreadId } from "@t3tools/contracts";
 import { CheckIcon, MessageSquareIcon } from "lucide-react";
 import { T, useGT } from "gt-react";

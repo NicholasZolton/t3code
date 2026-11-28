@@ -304,7 +304,6 @@ export function backgroundWorkNowItem(
 /** The local checkout moved off the branch this thread last ran on. */
 export function branchMismatchBannerItem(
   input: {
-    readonly refNoun: string;
     readonly mismatchKey: string;
     readonly mismatch: { readonly threadBranch: string; readonly currentBranch: string };
     readonly restoreDisabled: boolean;
@@ -346,19 +345,10 @@ export function branchMismatchBannerItem(
     ),
     actions: (
       <Button size="xs" variant="ghost" disabled={input.restoreDisabled} onClick={input.onRestore}>
-        {input.restoring ? (
-          <T>Restoring...</T>
-        ) : input.refNoun === "branch" ? (
-          <T>Restore branch</T>
-        ) : (
-          resolve(msg("Restore {refNoun}", { refNoun: input.refNoun }))
-        )}
+        {input.restoring ? <T>Restoring...</T> : <T>Restore branch</T>}
       </Button>
     ),
-    dismissLabel:
-      input.refNoun !== "branch"
-        ? resolve(msg("Dismiss {refNoun} change notice", { refNoun: input.refNoun }))
-        : resolve(msg("Dismiss branch change notice")),
+    dismissLabel: resolve(msg("Dismiss branch change notice")),
     onDismiss: input.onDismiss,
   };
 }

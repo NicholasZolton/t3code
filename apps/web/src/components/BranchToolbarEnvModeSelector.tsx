@@ -1,4 +1,3 @@
-import type { VcsTerminology } from "@t3tools/shared/vcs";
 import { ComposerSelectControl } from "./chat/ComposerControl";
 import { ComposerContextLabel } from "./ComposerContextLabel";
 import { FolderGit2Icon, FolderGitIcon, FolderIcon } from "lucide-react";
@@ -21,6 +20,9 @@ import {
   SelectPopup,
   SelectValue,
 } from "./ui/select";
+import { useAtomValue } from "@effect/atom-react";
+import { shortcutLabelForCommand } from "../keybindings";
+import { primaryServerKeybindingsAtom } from "../state/server";
 import { SharedTooltipTrigger } from "./ui/shared-tooltip";
 
 const PREVIOUS_WORKTREE_SELECT_VALUE = "previous-worktree";
@@ -34,7 +36,6 @@ interface BranchToolbarEnvModeSelectorProps {
   previousWorktreeLabel?: string | null;
   previousWorktreeBranch?: string | null;
   onUsePreviousWorktree?: () => void;
-  terminology: VcsTerminology;
 }
 
 export const BranchToolbarEnvModeSelector = memo(function BranchToolbarEnvModeSelector({
@@ -46,18 +47,21 @@ export const BranchToolbarEnvModeSelector = memo(function BranchToolbarEnvModeSe
   previousWorktreeLabel,
   previousWorktreeBranch = null,
   onUsePreviousWorktree,
-  terminology,
 }: BranchToolbarEnvModeSelectorProps) {
   const gt = useGT();
   const m = useMessages();
   const composerFloatingLayerProps = useComposerMenuProps();
+  const shortcutLabel = shortcutLabelForCommand(
+    useAtomValue(primaryServerKeybindingsAtom),
+    "composer.workspace",
+  );
   const showPreviousWorktree = Boolean(previousWorktreeLabel && onUsePreviousWorktree);
   const envModeItems = [
     {
       value: "local",
-      label: resolveCurrentWorkspaceLabel(activeWorktreePath, terminology, m),
+      label: resolveCurrentWorkspaceLabel(activeWorktreePath, m),
     },
-    { value: "worktree", label: resolveEnvModeLabel("worktree", terminology, m) },
+    { value: "worktree", label: resolveEnvModeLabel("worktree", m) },
     ...(showPreviousWorktree && previousWorktreeLabel
       ? [{ value: PREVIOUS_WORKTREE_SELECT_VALUE, label: previousWorktreeLabel }]
       : []),
@@ -84,8 +88,8 @@ export const BranchToolbarEnvModeSelector = memo(function BranchToolbarEnvModeSe
         )}
         <ComposerContextLabel>
           {forceNewWorktree
-            ? resolveEnvModeLabel("worktree", terminology, m)
-            : resolveLockedWorkspaceLabel(activeWorktreePath, effectiveEnvMode, terminology, m)}
+            ? resolveEnvModeLabel("worktree", m)
+            : resolveLockedWorkspaceLabel(activeWorktreePath, effectiveEnvMode, m)}
         </ComposerContextLabel>
       </span>
     );
@@ -97,7 +101,7 @@ export const BranchToolbarEnvModeSelector = memo(function BranchToolbarEnvModeSe
           forceNewWorktree
             ? gt("Each model starts in its own worktree.")
             : (activeWorktreePath ??
-              resolveLockedWorkspaceLabel(activeWorktreePath, effectiveEnvMode, terminology, m))
+              resolveLockedWorkspaceLabel(activeWorktreePath, effectiveEnvMode, m))
         }
       />
     );
@@ -130,8 +134,9 @@ export const BranchToolbarEnvModeSelector = memo(function BranchToolbarEnvModeSe
         label={
           <>
             {effectiveEnvMode === "worktree"
-              ? resolveEnvModeLabel("worktree", terminology, m)
-              : resolveCurrentWorkspaceLabel(activeWorktreePath, terminology, m)}
+              ? resolveEnvModeLabel("worktree", m)
+              : resolveCurrentWorkspaceLabel(activeWorktreePath, m)}
+            {shortcutLabel ? ` · ${shortcutLabel}` : null}
           </>
         }
       >
@@ -162,13 +167,13 @@ export const BranchToolbarEnvModeSelector = memo(function BranchToolbarEnvModeSe
               ) : (
                 <FolderIcon className="size-3" />
               )}
-              {resolveCurrentWorkspaceLabel(activeWorktreePath, terminology, m)}
+              {resolveCurrentWorkspaceLabel(activeWorktreePath, m)}
             </span>
           </SelectItem>
           <SelectItem value="worktree">
             <span className="inline-flex items-center gap-1.5">
               <FolderGit2Icon className="size-3" />
-              {resolveEnvModeLabel("worktree", terminology, m)}
+              {resolveEnvModeLabel("worktree", m)}
             </span>
           </SelectItem>
           {showPreviousWorktree && previousWorktreeLabel ? (

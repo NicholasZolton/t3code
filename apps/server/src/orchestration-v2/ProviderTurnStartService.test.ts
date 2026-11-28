@@ -165,12 +165,15 @@ function startWithMissingWorktree(
     Effect.succeed({ committed: true, storedEvents: [] } as never),
   );
   const startRootRun = vi.fn(() => Effect.void);
+  const pruneWorktrees = vi.fn(() => Effect.void);
   let worktreeExists = false;
-  const ensureWorkspace = vi.fn(() =>
+  const createWorktree = vi.fn(() =>
     Effect.sync(() => {
       worktreeExists = true;
+      return {} as never;
     }),
   );
+  const listLocalBranchNames = vi.fn(() => Effect.succeed(["feature/restore"]));
   const layer = ProviderTurnStart.layer.pipe(
     Layer.provide(
       Layer.mergeAll(
@@ -197,8 +200,12 @@ function startWithMissingWorktree(
                 ),
         } as never),
         layerWorktreeLocation(),
-        Layer.mock(GitWorkflow.GitWorkflowService)({ ensureWorkspace }),
         layerNoTaskFolders,
+        Layer.mock(GitWorkflow.GitWorkflowService)({
+          pruneWorktrees,
+          createWorktree,
+          listLocalBranchNames,
+        }),
         Layer.mock(ProjectService.ProjectService)({
           getById: () =>
             Effect.succeedSome({ workspaceRoot: "/tmp/provider-turn-start-project" } as never),
@@ -247,7 +254,8 @@ function startWithMissingWorktree(
   }).pipe(Effect.provide(layer), Effect.runPromise);
   return {
     start,
-    ensureWorkspace,
+    pruneWorktrees,
+    createWorktree,
     writeIfRunCurrent,
     startRootRun,
     projectionReads: () => projectionReadCount,
@@ -306,11 +314,11 @@ it.each([
 ])("recreates a missing worktree only at the managed location: $label", async (input) => {
   const harness = startWithMissingWorktree(input.worktreePath, input.realPaths);
   await harness.start;
-  expect(harness.ensureWorkspace).toHaveBeenCalledTimes(input.recreated ? 1 : 0);
+  expect(harness.createWorktree).toHaveBeenCalledTimes(input.recreated ? 1 : 0);
 });
 
 const restoreLeaseExists = vi.fn(() => Effect.succeed(false));
-const restoreLeaseEnsureWorkspace = vi.fn(() => Effect.void);
+const restoreLeaseCreateWorktree = vi.fn(() => Effect.succeed({} as never));
 const layerRestoreLeaseTest = layerThreadWorktreeRestore.pipe(
   Layer.provide(
     Layer.mergeAll(
@@ -321,7 +329,9 @@ const layerRestoreLeaseTest = layerThreadWorktreeRestore.pipe(
       } as never),
       layerWorktreeLocation(),
       Layer.mock(GitWorkflow.GitWorkflowService)({
-        ensureWorkspace: restoreLeaseEnsureWorkspace,
+        pruneWorktrees: () => Effect.void,
+        createWorktree: restoreLeaseCreateWorktree,
+        listLocalBranchNames: () => Effect.succeed(["feature/restore"]),
       }),
       Layer.mock(ProjectService.ProjectService)({
         getById: () =>
@@ -348,7 +358,7 @@ effectIt.effect("restores a missing worktree before a send only under the worksp
         return restoring;
       }),
     ).pipe(Effect.flatMap(Fiber.join));
-    expect(restoreLeaseEnsureWorkspace).toHaveBeenCalledTimes(1);
+    expect(restoreLeaseCreateWorktree).toHaveBeenCalledTimes(1);
     // Turn start finds the checkout present, so it runs setup from this hand-over, once.
     const threadId = ThreadId.make("thread_send_restore_lease");
     expect(yield* takeRecreated(threadId)).toMatchObject({ worktreePath });
@@ -371,7 +381,7 @@ effectIt.effect("restores into a leftover worktree folder that cannot itself be 
         )
       : Effect.void,
   );
-  const ensureWorkspace = vi.fn(() => Effect.void);
+  const createWorktree = vi.fn(() => Effect.succeed({} as never));
   return Effect.gen(function* () {
     const { restore } = yield* ThreadWorktreeRestore;
     yield* restore({
@@ -381,7 +391,7 @@ effectIt.effect("restores into a leftover worktree folder that cannot itself be 
       branch: "feature/restore",
     });
     expect(remove).toHaveBeenCalledWith(`${worktreePath}/node_modules`, { recursive: true });
-    expect(ensureWorkspace).toHaveBeenCalledTimes(1);
+    expect(createWorktree).toHaveBeenCalledTimes(1);
   }).pipe(
     Effect.provide(
       layerThreadWorktreeRestore.pipe(
@@ -397,7 +407,9 @@ effectIt.effect("restores into a leftover worktree folder that cannot itself be 
             } as never),
             layerWorktreeLocation(),
             Layer.mock(GitWorkflow.GitWorkflowService)({
-              ensureWorkspace,
+              pruneWorktrees: () => Effect.void,
+              createWorktree,
+              listLocalBranchNames: () => Effect.succeed(["feature/restore"]),
             }),
             Layer.mock(ProjectService.ProjectService)({
               getById: () =>
@@ -1285,8 +1297,8 @@ function makeLocalCommandHarness(input: {
         runtimeMode: thread.runtimeMode,
       } as never),
   );
-  const ensureWorkspace = vi.fn<GitWorkflow.GitWorkflowService["Service"]["ensureWorkspace"]>(
-    () => Effect.void,
+  const createWorktree = vi.fn<GitWorkflow.GitWorkflowService["Service"]["createWorktree"]>(() =>
+    Effect.succeed({} as never),
   );
   const getThreadRecords = vi.fn<ProjectionStore.ProjectionStoreV2Shape["getThreadRecords"]>((id) =>
     Effect.succeed(id === parentThreadId ? parentRecords : projection),
@@ -1384,7 +1396,9 @@ function makeLocalCommandHarness(input: {
           : Layer.succeed(FileSystem.FileSystem, input.fileSystem),
         input.gitWorkflow === undefined
           ? Layer.mock(GitWorkflow.GitWorkflowService)({
-              ensureWorkspace,
+              pruneWorktrees: () => Effect.void,
+              listLocalBranchNames: () => Effect.succeed(["feature/restore"]),
+              createWorktree,
             })
           : Layer.succeed(GitWorkflow.GitWorkflowService, input.gitWorkflow),
         Layer.mock(ProjectService.ProjectService)({
@@ -1451,7 +1465,7 @@ function makeLocalCommandHarness(input: {
       projection = next;
     },
     resolveRuntimePolicy,
-    ensureWorkspace,
+    createWorktree,
     open,
     fallbackEnsureThread,
     writeIfRunCurrent,
@@ -2106,7 +2120,7 @@ effectIt.effect("leaves a managed worktree folder without .git that holds user f
       failReadsAfterRunning: true,
     });
     yield* harness.start;
-    expect(harness.ensureWorkspace).not.toHaveBeenCalled();
+    expect(harness.createWorktree).not.toHaveBeenCalled();
     expect(yield* fileSystem.readFileString(path.join(worktreePath, "notes.md"))).toBe("keep me");
   }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
 );
@@ -2146,10 +2160,10 @@ effectIt.effect.each([
           }),
         ),
     });
-    harness.ensureWorkspace.mockImplementation(() =>
+    harness.createWorktree.mockImplementation(() =>
       fileSystem
         .makeDirectory(path.join(worktreePath, ".git"), { recursive: true })
-        .pipe(Effect.orDie),
+        .pipe(Effect.as({} as never), Effect.orDie),
     );
 
     const startup = yield* harness.start.pipe(Effect.forkChild({ startImmediately: true }));
@@ -2195,7 +2209,7 @@ effectIt.effect("runs setup for a worktree a send recreated before dispatch", ()
       runSetup,
     });
     yield* harness.start;
-    expect(harness.ensureWorkspace).not.toHaveBeenCalled();
+    expect(harness.createWorktree).not.toHaveBeenCalled();
     expect(runSetup).toHaveBeenCalledWith(expect.objectContaining({ worktreePath }));
     expect(harness.open).toHaveBeenCalledTimes(1);
   }).pipe(Effect.scoped, Effect.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))),
@@ -2218,8 +2232,8 @@ effectIt.effect(
         fileSystem,
         failReadsAfterRunning: true,
       });
-      harness.ensureWorkspace.mockImplementationOnce(() => Effect.interrupt);
-      harness.ensureWorkspace.mockImplementation(() =>
+      harness.createWorktree.mockImplementationOnce(() => Effect.interrupt);
+      harness.createWorktree.mockImplementation(() =>
         Effect.fail(
           new GitCommandError({
             operation: "worktree-add",
@@ -2243,7 +2257,7 @@ effectIt.effect(
       expect(harness.projection().runs.at(-1)?.status).toBe("starting");
 
       yield* harness.start;
-      expect(harness.ensureWorkspace).toHaveBeenCalledTimes(3);
+      expect(harness.createWorktree).toHaveBeenCalledTimes(3);
       expect(harness.writeIfRunCurrent).toHaveBeenCalledOnce();
       expect(harness.open).not.toHaveBeenCalled();
       expect(harness.startRootRun).not.toHaveBeenCalled();
@@ -3024,10 +3038,10 @@ effectIt.effect.each(["cleanup-first", "startup-first"])(
         fileSystem,
         failReadsAfterRunning: true,
       });
-      harness.ensureWorkspace.mockImplementation(() =>
+      harness.createWorktree.mockImplementation(() =>
         fileSystem
           .makeDirectory(path.join(worktreePath, ".git"), { recursive: true })
-          .pipe(Effect.orDie),
+          .pipe(Effect.as({} as never), Effect.orDie),
       );
       const open = harness.open.getMockImplementation()!;
       harness.open.mockImplementation(() =>
@@ -3068,7 +3082,7 @@ effectIt.effect.each(["cleanup-first", "startup-first"])(
       yield* Fiber.join(startup);
       if (laterCleanup !== undefined) yield* Fiber.join(laterCleanup);
       if (order === "cleanup-first") {
-        expect(harness.ensureWorkspace).toHaveBeenCalledWith({
+        expect(harness.createWorktree).toHaveBeenCalledWith({
           cwd: "/tmp/native-account-project",
           refName: "feature/restore",
           path: worktreePath,

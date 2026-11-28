@@ -149,11 +149,6 @@ import {
 import { editPendingThreadMessage } from "../../state/edit-pending-thread-message";
 import { environmentCatalog } from "../../connection/catalog";
 import { useThreadDevicePreviewCount } from "../../state/device";
-import { useEnvironmentQuery } from "../../state/query";
-import { useThreadSelection } from "../../state/use-thread-selection";
-import { useSelectedThreadWorktree } from "../../state/use-selected-thread-worktree";
-import { vcsEnvironment } from "../../state/vcs";
-import { resolveVcsTerminology } from "@t3tools/shared/vcs";
 import { ThreadBrowserFloat } from "../browser/ThreadBrowserFloat";
 import { useThreadServerBrowserTabCount } from "../../state/preview";
 import type { QueuedThreadMessage } from "../../state/thread-outbox-model";
@@ -480,19 +475,6 @@ function ThreadDetailBody(
       ...(tabId === undefined ? {} : { tabId }),
     });
   };
-  // Same (environment, cwd) key the git sheets use, so this reads the shared
-  // status atom rather than opening a second stream.
-  const { selectedThread } = useThreadSelection();
-  const { selectedThreadCwd } = useSelectedThreadWorktree();
-  const vcsStatus = useEnvironmentQuery(
-    selectedThread === null || selectedThreadCwd === null
-      ? null
-      : vcsEnvironment.status({
-          environmentId: selectedThread.environmentId,
-          input: { cwd: selectedThreadCwd },
-        }),
-  );
-  const vcsTerminology = resolveVcsTerminology(vcsStatus.data);
   const isKeyboardVisible = useKeyboardState((state) => state.isVisible);
   const liveKeyboardHeight = useKeyboardState((state) => state.height);
   // Android can lose IME hide callbacks on backgrounding. Quarantine translation on resume unless focused input retained its keyboard.
@@ -1569,7 +1551,6 @@ function ThreadDetailBody(
             <WorkspaceMutationIdProvider threadRef={props.selectedThreadDetailRef}>
               <ColumnWidth width={columnWidth}>
                 <ThreadFeed
-                  vcsTerminology={vcsTerminology}
                   toolCallVisibility={toolCallVisibility}
                   environmentId={props.environmentId}
                   threadId={props.selectedThread.id}

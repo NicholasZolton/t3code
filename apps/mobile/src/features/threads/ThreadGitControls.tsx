@@ -1,6 +1,7 @@
 import { msg, useGT, useMessages } from "gt-react-native";
 
 import * as Dialog from "../../components/ui/Dialog";
+import { useOpenPullRequest } from "../../native/useOpenPullRequest";
 import type { AppBarMenu } from "../../components/ui/AppBar.types";
 import {
   AuthSourceControlWriteScope,
@@ -15,9 +16,9 @@ import {
   requiresDefaultBranchConfirmation,
   resolveQuickAction,
 } from "@t3tools/client-runtime/state/vcs";
-import { resolveVcsTerminology, resolveVcsUnsupportedReason } from "@t3tools/shared/vcs";
 import { useNavigation } from "@react-navigation/native";
 import { sourceControlClients } from "@t3tools/client-runtime/source-control-clients";
+import { changeRequestTermKind } from "../../lib/changeRequestTerm";
 
 import { m, type MessageResolver } from "../../i18n/messages";
 import { useEnvironmentScope } from "../../state/session";
@@ -116,6 +117,7 @@ function useThreadGitControlModel(props: ThreadGitMenuProps) {
   const navigation = useNavigation();
   const gt = useGT();
   const messages = useMessages();
+  const openPullRequest = useOpenPullRequest();
   const environmentId = props.environmentId;
   const canWriteSourceControl = useEnvironmentScope(
     environmentId ? EnvironmentId.make(String(environmentId)) : null,
@@ -124,10 +126,7 @@ function useThreadGitControlModel(props: ThreadGitMenuProps) {
   const threadId = props.threadId;
   const { gitStatus, gitOperationLabel, onPull, onRunAction } = props;
 
-  const vcsTerminology = resolveVcsTerminology(gitStatus);
-  const vcsUnsupportedReason = resolveVcsUnsupportedReason(gitStatus);
-  const currentBranchLabel =
-    gitStatus?.refName ?? props.currentBranch ?? `No ${vcsTerminology.refNoun}`;
+  const currentBranchLabel = gitStatus?.refName ?? props.currentBranch ?? gt("Detached HEAD");
   const busy = gitOperationLabel !== null;
   const isRepo = gitStatus?.isRepo ?? true;
   const hasPrimaryRemote = gitStatus?.hasPrimaryRemote ?? false;
@@ -136,28 +135,13 @@ function useThreadGitControlModel(props: ThreadGitMenuProps) {
   const quickAction = (() => {
     if (!isRepo) {
       return {
-        label:
-          vcsTerminology.systemName === "Jujutsu"
-            ? `${vcsTerminology.systemName} unavailable`
-            : gt("Git unavailable"),
+        label: gt("Git unavailable"),
         disabled: true,
         kind: "show_hint" as const,
-        hint:
-          vcsTerminology.systemName === "Jujutsu"
-            ? gt("This workspace is not a {systemName} repository.", {
-                systemName: vcsTerminology.systemName,
-              })
-            : gt("This workspace is not a git repository."),
+        hint: gt("This workspace is not a git repository."),
       };
     }
-    const action = resolveQuickAction(
-      gitStatus,
-      busy,
-      isDefaultRef,
-      hasPrimaryRemote,
-      false,
-      messages,
-    );
+    const action = resolveQuickAction(gitStatus, busy, isDefaultRef, hasPrimaryRemote, messages);
     return !canWriteSourceControl && (action.kind === "run_pull" || action.kind === "run_action")
       ? {
           ...action,
@@ -167,12 +151,13 @@ function useThreadGitControlModel(props: ThreadGitMenuProps) {
       : action;
   })();
 
-  const quickActionHint =
-    vcsUnsupportedReason ??
-    (quickAction.disabled ? (quickAction.hint ?? gt("This action is unavailable.")) : null);
+  const quickActionHint = quickAction.disabled
+    ? (quickAction.hint ?? gt("This action is unavailable."))
+    : null;
 
   const quickActionIcon: QuickActionIcon = (() => {
     if (quickAction.kind === "run_pull") return "arrow.down.circle";
+    if (quickAction.kind === "open_pr") return "arrow.up.right.circle";
     if (quickAction.kind === "run_action") {
       if (quickAction.action === "commit") return "checkmark.circle";
       if (quickAction.action === "push" || quickAction.action === "commit_push")
@@ -180,6 +165,37 @@ function useThreadGitControlModel(props: ThreadGitMenuProps) {
     }
     return "arrow.up.right.circle";
   })();
+
+  const openExistingPr = async () => {
+    const term = changeRequestTermKind(
+      sourceControlClients.get(gitStatus?.sourceControlProvider?.kind).changeRequest,
+    );
+    const prUrl = gitStatus?.pr?.state === "open" ? gitStatus.pr.url : null;
+    if (!prUrl) {
+      Dialog.alert(
+        gt("{term, select, mr {No open MR} cr {No open change request} other {No open PR}}", {
+          term,
+        }),
+        gt(
+          "{term, select, mr {This branch does not have an open merge request.} cr {This branch does not have an open change request.} other {This branch does not have an open pull request.}}",
+          { term },
+        ),
+      );
+      return;
+    }
+    if (!(await openPullRequest(prUrl))) {
+      Dialog.alert(
+        gt(
+          "{term, select, mr {Unable to open MR} cr {Unable to open change request} other {Unable to open PR}}",
+          { term },
+        ),
+        gt(
+          "{term, select, mr {The merge request could not be opened.} cr {The change request could not be opened.} other {The pull request could not be opened.}}",
+          { term },
+        ),
+      );
+    }
+  };
 
   const runActionWithPrompt = async (input: GitActionRequestInput) => {
     if (!canWriteSourceControl) return;
@@ -199,14 +215,8 @@ function useThreadGitControlModel(props: ThreadGitMenuProps) {
     ) {
       if (props.hasThread === false) {
         Dialog.alert(
-          vcsTerminology.systemName === "Jujutsu"
-            ? gt("Choose a feature {refNoun}", { refNoun: vcsTerminology.refNoun })
-            : gt("Choose a feature branch"),
-          vcsTerminology.systemName === "Jujutsu"
-            ? gt("Switch {refNounPlural} before publishing changes from this draft.", {
-                refNounPlural: vcsTerminology.refNounPlural,
-              })
-            : gt("Switch branches before publishing changes from this draft."),
+          gt("Choose a feature branch"),
+          gt("Switch branches before publishing changes from this draft."),
         );
         return;
       }
@@ -223,6 +233,10 @@ function useThreadGitControlModel(props: ThreadGitMenuProps) {
 
   const runQuickAction = async () => {
     if (quickAction.disabled) return;
+    if (quickAction.kind === "open_pr") {
+      await openExistingPr();
+      return;
+    }
     if (quickAction.kind === "run_pull") {
       await onPull();
       return;
@@ -253,7 +267,6 @@ function useThreadGitControlModel(props: ThreadGitMenuProps) {
   return {
     currentBranchLabel,
     isRepo,
-    vcsTerminology,
     openGitInspector,
     openReview,
     quickAction,
@@ -330,10 +343,7 @@ export function useThreadGitMenuDefinition(props: ThreadGitMenuProps): AppBarMen
   // A plain folder that tracks repositories has no branch of its own; its turns still have diffs.
   const repositoriesOnly = !model.isRepo && props.tracksRepositories === true;
   return {
-    title:
-      model.vcsTerminology.systemName === "Jujutsu"
-        ? `${model.vcsTerminology.systemName} controls`
-        : gt("Git controls"),
+    title: gt("Git controls"),
     icon: "point.topleft.down.curvedto.point.bottomright.up",
     separateBackground: false,
     items: [
@@ -381,11 +391,7 @@ export function useThreadGitMenuDefinition(props: ThreadGitMenuProps): AppBarMen
             ? gt("Available after the first message")
             : repositoriesOnly
               ? gt("Turn diffs")
-              : model.vcsTerminology.systemName === "Jujutsu"
-                ? gt("Turn diffs and {workspaceNoun} changes", {
-                    workspaceNoun: model.vcsTerminology.workspaceNoun,
-                  })
-                : gt("Turn diffs and worktree changes"),
+              : gt("Turn diffs and worktree changes"),
         onPress: model.openReview,
       },
       ...(props.onMergeBack
@@ -411,11 +417,7 @@ export function useThreadGitMenuDefinition(props: ThreadGitMenuProps): AppBarMen
               ? gt("Repositories")
               : props.tracksRepositories === true
                 ? gt("Commit, branches, repositories")
-                : model.vcsTerminology.systemName === "Jujutsu"
-                  ? gt("Commit, files, {refNounPlural}", {
-                      refNounPlural: model.vcsTerminology.refNounPlural,
-                    })
-                  : gt("Commit, files, branches"),
+                : gt("Commit, files, branches"),
         onPress: model.openGitInspector,
       },
     ],

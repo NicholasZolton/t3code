@@ -7,14 +7,12 @@ import type {
 } from "@t3tools/contracts";
 import { summarizeChangedFiles } from "@t3tools/shared/changedFileKind";
 import { isTemporaryWorktreeBranch } from "@t3tools/shared/git";
-import { resolveVcsTerminology, type VcsTerminology } from "@t3tools/shared/vcs";
 import { msg } from "gt-react";
 import { m, type MessageResolver } from "../i18n/messages";
 import { changeRequestTermKind } from "./pullRequest/changeRequestTerm";
 import type { ChangeRequestTerminology } from "@t3tools/client-runtime/source-control-clients";
 import {
   changeRequestTerminologyFor,
-  resolveDefaultBranchActionDialogCopy as sharedDefaultBranchActionDialogCopy,
   type DefaultBranchActionDialogCopy,
   type DefaultBranchConfirmableAction,
   type GitActionIconName,
@@ -40,7 +38,7 @@ export interface GitActionMenuItem {
 export interface GitQuickAction {
   label: string;
   disabled: boolean;
-  kind: "run_action" | "run_pull" | "open_publish" | "open_pr" | "show_hint";
+  kind: "run_action" | "run_pull" | "open_publish" | "show_hint";
   action?: GitStackedAction;
   hint?: string;
 }
@@ -220,35 +218,20 @@ export function getMenuActionDisabledReason(
   const isAhead = gitStatus.aheadCount > 0;
   const isBehind = gitStatus.behindCount > 0;
   const terminology = changeRequestTerminologyFor(gitStatus);
-  const vcs = resolveVcsTerminology(gitStatus);
 
   if (item.id === "commit") {
     if (!hasChanges) {
-      return vcs.systemName === "Jujutsu"
-        ? resolve(
-            msg("{workspaceNounTitle} is clean. Make changes before committing.", {
-              workspaceNounTitle: vcs.workspaceNounTitle,
-            }),
-          )
-        : resolve(msg("Worktree is clean. Make changes before committing."));
+      return resolve(msg("Worktree is clean. Make changes before committing."));
     }
     return resolve(msg("Commit is currently unavailable."));
   }
 
   if (item.id === "push") {
     if (!hasBranch) {
-      return vcs.systemName === "Jujutsu"
-        ? resolve(msg("Check out a {refNoun} before pushing.", { refNoun: vcs.refNoun }))
-        : resolve(msg("Detached HEAD: check out a branch before pushing."));
+      return resolve(msg("Detached HEAD: check out a branch before pushing."));
     }
     if (isBehind) {
-      return vcs.systemName === "Jujutsu"
-        ? resolve(
-            msg("{refNounTitle} is behind upstream. Pull/rebase before pushing.", {
-              refNounTitle: vcs.refNounTitle,
-            }),
-          )
-        : resolve(msg("Branch is behind upstream. Pull/rebase before pushing."));
+      return resolve(msg("Branch is behind upstream. Pull/rebase before pushing."));
     }
     if (!gitStatus.hasUpstream && !hasPrimaryRemote) {
       return resolve(msg('Add an "origin" remote before pushing.'));
@@ -260,19 +243,12 @@ export function getMenuActionDisabledReason(
   }
 
   if (!hasBranch) {
-    return vcs.systemName === "Jujutsu"
-      ? resolve(
-          msg("Check out a {refNoun} before creating a {singular}.", {
-            refNoun: vcs.refNoun,
-            singular: terminology.singular,
-          }),
-        )
-      : resolve(
-          msg(
-            "Detached HEAD: check out a branch before creating a {term, select, mr {merge request} cr {change request} other {pull request}}.",
-            { term: changeRequestTermKind(terminology) },
-          ),
-        );
+    return resolve(
+      msg(
+        "Detached HEAD: check out a branch before creating a {term, select, mr {merge request} cr {change request} other {pull request}}.",
+        { term: changeRequestTermKind(terminology) },
+      ),
+    );
   }
   if (!gitStatus.hasUpstream && !hasPrimaryRemote) {
     return resolve(
@@ -291,19 +267,12 @@ export function getMenuActionDisabledReason(
     );
   }
   if (isBehind) {
-    return vcs.systemName === "Jujutsu"
-      ? resolve(
-          msg("{refNounTitle} is behind upstream. Pull/rebase before creating a {singular}.", {
-            refNounTitle: vcs.refNounTitle,
-            singular: terminology.singular,
-          }),
-        )
-      : resolve(
-          msg(
-            "Branch is behind upstream. Pull/rebase before creating a {term, select, mr {merge request} cr {change request} other {pull request}}.",
-            { term: changeRequestTermKind(terminology) },
-          ),
-        );
+    return resolve(
+      msg(
+        "Branch is behind upstream. Pull/rebase before creating a {term, select, mr {merge request} cr {change request} other {pull request}}.",
+        { term: changeRequestTermKind(terminology) },
+      ),
+    );
   }
   return resolve(
     msg(
@@ -331,7 +300,6 @@ export function resolveQuickAction(
   isBusy: boolean,
   isDefaultRef = false,
   hasPrimaryRemote = true,
-  canPublishRepository = false,
   resolve: MessageResolver = m,
 ): GitQuickAction {
   if (isBusy) {
@@ -360,27 +328,18 @@ export function resolveQuickAction(
   const isBehind = gitStatus.behindCount > 0;
   const isDiverged = isAhead && isBehind;
   const terminology = changeRequestTerminologyFor(gitStatus);
-  const vcs = resolveVcsTerminology(gitStatus);
 
   if (!hasBranch) {
     return {
       label: resolve(msg("Commit", { $context: "verb, git action" })),
       disabled: true,
       kind: "show_hint",
-      hint:
-        vcs.systemName === "Jujutsu"
-          ? resolve(
-              msg("Create and check out a {refNoun} before pushing or opening a {singular}.", {
-                refNoun: vcs.refNoun,
-                singular: terminology.singular,
-              }),
-            )
-          : resolve(
-              msg(
-                "Create and checkout a ref before pushing or opening a {term, select, mr {merge request} cr {change request} other {pull request}}.",
-                { term: changeRequestTermKind(terminology) },
-              ),
-            ),
+      hint: resolve(
+        msg(
+          "Create and checkout a ref before pushing or opening a {term, select, mr {merge request} cr {change request} other {pull request}}.",
+          { term: changeRequestTermKind(terminology) },
+        ),
+      ),
     };
   }
 
@@ -415,21 +374,11 @@ export function resolveQuickAction(
 
   if (!gitStatus.hasUpstream) {
     if (!hasPrimaryRemote) {
-      if (hasOpenPr && !isAhead) {
-        return {
-          label: resolve(msg("View {shortLabel}", { shortLabel: terminology.shortLabel })),
-          disabled: false,
-          kind: "open_pr",
-        };
-      }
-      return canPublishRepository
-        ? { label: resolve(msg("Publish repository")), disabled: false, kind: "open_publish" }
-        : {
-            label: resolve(msg("Publish repository")),
-            disabled: true,
-            kind: "show_hint",
-            hint: resolve(msg("Publishing is unavailable here.")),
-          };
+      return {
+        label: resolve(msg("Publish repository")),
+        disabled: false,
+        kind: "open_publish",
+      };
     }
     if (!isAhead) {
       if (hasOpenPr) {
@@ -469,20 +418,10 @@ export function resolveQuickAction(
 
   if (isDiverged) {
     return {
-      label:
-        vcs.systemName === "Jujutsu"
-          ? resolve(msg("Sync {refNoun}", { refNoun: vcs.refNoun }))
-          : resolve(msg("Sync ref")),
+      label: resolve(msg("Sync ref")),
       disabled: true,
       kind: "show_hint",
-      hint:
-        vcs.systemName === "Jujutsu"
-          ? resolve(
-              msg("{refNounTitle} has diverged from upstream. Rebase/merge first.", {
-                refNounTitle: vcs.refNounTitle,
-              }),
-            )
-          : resolve(msg("Branch has diverged from upstream. Rebase/merge first.")),
+      hint: resolve(msg("Branch has diverged from upstream. Rebase/merge first.")),
     };
   }
 
@@ -541,14 +480,7 @@ export function resolveQuickAction(
     label: resolve(msg("Commit", { $context: "verb, git action" })),
     disabled: true,
     kind: "show_hint",
-    hint:
-      vcs.systemName === "Jujutsu"
-        ? resolve(
-            msg("{refNounTitle} is up to date. No action needed.", {
-              refNounTitle: vcs.refNounTitle,
-            }),
-          )
-        : resolve(msg("Branch is up to date. No action needed.")),
+    hint: resolve(msg("Branch is up to date. No action needed.")),
   };
 }
 
@@ -557,12 +489,76 @@ export function resolveDefaultBranchActionDialogCopy(
     action: DefaultBranchConfirmableAction;
     branchName: string;
     includesCommit: boolean;
-    terminology?: ChangeRequestTerminology;
-    vcsTerminology?: VcsTerminology;
+    terminology: ChangeRequestTerminology;
   },
   resolve: MessageResolver = m,
 ): DefaultBranchActionDialogCopy {
-  return sharedDefaultBranchActionDialogCopy(input, resolve);
+  const branch = input.branchName;
+  const term = changeRequestTermKind(input.terminology);
+
+  if (input.action === "push" || input.action === "commit_push") {
+    if (input.includesCommit) {
+      return {
+        title: resolve(msg("Commit & push to default ref?")),
+        description: resolve(
+          msg(
+            'This action will commit and push changes on "{branch}". You can continue on this ref or create a feature ref and run the same action there.',
+            { branch },
+          ),
+        ),
+        continueLabel: resolve(msg("Commit & push to {branch}", { branch })),
+      };
+    }
+    return {
+      title: resolve(msg("Push to default ref?")),
+      description: resolve(
+        msg(
+          'This action will push local commits on "{branch}". You can continue on this ref or create a feature ref and run the same action there.',
+          { branch },
+        ),
+      ),
+      continueLabel: resolve(msg("Push to {branch}", { branch })),
+    };
+  }
+
+  if (input.includesCommit) {
+    return {
+      title: resolve(
+        msg(
+          "Commit, push & create {term, select, mr {MR} cr {change request} other {PR}} from default ref?",
+          { term },
+        ),
+      ),
+      description: resolve(
+        msg(
+          'This action will commit, push, and create a {term, select, mr {merge request} cr {change request} other {pull request}} on "{branch}". You can continue on this ref or create a feature ref and run the same action there.',
+          { term, branch },
+        ),
+      ),
+      continueLabel: resolve(
+        msg("Commit, push & create {term, select, mr {MR} cr {change request} other {PR}}", {
+          term,
+        }),
+      ),
+    };
+  }
+  return {
+    title: resolve(
+      msg(
+        "Push & create {term, select, mr {MR} cr {change request} other {PR}} from default ref?",
+        { term },
+      ),
+    ),
+    description: resolve(
+      msg(
+        'This action will push local commits and create a {term, select, mr {merge request} cr {change request} other {pull request}} on "{branch}". You can continue on this ref or create a feature ref and run the same action there.',
+        { term, branch },
+      ),
+    ),
+    continueLabel: resolve(
+      msg("Push & create {term, select, mr {MR} cr {change request} other {PR}}", { term }),
+    ),
+  };
 }
 
 /** The server names a feature branch from the commit it makes, so the action must commit changes. */
@@ -618,7 +614,6 @@ export function resolveThreadBranchMetadataPatch(
 export function resolveLiveThreadBranchUpdate(input: {
   threadBranch: string | null;
   gitStatus: VcsStatusResult | null;
-  worktreeBranchPrefix?: string | undefined;
 }): { branch: string | null } | null {
   if (!input.gitStatus) {
     return null;
@@ -635,8 +630,8 @@ export function resolveLiveThreadBranchUpdate(input: {
   if (
     input.threadBranch !== null &&
     input.gitStatus.refName !== null &&
-    !isTemporaryWorktreeBranch(input.threadBranch, input.worktreeBranchPrefix) &&
-    isTemporaryWorktreeBranch(input.gitStatus.refName, input.worktreeBranchPrefix)
+    !isTemporaryWorktreeBranch(input.threadBranch) &&
+    isTemporaryWorktreeBranch(input.gitStatus.refName)
   ) {
     return null;
   }

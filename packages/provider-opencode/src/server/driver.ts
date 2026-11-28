@@ -575,7 +575,7 @@ export const OpenCodeDriver: ProviderDriver<
       Effect.provideService(Digest.Digest, digest),
     );
     let unsupportedUsageVersion: string | undefined;
-    const checkUsageLimits = Effect.gen(function* () {
+    const checkGoUsageLimits = Effect.gen(function* () {
       if (!effectiveConfig.enabled) return yield* legacyUsageLimits;
       const runtime = yield* runtimeProbe.get;
       if (runtime.generation === "v1" || runtime.version === unsupportedUsageVersion)
@@ -601,6 +601,31 @@ export const OpenCodeDriver: ProviderDriver<
         })),
       ),
     );
+    const checkCodexUsageAccounts = Effect.fnUntraced(function* () {
+      const runtime = yield* runtimeProbe.lastSuccess;
+      if (!effectiveConfig.enabled || Option.isNone(runtime) || runtime.value.generation !== "v2") {
+        return undefined;
+      }
+      const account = yield* openCode2Server
+        .withConnection(({ client }) => readOpenCodeCodexAccount(client, host.paths.cwd))
+        .pipe(
+          Effect.provideService(HttpClient.HttpClient, httpClient),
+          Effect.timeout("10 seconds"),
+          Effect.catch(() =>
+            Effect.map(DateTime.now, (now): UsageLimitSourceAccount => ({
+              id: "openai",
+              driver: ProviderDriverKind.make("codex"),
+              usageLimits: makeUnavailableUsageLimits({
+                checkedAt: DateTime.formatIso(now),
+                reason: "probeFailed",
+                message:
+                  "OpenCode could not read its Codex login. Refresh provider status to try again.",
+              }),
+            })),
+          ),
+        );
+      return account ? [account] : [];
+    });
     const checkProvider = Effect.all(
       {
         // A configured loopback server reports its running version. Probe the local
@@ -627,7 +652,7 @@ export const OpenCodeDriver: ProviderDriver<
           Effect.annotateLogs({ providerInstanceId: instanceId }),
           Effect.annotateSpans({ providerInstanceId: instanceId }),
         ),
-        usageLimits: checkUsageLimits,
+        usageLimits: checkGoUsageLimits,
       },
       { concurrency: "unbounded" },
     ).pipe(
@@ -638,32 +663,9 @@ export const OpenCodeDriver: ProviderDriver<
       })),
       Effect.flatMap((provider) =>
         Effect.gen(function* () {
-          const generation = yield* runtimeProbe.lastSuccess;
-          if (
-            !provider.enabled ||
-            provider.status !== "ready" ||
-            Option.isNone(generation) ||
-            generation.value.generation !== "v2"
-          ) {
-            return provider;
-          }
-          const account = yield* openCode2Server
-            .withConnection(({ client }) => readOpenCodeCodexAccount(client, host.paths.cwd))
-            .pipe(
-              Effect.provideService(HttpClient.HttpClient, httpClient),
-              Effect.timeout("10 seconds"),
-              Effect.orElseSucceed((): UsageLimitSourceAccount => ({
-                id: "openai",
-                driver: ProviderDriverKind.make("codex"),
-                usageLimits: makeUnavailableUsageLimits({
-                  checkedAt: provider.checkedAt,
-                  reason: "probeFailed",
-                  message:
-                    "OpenCode could not read its Codex login. Refresh provider status to try again.",
-                }),
-              })),
-            );
-          return { ...provider, usageLimitAccounts: account ? [account] : [] };
+          if (!provider.enabled || provider.status !== "ready") return provider;
+          const usageLimitAccounts = yield* checkCodexUsageAccounts();
+          return usageLimitAccounts === undefined ? provider : { ...provider, usageLimitAccounts };
         }),
       ),
       Effect.map(stampIdentity),
@@ -786,7 +788,11 @@ export const OpenCodeDriver: ProviderDriver<
       initialSnapshot: (settings) =>
         makePendingOpenCodeProvider(settings.provider).pipe(Effect.map(stampIdentity)),
       checkProvider,
-      checkUsageLimits,
+      checkUsageLimits: Effect.all(
+        { usageLimits: checkGoUsageLimits, usageLimitAccounts: checkCodexUsageAccounts() },
+        { concurrency: 2 },
+      ),
+      recoverUsageOnInterval: checkGoUsageLimits,
       enrichSnapshot: ({ settings, snapshot, publishSnapshot }) => {
         let enriched = snapshot;
         let catalog: ReadonlyArray<OpenCode2Model> | undefined;

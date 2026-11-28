@@ -37,12 +37,6 @@ import { usePaginatedBranches } from "../state/queries";
 import { useProjectClone } from "../state/projectClones";
 import { readThreadShell, useProject, useQuietThreadShell } from "../state/entities";
 import { useEnvironmentQuery } from "../state/query";
-import {
-  JJ_WORKING_COPY_LABEL,
-  JJ_WORKING_COPY_REVISION,
-  resolveVcsTerminology,
-  resolveWorktreeBaseRef,
-} from "@t3tools/shared/vcs";
 import { readEnvironmentScope, useEnvironmentScope } from "~/state/session";
 import { threadEnvironment } from "../state/threads";
 import { useAtomCommand } from "../state/use-atom-command";
@@ -273,7 +267,6 @@ export function BranchToolbarBranchSelector({
           input: { cwd: branchCwd },
         }),
   );
-  const vcsTerminology = resolveVcsTerminology(branchStatusQuery.data);
   const projectStatusQuery = useEnvironmentQuery(
     activeProjectCwd === null
       ? null
@@ -297,10 +290,6 @@ export function BranchToolbarBranchSelector({
   const prReference = parsePullRequestReference(trimmedBranchQuery);
   const isSelectingWorktreeBase =
     effectiveEnvMode === "worktree" && !envLocked && !activeWorktreePath;
-  const canSelectWorkingCopy =
-    isSelectingWorktreeBase &&
-    branchStatusQuery.data?.vcs?.kind === "jj" &&
-    !branchStatusQuery.data.vcs.unsupportedReason;
   const isWorktreeChangeBlockedForRef = (refName: VcsRef) =>
     activeProjectCwd !== null &&
     isWorktreeChangeBlocked({
@@ -329,7 +318,6 @@ export function BranchToolbarBranchSelector({
   const pickerCreateBranchItemValue = hasExactBranchMatch ? null : createBranchItemValue;
   const branchPickerItems = [
     ...(checkoutPullRequestItemValue ? [checkoutPullRequestItemValue] : []),
-    ...(canSelectWorkingCopy ? [JJ_WORKING_COPY_REVISION] : []),
     ...refs.map((refName) => refName.name),
     ...(pickerCreateBranchItemValue ? [pickerCreateBranchItemValue] : []),
   ];
@@ -376,9 +364,7 @@ export function BranchToolbarBranchSelector({
   const listedActiveBranch =
     resolvedActiveBranch === null ? null : (branchByName.get(resolvedActiveBranch) ?? null);
   const activeBranchRefQuery = useEnvironmentQuery(
-    branchCwd !== null &&
-      resolvedActiveBranch !== null &&
-      resolvedActiveBranch !== JJ_WORKING_COPY_REVISION
+    branchCwd !== null && resolvedActiveBranch !== null
       ? vcsEnvironment.listRefs({
           environmentId,
           input: {
@@ -403,16 +389,12 @@ export function BranchToolbarBranchSelector({
   const branchStatusText = isInitialBranchesLoadPending
     ? gt("Loading refs...")
     : isFetchingNextPage
-      ? vcsTerminology.systemName === "Jujutsu"
-        ? `Loading more ${vcsTerminology.refNounPlural}...`
-        : gt("Loading more refs...")
+      ? gt("Loading more refs...")
       : hasNextPage
-        ? vcsTerminology.systemName === "Jujutsu"
-          ? `Showing ${refs.length} of ${totalBranchCount} ${vcsTerminology.refNounPlural}`
-          : gt(
-              "{total, plural, one {Showing {shown} of {total} refs} other {Showing {shown} of {total} refs}}",
-              { shown: refs.length, total: totalBranchCount },
-            )
+        ? gt(
+            "{total, plural, one {Showing {shown} of {total} refs} other {Showing {shown} of {total} refs}}",
+            { shown: refs.length, total: totalBranchCount },
+          )
         : null;
 
   const copyBranchName = (branchName: string) => {
@@ -438,14 +420,7 @@ export function BranchToolbarBranchSelector({
     event.preventDefault();
     event.stopPropagation();
     const items: ContextMenuItem<"copy-branch-name">[] = [
-      {
-        id: "copy-branch-name",
-        label:
-          vcsTerminology.systemName === "Jujutsu"
-            ? gt("Copy {refNoun} name", { refNoun: vcsTerminology.refNoun })
-            : gt("Copy branch name"),
-        icon: "copy",
-      },
+      { id: "copy-branch-name", label: gt("Copy branch name"), icon: "copy" },
     ];
     void api.contextMenu
       .show(items, { x: event.clientX, y: event.clientY }, contextMenuSourceOf(event))
@@ -592,10 +567,7 @@ export function BranchToolbarBranchSelector({
         toastManager.add(
           stackedThreadToast({
             type: "error",
-            title:
-              vcsTerminology.systemName === "Jujutsu"
-                ? gt("Failed to switch {refNoun}.", { refNoun: vcsTerminology.refNoun })
-                : gt("Failed to switch ref."),
+            title: gt("Failed to switch ref."),
             description: toBranchActionErrorMessage(squashAtomCommandFailure(checkoutResult)),
           }),
         );
@@ -645,10 +617,7 @@ export function BranchToolbarBranchSelector({
         toastManager.add(
           stackedThreadToast({
             type: "error",
-            title:
-              vcsTerminology.systemName === "Jujutsu"
-                ? gt("Failed to create and switch {refNoun}.", { refNoun: vcsTerminology.refNoun })
-                : gt("Failed to create and switch ref."),
+            title: gt("Failed to create and switch ref."),
             description: toBranchActionErrorMessage(squashAtomCommandFailure(createBranchResult)),
           }),
         );
@@ -658,11 +627,7 @@ export function BranchToolbarBranchSelector({
 
   const worktreeBaseBranchCandidate = isInitialBranchesLoadPending
     ? null
-    : resolveWorktreeBaseRef({
-        defaultRef: resolveDefaultWorktreeBaseBranch(refs),
-        currentRef: null,
-        vcsKind: canSelectWorkingCopy ? "jj" : undefined,
-      });
+    : resolveDefaultWorktreeBaseBranch(refs);
 
   const projectCloneDone = useProjectClone(activeProjectRef)?.phase === "done";
   const refreshStaleRefs = useEffectEvent(() => {
@@ -718,13 +683,6 @@ export function BranchToolbarBranchSelector({
     worktreeBaseBranchCandidate,
   ]);
 
-  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- persists the resolved checkout branch when leaving the Jujutsu workspace mode
-  useEffect(() => {
-    if (effectiveEnvMode === "local" && activeThreadBranch === JJ_WORKING_COPY_REVISION) {
-      setThreadBranch(currentGitBranch, activeWorktreePath, true);
-    }
-  }, [activeThreadBranch, activeWorktreePath, currentGitBranch, effectiveEnvMode, setThreadBranch]);
-
   const handleOpenChange = (open: boolean) => {
     setIsBranchMenuOpen(open);
     if (open && !isBranchMenuOpen && branchCwd !== null) {
@@ -755,7 +713,6 @@ export function BranchToolbarBranchSelector({
       effectiveEnvMode,
       resolvedActiveBranch,
       resolvedActiveBranchIsRemote,
-      terminology: vcsTerminology,
       startFromOrigin,
     },
     messages,
@@ -784,12 +741,6 @@ export function BranchToolbarBranchSelector({
   const linkedIssues = serverThread?.issues ?? [];
 
   function selectPickerItem(itemValue: string) {
-    if (itemValue === JJ_WORKING_COPY_REVISION && canSelectWorkingCopy && canUpdateThreadBranch) {
-      setThreadBranch(JJ_WORKING_COPY_REVISION, null);
-      handleOpenChange(false);
-      onComposerFocusRequest?.();
-      return;
-    }
     if (itemValue === checkoutPullRequestItemValue && prReference && onCheckoutPullRequestRequest) {
       latestSelectionIdRef.current++;
       handleOpenChange(false);
@@ -804,19 +755,6 @@ export function BranchToolbarBranchSelector({
   }
 
   function renderPickerItem(itemValue: string, index: number) {
-    if (itemValue === JJ_WORKING_COPY_REVISION && canSelectWorkingCopy) {
-      return (
-        <ComboboxItem
-          key={itemValue}
-          index={index}
-          value={itemValue}
-          disabled={!canUpdateThreadBranch}
-          onClick={() => selectPickerItem(itemValue)}
-        >
-          {JJ_WORKING_COPY_LABEL}
-        </ComboboxItem>
-      );
-    }
     if (checkoutPullRequestItemValue && itemValue === checkoutPullRequestItemValue) {
       return (
         <ComboboxItem
@@ -850,17 +788,11 @@ export function BranchToolbarBranchSelector({
           value={itemValue}
           onClick={() => selectPickerItem(itemValue)}
         >
-          {vcsTerminology.systemName === "Jujutsu" ? (
-            <span className="truncate">
-              {gt('Create new bookmark "{name}"', { name: newRefName })}
-            </span>
-          ) : (
-            <span className="truncate">
-              <T>
-                Create new ref &quot;<Var>{newRefName}</Var>&quot;
-              </T>
-            </span>
-          )}
+          <span className="truncate">
+            <T>
+              Create new ref &quot;<Var>{newRefName}</Var>&quot;
+            </T>
+          </span>
         </ComboboxItem>
       );
     }
@@ -870,7 +802,6 @@ export function BranchToolbarBranchSelector({
 
     return (
       <BranchPickerRefItem
-        terminology={vcsTerminology}
         branch={refName}
         projectCwd={activeProjectCwd}
         index={index}
@@ -896,7 +827,6 @@ export function BranchToolbarBranchSelector({
 
   return (
     <BranchPicker
-      terminology={vcsTerminology}
       items={branchPickerItems}
       filteredItems={filteredBranchPickerItems}
       open={isBranchMenuOpen}
@@ -923,7 +853,7 @@ export function BranchToolbarBranchSelector({
             : "branch"
       }
       originControl={
-        isSelectingWorktreeBase && resolvedActiveBranch !== JJ_WORKING_COPY_REVISION
+        isSelectingWorktreeBase
           ? { checked: startFromOrigin, onCheckedChange: onStartFromOriginChange }
           : undefined
       }

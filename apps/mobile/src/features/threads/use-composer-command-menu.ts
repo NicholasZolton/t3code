@@ -41,15 +41,12 @@ import {
   serializeComposerFileLink,
   type ComposerTrigger,
 } from "@t3tools/shared/composerTrigger";
-import {
-  normalizeSearchQuery,
-  scoreSearchFields,
-  SEARCH_SECONDARY_FIELD_WEIGHT,
-} from "@t3tools/shared/searchRanking";
+import { normalizeSearchQuery } from "@t3tools/shared/searchRanking";
+import { scoreSearchFields, SEARCH_SECONDARY_FIELD_WEIGHT } from "@t3tools/shared/weightedSearch";
+import { searchProviderSkills } from "@t3tools/client-runtime/providerSkillSearch";
 import {
   getProviderSkillsForSlashMenu,
   getProviderSlashCommandsForSlashMenu,
-  searchProviderSkills,
   resolveProviderSkillsForCwd,
   resolveProviderSlashCommandsForCwd,
 } from "@t3tools/client-runtime/providerSkills";

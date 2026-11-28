@@ -68,11 +68,6 @@ import {
 } from "../../state/use-model-option-memory";
 import { useBranches, usePaginatedBranches } from "../../state/queries";
 import { vcsEnvironment } from "../../state/vcs";
-import {
-  JJ_WORKING_COPY_REVISION,
-  resolveVcsTerminology,
-  type VcsTerminology,
-} from "@t3tools/shared/vcs";
 import { type QueuedThreadMessage } from "../../state/thread-outbox";
 import {
   setPendingConnectionError,
@@ -129,7 +124,6 @@ type WorkspaceMode = "local" | "worktree";
 
 export function branchBadgeLabel(
   input: {
-    readonly terminology?: VcsTerminology;
     readonly branch: VcsRef;
     readonly project: EnvironmentProject | null;
   },
@@ -139,9 +133,7 @@ export function branchBadgeLabel(
     return resolve(msg("current", { $context: "branch badge, the checked-out branch" }));
   }
   if (input.branch.worktreePath && input.branch.worktreePath !== input.project?.workspaceRoot) {
-    return input.terminology?.systemName === "Jujutsu"
-      ? input.terminology.workspaceNoun
-      : resolve(msg("worktree", { $context: "branch badge, checked out in another worktree" }));
+    return resolve(msg("worktree", { $context: "branch badge, checked out in another worktree" }));
   }
   if (input.branch.isRemote) {
     return resolve(msg("remote", { $context: "branch badge, a remote-tracking branch" }));
@@ -184,8 +176,6 @@ type NewTaskFlowContextValue = {
   readonly branchesLoading: boolean;
   readonly availableBranches: ReadonlyArray<VcsRef>;
   readonly currentCheckoutBranchName: string | null;
-  readonly vcsTerminology: VcsTerminology;
-  readonly canSelectWorkingCopy: boolean;
   readonly runtimeMode: RuntimeMode;
   readonly expandedProvider: string | null;
   readonly environments: ReadonlyArray<{
@@ -222,7 +212,6 @@ type NewTaskFlowContextValue = {
   ) => void;
   readonly setWorkspaceMode: (mode: WorkspaceMode) => void;
   readonly selectBranch: (branch: VcsRef) => void;
-  readonly selectWorkingCopy: () => void;
   readonly setStartFromOrigin: (value: boolean) => void;
   readonly buildPendingTaskMessage: (
     metadata: TurnCommandMetadata,
@@ -404,7 +393,6 @@ export function NewTaskFlowProvider(
       : null,
   );
   const currentCheckoutBranchName = projectGitStatus.data?.refName ?? null;
-  const vcsTerminology = resolveVcsTerminology(projectGitStatus.data);
   // The unfiltered ref list also provides repository capability while offline.
   const projectBranches = useBranches({
     environmentId: selectedProject?.environmentId ?? null,
@@ -438,14 +426,9 @@ export function NewTaskFlowProvider(
       tracksGitRepositories,
       branches: allBranchRefs,
       projectCwd: selectedProject?.workspaceRoot ?? null,
-      vcsKind: projectGitStatus.data?.vcs?.kind,
     });
   const workspaceSelection = resolveWorkspaceSelection(selectedProjectDraft.workspaceSelection);
   const workspaceMode = workspaceSelection.mode;
-  const canSelectWorkingCopy =
-    workspaceMode === "worktree" &&
-    projectGitStatus.data?.vcs?.kind === "jj" &&
-    !projectGitStatus.data.vcs.unsupportedReason;
   const selectedBranchName = workspaceSelection.branch;
   const selectedWorktreePath = workspaceSelection.worktreePath;
   // A new worktree does not exist yet, so the project root stands in for it.
@@ -467,9 +450,7 @@ export function NewTaskFlowProvider(
     messages,
   );
   const startFromOrigin =
-    isGitRepo &&
-    selectedBranchName !== JJ_WORKING_COPY_REVISION &&
-    (draftStartFromOrigin ?? projectSettings.settings.newWorktreesStartFromOrigin);
+    isGitRepo && (draftStartFromOrigin ?? projectSettings.settings.newWorktreesStartFromOrigin);
   const defaultRuntimeMode = projectSettings.settings.defaultRuntimeMode;
   const managedPolicy = selectedEnvironmentServerConfig?.managedPolicy;
   const runtimeMode = resolveNewThreadRuntimeMode(
@@ -727,27 +708,8 @@ export function NewTaskFlowProvider(
     });
   };
 
-  const selectWorktreeBase = (baseRef: string): void => {
-    if (!selectedProjectDraftKey) return;
-    updateComposerDraftSettings(selectedProjectDraftKey, {
-      workspaceSelection: {
-        mode: "worktree",
-        branch: baseRef,
-        worktreePath: null,
-        ...(draftStartFromOrigin !== undefined ? { startFromOrigin: draftStartFromOrigin } : {}),
-      },
-    });
-  };
-  const selectWorkingCopy = (): void => {
-    if (canSelectWorkingCopy) selectWorktreeBase(JJ_WORKING_COPY_REVISION);
-  };
-
   const selectBranch = (branch: VcsRef) => {
     if (!selectedProject || !selectedProjectDraftKey) {
-      return;
-    }
-    if (workspaceMode === "worktree") {
-      selectWorktreeBase(branch.name);
       return;
     }
     updateComposerDraftSettings(selectedProjectDraftKey, {
@@ -984,8 +946,6 @@ export function NewTaskFlowProvider(
     branchesLoading,
     availableBranches,
     currentCheckoutBranchName,
-    vcsTerminology,
-    canSelectWorkingCopy,
     runtimeMode,
     expandedProvider,
     environments,
@@ -1010,7 +970,6 @@ export function NewTaskFlowProvider(
     setSelectedModelKey,
     setWorkspaceMode,
     selectBranch,
-    selectWorkingCopy,
     setStartFromOrigin,
     buildPendingTaskMessage,
     setPrompt,

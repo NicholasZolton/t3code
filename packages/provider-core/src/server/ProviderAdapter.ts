@@ -65,7 +65,6 @@ export type ProviderAdapterV2RuntimeWorkspace = typeof ProviderAdapterV2RuntimeW
 export const ProviderAdapterV2RuntimePolicy = Schema.Struct({
   runtimeMode: RuntimeMode,
   interactionMode: ProviderInteractionMode,
-  vcsAgentHint: Schema.optional(Schema.String),
   cwd: Schema.NullOr(Schema.String),
   approvalPolicy: Schema.optional(Schema.Unknown),
   sandboxPolicy: Schema.optional(Schema.Unknown),

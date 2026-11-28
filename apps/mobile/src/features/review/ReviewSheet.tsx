@@ -1,7 +1,5 @@
 import { settlePromise, squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
 import { AsyncResult } from "effect/reactivity";
-import { useEnvironmentQuery } from "../../state/query";
-import { vcsEnvironment } from "../../state/vcs";
 import type { EnvironmentId, ThreadId } from "@t3tools/contracts";
 import { formatDiffCount } from "@t3tools/client-runtime/diff-count";
 import { LegendList } from "@legendapp/list/react-native";
@@ -413,12 +411,6 @@ export function ReviewSheet(props: ReviewSheetProps) {
   const { draftMessage, draftContext } = useThreadDraftForThread({ environmentId, threadId });
   const reviewCache = useReviewCacheForThread({ environmentId, threadId });
   const { selectedThreadCwd } = useSelectedThreadWorktree();
-  const gitStatusQuery = useEnvironmentQuery(
-    selectedThreadCwd === null
-      ? null
-      : vcsEnvironment.status({ environmentId, input: { cwd: selectedThreadCwd } }),
-  );
-  const vcsKind = gitStatusQuery.data?.vcs?.kind ?? null;
   const topContentInset = useContentTopInset();
   const bottomContentInset = useSheetContentBottomInset();
 
@@ -434,7 +426,6 @@ export function ReviewSheet(props: ReviewSheetProps) {
     environmentId,
     threadId,
     reviewCache,
-    vcsKind,
   });
   useReviewDiffPrewarming({
     threadKey: reviewCache.threadKey,

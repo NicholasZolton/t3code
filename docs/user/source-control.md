@@ -81,8 +81,8 @@ The Pull requests page displays stack layer positions and navigation:
 
 Open **Issues** from the sidebar utility row or **Open issues** in the command palette to browse, filter, search, save views, comment, edit, and transition issues across GitHub, GitLab, Azure DevOps, Forgejo, Linear, and Jira Cloud.
 
-- **Linear**: Connect an API key in **Settings → Source control & issues** and bind one or more teams per project (supports multiple Linear accounts). Agents file new issues in the first bound team unless another is named.
-- **Jira Cloud**: Connect your site (`yourteam.atlassian.net`), account email, and an [API token](https://id.atlassian.com/manage-profile/security/api-tokens) in **Settings → Source control & issues**, then bind Jira projects (supports multiple Jira sites and accounts). Issues move along their workflow's transitions; reactions and linked pull requests are not available, and new issues are filed as a Task.
+- **Linear**: Connect an API key in **Settings → Source control & issues** and bind one or more teams per project (supports multiple Linear accounts). Agents file new issues in the first bound team unless another is named. An issue linked by its full URL needs no binding: any thread, No project threads included, can open and change an issue from a connected workspace, as far as your Linear account allows.
+- **Jira Cloud**: Connect your site (`yourteam.atlassian.net`), account email, and an [API token](https://id.atlassian.com/manage-profile/security/api-tokens) in **Settings → Source control & issues**, then bind Jira projects (supports multiple Jira sites and accounts). Issues move along their workflow's transitions; reactions and linked pull requests are not available, and new issues are filed as a Task. On a Jira Service Management issue, a comment is an **Internal note** the customer never sees unless you switch it to **Reply to customer** before sending.
 - **Link to threads**: Click **Link to this thread** on an issue beside a thread (or let agents call `link_issue`) to track it in **Linked items**.
 - Remote issue writes require the `source-control:write` scope.
 
@@ -93,55 +93,10 @@ Open **Issues** from the sidebar utility row or **Open issues** in the command p
 - **Push fails**: Check Git SSH/HTTPS credentials separately from API auth.
 - **Fork PR badge missing**: Set upstream with `git branch --set-upstream-to=<remote>/<branch>`.
 
-## Jujutsu repositories
+## Existing Jujutsu workspaces
 
-T3 Code works with [Jujutsu](https://jj-vcs.github.io/jj/) repositories that are colocated with Git,
-which is what `jj git init --colocate` creates. Pull requests, cloning, and publishing still run
-against the Git store in that repository, so a Jujutsu project gets the same hosting integration as a
-Git one. Install Jujutsu 0.42.0 or newer on the machine running the server.
+T3 Code no longer creates Jujutsu workspaces or restores their checkpoints. Use `jj` to manage
+them, or open a separate Git checkout to start new worktree threads.
 
-Terms follow the repository: bookmarks instead of branches, workspaces instead of worktrees, changes
-instead of commits. Checkpoints and revert work the same way. A revert restores your
-working copy with `jj restore`, so `jj undo` takes it back.
-
-New workspaces can start from **Current working copy**, including its snapshotted files, without an
-existing bookmark. This is the default when no default or current bookmark is available. It always
-uses the local working copy, regardless of **Start from origin**.
-
-### Choosing the version control system
-
-T3 Code uses the nearest marker directory, so a checkout holding `.jj` is Jujutsu and a Git checkout
-inside it is still Git. Threads that already run in a Git worktree keep working as Git.
-
-To pin a project, add `.t3code/vcs.json` in its root:
-
-```json
-{ "vcs": { "kind": "git" } }
-```
-
-Use `"jj"` to force Jujutsu, or delete the file to go back to detection. For a directory with no
-version control yet, **Initialize Jujutsu** sits alongside **Initialize Git** and runs
-`jj git init --colocate`.
-For an existing Git repository, choose **Enable Jujutsu** from the repository actions on web,
-desktop, or mobile. It keeps the Git history, remotes, and working files while adding a colocated
-Jujutsu workspace. Run it from the main checkout; Git worktrees continue to use Git.
-
-### What is different under Jujutsu
-
-- Turn diffs include all changes between checkpoints, including changes brought in by a pull or rebase.
-- Automatic storage cleanup does not remove Jujutsu workspaces.
-- **Git hooks do not run** for commits made through T3 Code. Hooks that read the Git index, such as
-  `lint-staged` or a staged-diff format check, see nothing under Jujutsu, so T3 Code skips them
-  rather than reporting a hook run that did nothing. Run them yourself if you depend on them.
-- A change with conflicts cannot be pushed until you resolve it, and its diff shows one side of each
-  conflicted file rather than the markers on disk.
-- T3 Code snapshots new files up to **10 MiB**. Unexpected files outside a checkpoint are reported
-  in the thread's activity; ignored files are excluded normally. Reverting a turn leaves excluded
-  files on disk. Files already tracked remain covered when they grow beyond that limit.
-- A repository that is not colocated, a missing `jj`, or a version below 0.42.0 leaves source control
-  actions disabled with the reason, instead of silently falling back to Git. Install or upgrade
-  Jujutsu, or run `jj git init --colocate` in the repository.
-
-Agents receive a short Jujutsu hint for their current workspace. Turn off **VCS agent hints** in
-**Settings → Source Control** to stop injecting these hints, including when resuming existing threads.
-This setting can also be overridden for a project.
+If an old workspace is also registered as a Git worktree, normal worktree removal can delete
+the whole folder, including `.jj`. Keep the worktree if you still need its files.

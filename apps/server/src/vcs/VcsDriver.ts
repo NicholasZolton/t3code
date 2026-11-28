@@ -2,15 +2,10 @@ import * as Context from "effect/Context";
 import type * as Effect from "effect/Effect";
 
 import type {
-  VcsDriverCapabilities,
   VcsError,
   VcsInitInput,
   VcsListRemotesResult,
   VcsListWorkspaceFilesResult,
-  ReviewDiffFileContentsInput,
-  ReviewDiffFileContentsResult,
-  ReviewDiffPreviewInput,
-  ReviewDiffPreviewResult,
   VcsRepositoryIdentity,
 } from "@t3tools/contracts";
 import { CheckpointRef } from "@t3tools/contracts";
@@ -139,8 +134,6 @@ export interface CheckpointCaptureResult {
 export class VcsDriver extends Context.Service<
   VcsDriver,
   {
-    readonly capabilities: VcsDriverCapabilities;
-    readonly agentContextHint?: string;
     readonly execute: (
       input: Omit<VcsProcess.VcsProcessInput, "command">,
     ) => Effect.Effect<VcsProcess.VcsProcessOutput, VcsError>;
@@ -158,14 +151,5 @@ export class VcsDriver extends Context.Service<
       relativePaths: ReadonlyArray<string>,
     ) => Effect.Effect<ReadonlyArray<string>, VcsError>;
     readonly initRepository: (input: VcsInitInput) => Effect.Effect<void, VcsError>;
-    readonly getDiffPreview?: (
-      input: ReviewDiffPreviewInput,
-    ) => Effect.Effect<ReviewDiffPreviewResult, VcsError>;
-    /** Git reaches review diffs through its legacy GitVcsDriver service. */
-    readonly getDiffFileContents?: (
-      input: ReviewDiffFileContentsInput,
-    ) => Effect.Effect<ReviewDiffFileContentsResult, VcsError>;
-    /** Probe repository-specific checkpoint availability; absent means usable, probe errors mean false. */
-    readonly checkpointsUsable?: (cwd: string) => Effect.Effect<boolean, never>;
   }
 >()("t3/vcs/VcsDriver") {}

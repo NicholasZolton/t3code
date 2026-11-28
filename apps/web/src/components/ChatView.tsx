@@ -12,7 +12,6 @@ import { resolveNewThreadModelSelection } from "@t3tools/shared/usageLimits";
 import { queuedRunEditBlockedReason } from "@t3tools/client-runtime/queued-run-edit";
 import { ScrollToEndButton, WorkspaceFileDropOverlay } from "./chat/TimelineOverlays";
 import { usePasteToFocusComposer } from "./chat/usePasteToFocusComposer";
-import { resolveVcsTerminology } from "@t3tools/shared/vcs";
 import { useFocusComposerOnThreadOpen } from "./chat/useFocusComposerOnThreadOpen";
 import { configuredHostedAppUrl } from "../hostedPairing";
 import {
@@ -103,6 +102,7 @@ import {
   deriveThreadActivityRun,
   deriveLatestThreadRun,
   presentProviderStarting,
+  pendingProviderStartup,
   deriveThreadStructureRuntime,
   limitRecoveryOwnsSnooze,
 } from "@t3tools/client-runtime/state/thread-execution";
@@ -173,6 +173,7 @@ import {
   deriveActiveWorkStartedAt,
   deriveRevertTurnCountByUserMessageId,
   deriveCanInterruptRunningThread,
+  findLatestTaskList,
   findRevertCheckpoint,
   isLatestRunSettled,
 } from "../session-logic";
@@ -1547,6 +1548,7 @@ export default function ChatView(props: ChatViewProps) {
     localDispatchStartedAt,
     isPreparingWorktree: isLocallyPreparingWorktree,
     isSendBusy,
+    localDispatchProviderInstanceId,
     backgroundSubmissionPending,
   } = useLocalDispatchState({
     environmentId,
@@ -1613,15 +1615,24 @@ export default function ChatView(props: ChatViewProps) {
     deriveActiveWorkStartedAt(activeActivityRun, activeRuntime, localDispatchStartedAt) ??
     runlessWorkStartedAt;
   // Until the server has the run, a send shows the provider it is starting, not the thinking brain.
+  const dispatchedProviderEntry =
+    providerInstanceEntries.find((entry) => entry.instanceId === localDispatchProviderInstanceId) ??
+    selectedProviderEntry;
+  const dispatchedProviderStartup =
+    dispatchedProviderEntry === undefined
+      ? null
+      : pendingProviderStartup(serverProjection, dispatchedProviderEntry.instanceId);
   const providerStartingRun =
     activeActivityRun?.providerStartingLabelMsg !== undefined
       ? activeActivityRun
       : isSendBusy &&
-          selectedProviderEntry !== undefined &&
+          dispatchedProviderEntry !== undefined &&
+          dispatchedProviderStartup !== null &&
           (activeActivityRun === null || !ACTIVE_RUN_STATUSES.has(activeActivityRun.status))
         ? presentProviderStarting({
-            instanceId: selectedProviderEntry.instanceId,
-            driver: selectedProviderEntry.driverKind,
+            instanceId: dispatchedProviderEntry.instanceId,
+            driver: dispatchedProviderEntry.driverKind,
+            phase: dispatchedProviderStartup.phase,
           })
         : null;
   const activeRunPreparing = activeActivityRun?.status === "preparing";
@@ -1885,7 +1896,6 @@ export default function ChatView(props: ChatViewProps) {
   const activeWorkspaceRoot = activeThreadWorktreePath ?? activeProjectCwd ?? undefined;
   const activeTerminalLaunchContext =
     terminalUiLaunchContext?.threadId === activeThreadId ? terminalUiLaunchContext : null;
-  const vcsTerminology = resolveVcsTerminology(gitStatusQuery.data);
   const liveIsGitRepo = gitStatusQuery.data?.isRepo;
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- records live git repo status in the session cache read while the status query is unavailable
   useEffect(() => {
@@ -2876,7 +2886,6 @@ export default function ChatView(props: ChatViewProps) {
       ...systemComposerBannerItems,
       branchMismatchBannerItem(
         {
-          refNoun: vcsTerminology.refNoun,
           mismatchKey: activeBranchMismatchKey,
           mismatch: localCheckoutBranchMismatch,
           restoreDisabled: !canWriteSourceControl || isRestoringThreadBranch,
@@ -3894,7 +3903,6 @@ export default function ChatView(props: ChatViewProps) {
                             ) : null}
                             {!composerMounted ? null : (
                               <ChatComposer
-                                workspaceNoun={vcsTerminology.workspaceNoun}
                                 canOperateThread={canOperateThread}
                                 reportedModelSelection={reportedModelSelection}
                                 multipleModelSelections={multipleModelSelections}
@@ -4239,6 +4247,7 @@ export default function ChatView(props: ChatViewProps) {
                     sources: serverConfig?.usageLimitSources ?? EMPTY_USAGE_LIMIT_SOURCES,
                     contextWindow: activeContextWindow,
                   }}
+                  taskList={findLatestTaskList(serverProjection)}
                 />
 
                 <PullRequestThreadDialogHost

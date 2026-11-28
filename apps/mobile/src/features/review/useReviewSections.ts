@@ -5,12 +5,7 @@ import { useMemo } from "react";
 import { msg, useMessages } from "gt-react-native";
 
 import { deriveThreadCheckpointSummaries } from "@t3tools/client-runtime/state/thread-checkpoints";
-import type {
-  EnvironmentId,
-  ReviewDiffPreviewSource,
-  ThreadId,
-  VcsDriverKind,
-} from "@t3tools/contracts";
+import type { EnvironmentId, ReviewDiffPreviewSource, ThreadId } from "@t3tools/contracts";
 
 import { useCheckpointDiff } from "../../state/queries";
 import { useEnvironmentQuery } from "../../state/query";
@@ -46,7 +41,6 @@ export function useReviewSections(input: {
   readonly environmentId?: EnvironmentId;
   readonly threadId?: ThreadId;
   readonly reviewCache: ReviewCacheForThread;
-  readonly vcsKind?: VcsDriverKind | null;
 }) {
   const { environmentId, reviewCache, threadId } = input;
   const messages = useMessages();
@@ -113,7 +107,6 @@ export function useReviewSections(input: {
     checkpoints: readyCheckpoints,
     gitSections: canReadFiles || fileAccess.isPending ? gitSections : [],
     turnDiffById: reviewTurnDiffsBySectionId(readyCheckpoints, lastTurnDiffs),
-    vcsKind: input.vcsKind,
     gitSectionStates: {
       "working-tree": gitSectionState(fileAccess.isPending, workingTreePreview),
       "branch-range": gitSectionState(fileAccess.isPending, branchPreview),

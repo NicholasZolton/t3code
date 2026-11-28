@@ -582,7 +582,6 @@ export function NewTaskDraftScreen(props: {
     {
       branchName: selectedBranchName,
       startFromOrigin: flow.startFromOrigin,
-      terminology: flow.vcsTerminology,
       workspaceMode: flow.workspaceMode,
       pullRequestReference: flow.pullRequestReference,
     },
@@ -590,7 +589,6 @@ export function NewTaskDraftScreen(props: {
   );
   const workspaceLabel = resolveNewTaskWorkspaceLabel(
     {
-      terminology: flow.vcsTerminology,
       workspaceMode: flow.workspaceMode,
       worktreePath: flow.selectedWorktreePath,
     },
@@ -947,13 +945,9 @@ export function NewTaskDraftScreen(props: {
     <View className="flex-row flex-wrap items-center gap-x-1 px-2">
       <ComposerInlineControl
         accessibilityHint={
-          flow.vcsTerminology.systemName === "Jujutsu"
-            ? flow.workspaceMode === "local"
-              ? gt("Switches to a new workspace")
-              : gt("Switches to the current working copy")
-            : flow.workspaceMode === "local"
-              ? gt("Switches to a new worktree")
-              : gt("Switches to the current checkout")
+          flow.workspaceMode === "local"
+            ? gt("Switches to a new worktree")
+            : gt("Switches to the current checkout")
         }
         accessibilityLabel={workspaceLabel}
         disabled={isComposerInteractionLocked || !(flow.isGitRepo || flow.tracksGitRepositories)}
@@ -997,24 +991,14 @@ export function NewTaskDraftScreen(props: {
         <View className="min-w-0 shrink">
           <ComposerInlineControl
             accessibilityLabel={
-              flow.vcsTerminology.systemName === "Jujutsu"
-                ? `${startsNewWorktree ? `Base ${flow.vcsTerminology.refNoun}` : flow.vcsTerminology.refNounTitle}: ${selectedBranchLabel}`
-                : startsNewWorktree
-                  ? gt("Base branch: {branch}", { branch: selectedBranchLabel })
-                  : gt("Branch: {branch}", { branch: selectedBranchLabel })
+              startsNewWorktree
+                ? gt("Base branch: {branch}", { branch: selectedBranchLabel })
+                : gt("Branch: {branch}", { branch: selectedBranchLabel })
             }
             chevronDirection="right"
             disabled={isComposerInteractionLocked || !flow.isGitRepo}
             icon="arrow.triangle.branch"
-            label={
-              showBranchLoading
-                ? flow.vcsTerminology.systemName === "Jujutsu"
-                  ? gt("Loading {refNounPlural}…", {
-                      refNounPlural: flow.vcsTerminology.refNounPlural,
-                    })
-                  : gt("Loading branches…")
-                : selectedBranchLabel
-            }
+            label={showBranchLoading ? gt("Loading branches…") : selectedBranchLabel}
             maxWidth="100%"
             onPress={() => openContextPicker("NewTaskBranch")}
           />

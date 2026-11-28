@@ -1,12 +1,8 @@
-import {
-  insertRankedSearchResult,
-  normalizeSearchQuery,
-  scoreSearchFields,
-  SEARCH_SECONDARY_FIELD_WEIGHT,
-} from "@t3tools/shared/searchRanking";
+import { insertRankedSearchResult, normalizeSearchQuery } from "@t3tools/shared/searchRanking";
+import { scoreSearchFields, SEARCH_SECONDARY_FIELD_WEIGHT } from "@t3tools/shared/weightedSearch";
 
 import type { ComposerCommandItem } from "./ComposerCommandMenu";
-import { scoreProviderSkill } from "@t3tools/client-runtime/providerSkills";
+import { scoreProviderSkill } from "@t3tools/client-runtime/providerSkillSearch";
 
 type SlashSearchItem = Extract<
   ComposerCommandItem,

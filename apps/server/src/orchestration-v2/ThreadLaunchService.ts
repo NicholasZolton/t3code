@@ -33,7 +33,6 @@ import * as Context from "effect/Context";
 import * as DateTime from "effect/DateTime";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
-import { JJ_WORKING_COPY_REVISION } from "@t3tools/shared/vcs";
 import * as Exit from "effect/Exit";
 import * as Fiber from "effect/Fiber";
 import * as FileSystem from "effect/FileSystem";
@@ -45,15 +44,15 @@ import * as Schedule from "effect/Schedule";
 import * as Schema from "effect/Schema";
 import * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
-import {
-  buildTemporaryWorktreeBranchName,
-  flattenTemporaryWorktreeBranchName,
-  formatGeneratedBranchName,
-  isTemporaryWorktreeBranch,
-} from "@t3tools/shared/git";
+import { formatGeneratedBranchName, isTemporaryWorktreeBranch } from "@t3tools/shared/git";
 
 import * as CheckpointStore from "../checkpointing/CheckpointStore.ts";
 import * as GitWorkflow from "../git/GitWorkflowService.ts";
+import {
+  buildConfiguredWorktreeBranchName,
+  flattenConfiguredWorktreeBranchName,
+  isConfiguredWorktreeBranch,
+} from "../workspace/worktreeBranchNames.ts";
 import type * as GitVcsDriver from "../vcs/GitVcsDriver.ts";
 import { parseGitCloneProgressLine } from "../project/gitCloneProgress.ts";
 import * as ProjectService from "../project/ProjectService.ts";
@@ -713,7 +712,7 @@ const make = Effect.gen(function* () {
       let branch: string | null;
       if (generatedTemporaryBranch) {
         const uuid = yield* randomUuidV4;
-        branch = buildTemporaryWorktreeBranchName(
+        branch = buildConfiguredWorktreeBranchName(
           () => uuid.replaceAll("-", ""),
           temporaryBranchPrefix,
         );
@@ -769,9 +768,7 @@ const make = Effect.gen(function* () {
         let startRef = requestedBaseRef;
         let baseRefName = requestedBaseRef;
         const remote =
-          input.workspaceStrategy.startFromOrigin === true &&
-          projectIsRepository &&
-          input.workspaceStrategy.baseRef !== JJ_WORKING_COPY_REVISION
+          input.workspaceStrategy.startFromOrigin === true && projectIsRepository
             ? yield* git
                 .resolveWorktreeBaseRemote({
                   cwd: project.workspaceRoot,
@@ -831,7 +828,7 @@ const make = Effect.gen(function* () {
         if (
           branch !== null &&
           projectIsRepository &&
-          (generatedTemporaryBranch || isTemporaryWorktreeBranch(branch, temporaryBranchPrefix))
+          (generatedTemporaryBranch || isConfiguredWorktreeBranch(branch, temporaryBranchPrefix))
         ) {
           const parts = branch.split("/");
           for (let depth = 1; depth < parts.length; depth++) {
@@ -845,7 +842,7 @@ const make = Effect.gen(function* () {
             ) {
               branch = generatedTemporaryBranch
                 ? branch.replaceAll("/", "-")
-                : flattenTemporaryWorktreeBranchName(branch);
+                : flattenConfiguredWorktreeBranchName(branch);
               break;
             }
           }
@@ -992,7 +989,7 @@ const make = Effect.gen(function* () {
         worktreePath !== null &&
         branch !== null &&
         initialMessage !== undefined &&
-        (generatedTemporaryBranch || isTemporaryWorktreeBranch(branch, temporaryBranchPrefix))
+        (generatedTemporaryBranch || isConfiguredWorktreeBranch(branch, temporaryBranchPrefix))
       ) {
         const oldBranch = branch;
         const worktreeCwd = worktreePath;

@@ -1,4 +1,3 @@
-import { DEFAULT_VCS_TERMINOLOGY, type VcsTerminology } from "@t3tools/shared/vcs";
 import { sourceControlClients } from "@t3tools/client-runtime/source-control-clients";
 import { changeRequestTermKind } from "../../../lib/changeRequestTerm";
 import { SymbolView } from "../../../components/ui/AppSymbol";
@@ -41,18 +40,13 @@ export function statusSummary(
     readonly sourceControlProvider?: { readonly kind: string } | null;
   } | null,
   resolve: MessageResolver,
-  terminology: VcsTerminology = DEFAULT_VCS_TERMINOLOGY,
 ): string {
   if (!gitStatus) {
-    return terminology.systemName === "Git"
-      ? resolve(msg("Loading branch status\u2026"))
-      : resolve(msg("Loading {refNoun} status…", { refNoun: terminology.refNoun }));
+    return resolve(msg("Loading branch status\u2026"));
   }
 
   if (!gitStatus.isRepo) {
-    return terminology.systemName === "Git"
-      ? resolve(msg("Not a git repository"))
-      : resolve(msg("Not a {systemName} repository", { systemName: terminology.systemName }));
+    return resolve(msg("Not a git repository"));
   }
 
   const parts: string[] = [];

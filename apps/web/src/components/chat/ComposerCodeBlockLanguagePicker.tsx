@@ -1,7 +1,7 @@
 import { T, useGT, useMessages } from "gt-react";
 import { CheckIcon, ChevronDownIcon } from "lucide-react";
 import { useState } from "react";
-import { searchItems } from "@t3tools/shared/searchRanking";
+import { searchItems } from "@t3tools/shared/weightedSearch";
 
 import {
   CODE_BLOCK_LANGUAGES,

@@ -1,5 +1,5 @@
 import type { DesktopBridge, DesktopDiscoveredSshHost } from "@t3tools/contracts";
-import { searchItems } from "@t3tools/shared/searchRanking";
+import { searchItems } from "@t3tools/shared/weightedSearch";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import { Atom } from "effect/reactivity";

@@ -4,7 +4,6 @@ import { FitSheet } from "../../../components/ui/FitSheet";
 import { SheetHeader } from "../../../components/ui/SheetHeader";
 import { Button } from "../../../components/ui/Button";
 import { useNavigation, type StaticScreenProps } from "@react-navigation/native";
-import { resolveVcsTerminology } from "@t3tools/shared/vcs";
 import { T, useGT, Var } from "gt-react-native";
 import { useState } from "react";
 import { Pressable, View } from "react-native";
@@ -65,7 +64,6 @@ export function GitCommitSheet(props: GitCommitSheetProps) {
   );
 
   const isDefaultRef = gitStatus.data?.isDefaultRef ?? false;
-  const vcsTerminology = resolveVcsTerminology(gitStatus.data);
   const allFiles = gitStatus.data?.workingTree?.files ?? [];
 
   const selectionKey =
@@ -174,18 +172,7 @@ export function GitCommitSheet(props: GitCommitSheetProps) {
     >
       {isDefaultRef ? (
         <Text className="text-sm text-warning-foreground">
-          {vcsTerminology.systemName === "Git" ? (
-            <T>You’re on the default branch. You can create a new branch when committing.</T>
-          ) : (
-            gt("You’re on the default {refNoun}. You can create a new {refNoun} when committing.", {
-              refNoun: vcsTerminology.refNoun,
-            })
-          )}
-        </Text>
-      ) : null}
-      {gitStatus.data?.vcs?.kind === "jj" ? (
-        <Text className="text-xs text-foreground-muted">
-          {gt("Jujutsu does not run Git hooks.")}
+          <T>You’re on the default branch. You can create a new branch when committing.</T>
         </Text>
       ) : null}
       <View className="gap-2">
@@ -318,11 +305,7 @@ export function GitCommitSheet(props: GitCommitSheetProps) {
           onPress={() => void runCommitAction(false)}
         />
         <Button
-          label={
-            vcsTerminology.systemName !== "Git"
-              ? gt("Commit on a new {refNoun}", { refNoun: vcsTerminology.refNoun })
-              : gt("Commit on a new branch")
-          }
+          label={gt("Commit on a new branch")}
           icon="arrow.branch"
           tone="text"
           fullWidth

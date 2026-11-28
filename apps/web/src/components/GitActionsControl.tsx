@@ -23,7 +23,6 @@ import type {
   SourceControlProviderDiscoveryItem,
   SourceControlPublishRepositoryResult,
   SourceControlRepositoryVisibility,
-  VcsDriverKind,
   VcsStatusResult,
 } from "@t3tools/contracts";
 import { useNavigate } from "@tanstack/react-router";
@@ -128,7 +127,6 @@ import {
   THREAD_DETAILS_PANEL_SPLIT_GROUP_CLASS,
   THREAD_DETAILS_PANEL_SPLIT_SEPARATOR_CLASS,
 } from "./chat/threadDetailsPanelStyles";
-import { getVcsTerminology, resolveVcsTerminology } from "@t3tools/shared/vcs";
 import { getSourceControlPresentation, sourceControlIcon } from "~/sourceControlPresentation";
 import {
   isSourceControlProviderOffered,
@@ -175,7 +173,6 @@ interface GitActionsControlProps extends GitActionsViewProps {
   quietUntilWork?: boolean;
   /** The ref the Changes row compares against, when the viewer picked one. */
   changesBaseRef?: string | null;
-  allowJujutsuConversion?: boolean;
 }
 
 interface ThreadGitActionsControlProps extends GitActionsViewProps {
@@ -1004,7 +1001,6 @@ function CheckoutGitActionsControl({
   branchFollower,
   quietUntilWork = false,
   changesBaseRef = null,
-  allowJujutsuConversion = false,
   compact = false,
   showActions = true,
   showChanges = true,
@@ -1037,7 +1033,6 @@ function CheckoutGitActionsControl({
   } | null>(null);
   const [isEditingFiles, setIsEditingFiles] = useState(false);
   const [isPublishDialogOpen, setIsPublishDialogOpen] = useState(false);
-  const [isConvertToJjDialogOpen, setIsConvertToJjDialogOpen] = useState(false);
   const [inlineSuccess, setInlineSuccess] = useState<InlineGitActionSuccess | null>(null);
   const [pendingDefaultBranchAction, setPendingDefaultBranchAction] =
     useState<PendingDefaultBranchAction | null>(null);
@@ -1060,7 +1055,6 @@ function CheckoutGitActionsControl({
   const { data: gitStatus, error: gitStatusError } = gitStatusQuery;
   const sourceControlPresentation = getSourceControlPresentation(gitStatus?.sourceControlProvider);
   const changeRequestTerminology = sourceControlPresentation.terminology;
-  const vcsTerminology = resolveVcsTerminology(gitStatus);
   const SourceControlIcon = sourceControlPresentation.Icon;
   const isRepo = gitStatus?.isRepo ?? true;
   const hasPrimaryRemote = gitStatus?.hasPrimaryRemote ?? false;
@@ -1140,15 +1134,6 @@ function CheckoutGitActionsControl({
   const noneSelected = selectedFiles.length === 0;
 
   const initAction = useVcsInitAction(sourceControlScope);
-  const vcsDiscovery = useEnvironmentQuery(
-    activeEnvironmentId !== null && !isRepo
-      ? sourceControlEnvironment.discovery({ environmentId: activeEnvironmentId, input: {} })
-      : null,
-  );
-  const canInitJujutsu =
-    vcsDiscovery.data?.versionControlSystems.some(
-      (item) => item.kind === "jj" && item.status === "available" && item.implemented,
-    ) ?? false;
   const runImmediateGitAction = useGitStackedAction(sourceControlScope);
   const pullAction = useVcsPullAction(sourceControlScope);
   const isGitActionRunning = useSourceControlActionRunning(
@@ -1168,7 +1153,6 @@ function CheckoutGitActionsControl({
     isGitActionRunning,
     isDefaultRef,
     hasPrimaryRemote,
-    true,
     messages,
   );
   const quickActionDisabledReason = !canWriteSourceControl
@@ -1191,7 +1175,6 @@ function CheckoutGitActionsControl({
           action: pendingDefaultBranchAction.action,
           branchName: pendingDefaultBranchAction.branchName,
           includesCommit: pendingDefaultBranchAction.includesCommit,
-          vcsTerminology,
           terminology: changeRequestTerminology,
         },
         messages,
@@ -1472,29 +1455,8 @@ function CheckoutGitActionsControl({
     })();
   };
 
-  const runInit = async (kind: VcsDriverKind) => {
-    const result = await initAction.run(kind);
-    if (result._tag === "Success" || isAtomCommandInterrupted(result)) {
-      return;
-    }
-    const error = squashAtomCommandFailure(result);
-    toastManager.add(
-      stackedThreadToast({
-        type: "error",
-        title: gt("{system} initialization failed", { system: getVcsTerminology(kind).systemName }),
-        description: error instanceof Error ? error.message : gt("An error occurred."),
-        ...(threadToastData !== undefined ? { data: threadToastData } : {}),
-      }),
-    );
-  };
-
   const canPublishRepository =
     canWriteSourceControl && isRepo && gitStatusForActions !== null && !hasPrimaryRemote;
-  const canEnableJujutsu =
-    allowJujutsuConversion &&
-    canWriteSourceControl &&
-    gitStatusForActions?.isRepo &&
-    (gitStatusForActions.vcs?.kind === undefined || gitStatusForActions.vcs.kind === "git");
   const isDetachedHead = gitStatusForActions?.refName === null;
   const isCleanAndBehind =
     gitStatusForActions !== null &&
@@ -1502,19 +1464,34 @@ function CheckoutGitActionsControl({
     !gitStatusForActions.hasWorkingTreeChanges &&
     gitStatusForActions.behindCount > 0 &&
     gitStatusForActions.aheadCount === 0;
-  const hasGitMenuContent =
-    canEnableJujutsu ||
-    hasUsableGitMenuContent({
-      menuItems: gitActionMenuItems,
-      canWriteSourceControl,
-      canPublishRepository,
-      hasNotice: isDetachedHead || isCleanAndBehind || Boolean(gitStatusError),
-    });
+  const hasGitMenuContent = hasUsableGitMenuContent({
+    menuItems: gitActionMenuItems,
+    canWriteSourceControl,
+    canPublishRepository,
+    hasNotice: isDetachedHead || isCleanAndBehind || Boolean(gitStatusError),
+  });
 
   // A disabled menu cannot refresh on open, and terminal edits or commits publish no status.
   const refreshStatusForEmptyMenu = () =>
     requestVcsStatusRefresh(refreshVcsStatus, activeEnvironmentId, gitCwd);
 
+  const initializeGit = () => {
+    void (async () => {
+      const result = await initAction.run();
+      if (result._tag === "Success" || isAtomCommandInterrupted(result)) {
+        return;
+      }
+      const error = squashAtomCommandFailure(result);
+      toastManager.add(
+        stackedThreadToast({
+          type: "error",
+          title: gt("Git initialization failed"),
+          description: thrownErrorMessage(error, m) ?? gt("An error occurred."),
+          ...(threadToastData !== undefined ? { data: threadToastData } : {}),
+        }),
+      );
+    })();
+  };
   const gitItems = (
     <>
       {gitActionMenuItems.map((item) => {
@@ -1573,25 +1550,12 @@ function CheckoutGitActionsControl({
           </MenuItemLabel>
         </MenuItem>
       ) : null}
-      {canEnableJujutsu ? (
-        <MenuItem
-          disabled={isGitActionRunning || initAction.isPending}
-          onClick={() => setIsConvertToJjDialogOpen(true)}
-        >
-          <GitBranchPlusIcon />
-          <MenuItemLabel>{gt("Enable Jujutsu...")}</MenuItemLabel>
-        </MenuItem>
-      ) : null}
       {isDetachedHead && (
         <p className="px-2 py-1.5 text-xs text-warning">
-          {vcsTerminology.systemName === "Jujutsu"
-            ? gt("Create and check out a bookmark to enable push and {term} actions.", {
-                term: changeRequestTerminology.singular,
-              })
-            : gt(
-                "Detached HEAD: create and check out a branch to enable push and {term, select, mr {merge request} cr {change request} other {pull request}} actions.",
-                { term: changeRequestTermKind(changeRequestTerminology) },
-              )}
+          {gt(
+            "Detached HEAD: create and check out a branch to enable push and {term, select, mr {merge request} cr {change request} other {pull request}} actions.",
+            { term: changeRequestTermKind(changeRequestTerminology) },
+          )}
         </p>
       )}
       {isCleanAndBehind && (
@@ -1607,63 +1571,20 @@ function CheckoutGitActionsControl({
 
   return (
     <>
-      <Dialog open={isConvertToJjDialogOpen} onOpenChange={setIsConvertToJjDialogOpen}>
-        <DialogPopup>
-          <DialogHeader>
-            <DialogTitle>{gt("Enable Jujutsu for this Git repository?")}</DialogTitle>
-            <DialogDescription>
-              {gt(
-                "Jujutsu will use this repository's existing Git store. Commits, branches, remotes, and uncommitted files stay in place. The main repository will open in Jujutsu mode; existing Git worktrees continue to use Git.",
-              )}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter variant="bare">
-            <Button variant="outline" onClick={() => setIsConvertToJjDialogOpen(false)}>
-              {gt("Cancel")}
-            </Button>
-            <Button
-              disabled={initAction.isPending}
-              onClick={() => {
-                setIsConvertToJjDialogOpen(false);
-                void runInit("jj");
-              }}
-            >
-              {gt("Enable Jujutsu")}
-            </Button>
-          </DialogFooter>
-        </DialogPopup>
-      </Dialog>
       {!showActions ? null : !isRepo ? (
-        <>
-          <ThreadDetailsControl
-            size="xs"
-            variant="ghost"
-            part="row"
-            panel
-            disabled={!canWriteSourceControl || initAction.isPending}
-            onClick={() => void runInit("git")}
-          >
-            <GitBranchPlusIcon className="size-3.5" aria-hidden />
-            <span className={cn("ml-0.5", THREAD_DETAILS_PANEL_LABEL_CLASS)}>
-              {initAction.isPending ? <T>Initializing...</T> : <T>Initialize Git</T>}
-            </span>
-          </ThreadDetailsControl>
-          {canInitJujutsu ? (
-            <ThreadDetailsControl
-              size="xs"
-              variant="ghost"
-              part="row"
-              panel
-              disabled={!canWriteSourceControl || initAction.isPending}
-              onClick={() => void runInit("jj")}
-            >
-              <GitBranchPlusIcon className="size-3.5" aria-hidden />
-              <span className={cn("ml-0.5", THREAD_DETAILS_PANEL_LABEL_CLASS)}>
-                {gt("Initialize Jujutsu")}
-              </span>
-            </ThreadDetailsControl>
-          ) : null}
-        </>
+        <ThreadDetailsControl
+          size="xs"
+          variant="ghost"
+          part="row"
+          panel
+          disabled={!canWriteSourceControl || initAction.isPending}
+          onClick={initializeGit}
+        >
+          <GitBranchPlusIcon className="size-3.5" aria-hidden />
+          <span className={cn("ml-0.5", THREAD_DETAILS_PANEL_LABEL_CLASS)}>
+            {initAction.isPending ? <T>Initializing...</T> : <T>Initialize Git</T>}
+          </span>
+        </ThreadDetailsControl>
       ) : quietEmptyDraft || (compact && !gitActionProgress && !visibleInlineSuccess) ? null : (
         <div
           role="group"
@@ -1882,11 +1803,6 @@ function CheckoutGitActionsControl({
           <DialogHeader>
             <DialogTitle>{messages(COMMIT_DIALOG_TITLE)}</DialogTitle>
             <DialogDescription>{messages(COMMIT_DIALOG_DESCRIPTION)}</DialogDescription>
-            {gitStatusForActions?.vcs?.kind === "jj" ? (
-              <p className="text-sm text-muted-foreground">
-                {gt("Jujutsu does not run Git hooks.")}
-              </p>
-            ) : null}
           </DialogHeader>
           <DialogPanel>
             <div className="space-y-3 rounded-xl bg-zinc-25 p-3 text-sm ring-1 ring-black/5 dark:bg-white/[0.035] dark:ring-white/5">
@@ -1896,26 +1812,15 @@ function CheckoutGitActionsControl({
                 </span>
                 <span className="min-w-0 truncate font-medium">{target?.name}</span>
                 <span className="text-muted-foreground">
-                  {vcsTerminology.systemName === "Jujutsu" ? (
-                    vcsTerminology.refNounTitle
-                  ) : (
-                    <T context="git branch">Branch</T>
-                  )}
+                  <T context="git branch">Branch</T>
                 </span>
                 <span className="flex items-center justify-between gap-2">
                   <span className="font-medium">
-                    {gitStatusForActions?.refName ??
-                      (vcsTerminology.systemName === "Jujutsu"
-                        ? gt("(no {refNoun})", { refNoun: vcsTerminology.refNoun })
-                        : gt("(detached HEAD)"))}
+                    {gitStatusForActions?.refName ?? gt("(detached HEAD)")}
                   </span>
                   {isDefaultRef && (
                     <span className="text-right text-warning">
-                      {vcsTerminology.systemName === "Jujutsu" ? (
-                        gt("Warning: default {refNoun}", { refNoun: vcsTerminology.refNoun })
-                      ) : (
-                        <T>Default branch</T>
-                      )}
+                      <T>Default branch</T>
                     </span>
                   )}
                 </span>
@@ -2073,14 +1978,7 @@ function CheckoutGitActionsControl({
               disabled={!canCreateFeatureBranch || noneSelected}
               onClick={() => void runDialogAction(true)}
             >
-              {vcsTerminology.systemName === "Jujutsu" ? (
-                gt("{changeNounTitle} on new {refNoun}", {
-                  changeNounTitle: vcsTerminology.changeNounTitle,
-                  refNoun: vcsTerminology.refNoun,
-                })
-              ) : (
-                <T>Commit on new branch</T>
-              )}
+              <T>Commit on new branch</T>
             </Button>
             <Button
               size="sm"
@@ -2114,17 +2012,14 @@ function CheckoutGitActionsControl({
         <DialogPopup className="max-w-xl">
           <DialogHeader>
             <DialogTitle>
-              {pendingDefaultBranchActionCopy?.title ??
-                (vcsTerminology.systemName === "Jujutsu"
-                  ? gt("Run action on default {refNoun}?", { refNoun: vcsTerminology.refNoun })
-                  : gt("Run action on default branch?"))}
+              {pendingDefaultBranchActionCopy?.title ?? gt("Run action on default branch?")}
             </DialogTitle>
             <DialogDescription>{pendingDefaultBranchActionCopy?.description}</DialogDescription>
             {featureBranchUnavailableReason && (
               <p className="text-xs text-muted-foreground">{featureBranchUnavailableReason}</p>
             )}
           </DialogHeader>
-          <DialogFooter variant="bare" className="sm:flex-wrap sm:items-center">
+          <DialogFooter variant="bare" className="sm:items-center">
             <Button
               className="w-full sm:mr-auto sm:w-auto"
               variant="outline"
@@ -2148,11 +2043,7 @@ function CheckoutGitActionsControl({
               onClick={() => continuePendingDefaultBranchAction(true)}
               disabled={!canCreateFeatureBranch || featureBranchUnavailableReason !== null}
             >
-              {vcsTerminology.systemName === "Jujutsu" ? (
-                gt("Check out feature {refNoun} & continue", { refNoun: vcsTerminology.refNoun })
-              ) : (
-                <T>Check out feature branch & continue</T>
-              )}
+              <T>Check out feature branch & continue</T>
             </Button>
           </DialogFooter>
         </DialogPopup>
@@ -2174,8 +2065,6 @@ export default function ThreadGitActionsControl({
     "thread branch metadata update",
   );
   const activeEnvironmentId = activeThreadRef?.environmentId ?? null;
-  const worktreeBranchPrefix = useAtomValue(serverEnvironment.configValueAtom(activeEnvironmentId))
-    ?.settings.worktreeBranchPrefix;
   // Subscribed so a granted or revoked scope re-renders the control that reads it on demand.
   useEnvironmentScope(activeEnvironmentId, AuthOrchestrationOperateScope);
   const activeServerThreadShell = useQuietThreadShell(activeThreadRef);
@@ -2271,7 +2160,6 @@ export default function ThreadGitActionsControl({
     const branchUpdate = resolveLiveThreadBranchUpdate({
       threadBranch: activeDraftThread?.branch ?? null,
       gitStatus,
-      worktreeBranchPrefix,
     });
     if (!branchUpdate) {
       return;
@@ -2282,7 +2170,6 @@ export default function ThreadGitActionsControl({
     activeServerThread,
     activeDraftThread?.branch,
     gitStatus,
-    worktreeBranchPrefix,
     isGitActionRunning,
     isProjectCloning,
     isSelectingWorktreeBase,
@@ -2306,7 +2193,6 @@ export default function ThreadGitActionsControl({
       }}
       quietUntilWork={draftId !== undefined || activeServerThreadShell?.latestRun === null}
       changesBaseRef={changesBaseRef}
-      allowJujutsuConversion={!activeServerThread?.worktreePath && !activeDraftThread?.worktreePath}
     />
   );
 }

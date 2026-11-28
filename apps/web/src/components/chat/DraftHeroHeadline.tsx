@@ -43,7 +43,7 @@ import { InlineButton } from "../ui/button";
 import { DraftProjectName } from "./DraftProjectName";
 import { DraftHeroProjectHeading } from "./DraftHeroProjectHeading";
 import { TriageDraftHero } from "./TriageDraftHero";
-import { searchItems } from "@t3tools/shared/searchRanking";
+import { searchItems } from "@t3tools/shared/weightedSearch";
 
 const ADD_PROJECT_VALUE = "add-project";
 

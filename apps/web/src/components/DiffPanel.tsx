@@ -38,7 +38,7 @@ import { useFilesystemReadAccess } from "~/state/filesystem";
 import { useOpenInPreferredEditor } from "../editorPreferences";
 import { useFileContextMenuHandler } from "../fileContextMenu";
 import { type DraftId, useComposerDraftStore } from "../composerDraftStore";
-import { openDiffFilePrimaryAction } from "../diffFileActions";
+import { openDiffFilePrimaryAction, resolveDiffPathForWorkspace } from "../diffFileActions";
 import { toolCallDiff } from "../lib/toolCallDiff";
 import { useCheckpointDiff, useTurnItemDetail } from "~/state/queries";
 import { revisionedQuery } from "~/state/revisionedQuery";
@@ -53,6 +53,10 @@ import {
 } from "../diffPanelStore";
 import { useLocalStorage } from "../hooks/useLocalStorage";
 import { isTestChangedFile } from "@t3tools/shared/changedFileKind";
+import { resolvePathLinkTarget } from "@t3tools/shared/fileLinks";
+import { isWorkspaceImagePreviewPath } from "@t3tools/shared/mediaPreview";
+import { ChatMarkdownAssetImage } from "./chat/ChatMarkdownMedia";
+import { workspaceAssetResource } from "./files/filePreviewMode";
 import { useHideTestFiles } from "./diffs/useHideTestFiles";
 import { useRenderedAppearance } from "../hooks/useTheme";
 import { useStableCallback } from "../hooks/useStableCallback";
@@ -108,7 +112,6 @@ import {
   DropdownMenuTrigger,
 } from "./ui/menu";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
-import { resolveVcsTerminology } from "@t3tools/shared/vcs";
 import { SharedTooltipTrigger } from "./ui/shared-tooltip";
 import { useEnvironmentQuery, useEnvironmentQueryRefresh } from "../state/query";
 import { useAtomCommand } from "../state/use-atom-command";
@@ -717,7 +720,6 @@ export default function DiffPanel({
     ...(baseRefQuery.trim().length === 0 ? [AUTOMATIC_BASE_REF] : []),
     ...matchingBaseRefChoices.map(valueForBaseRefChoice),
   ];
-  const vcsTerminology = resolveVcsTerminology(gitStatusQuery.data);
   const canOpenInCrit =
     isGitRepo &&
     activeThread != null &&
@@ -913,6 +915,54 @@ export default function DiffPanel({
         (repository) => repository.repositoryPath === match.section.repositoryPath,
       )?.cwd,
     };
+  };
+  // Only uncommitted and branch changes end at the working tree, the one version that can be shown.
+  const workingTreeImagePath = (filePath: string) => {
+    if (
+      !isGitSelection ||
+      selectedCommitSha !== null ||
+      !activeCwd ||
+      !isWorkspaceImagePreviewPath(filePath)
+    ) {
+      return null;
+    }
+    if (gitRepository !== null) return resolvePathLinkTarget(filePath, gitRepository.cwd);
+    const workspacePath = resolveDiffPathForWorkspace({
+      filePath,
+      workspaceRoot: activeCwd,
+      repositoryRoot: activeRepositoryRoot,
+    });
+    return workspacePath === null ? null : resolvePathLinkTarget(workspacePath, activeCwd);
+  };
+  const imagePreviewPath = (fileDiff: FileDiffMetadata) => {
+    const filePath = resolveFileDiffPath(fileDiff);
+    return fileDiff.hunks.length === 0 &&
+      fileDiff.type !== "deleted" &&
+      workingTreeImagePath(filePath) !== null
+      ? filePath
+      : null;
+  };
+  const renderImagePreview = (filePath: string) => {
+    const absolutePath = workingTreeImagePath(filePath);
+    if (!routeThreadRef || !activeCwd || absolutePath === null) return null;
+    const resource = workspaceAssetResource({
+      kind: "workspace-file",
+      threadRef: routeThreadRef,
+      draft: false,
+      workspaceRoot: activeCwd,
+      absolutePath,
+    });
+    return resource._tag === "workspace-file" || resource._tag === "media-file" ? (
+      <div className="flex justify-center p-3">
+        <ChatMarkdownAssetImage
+          environmentId={routeThreadRef.environmentId}
+          resource={resource}
+          alt={filePath}
+          workspaceRoot={activeCwd}
+          workspaceMutationId={workspaceMutationId}
+        />
+      </div>
+    ) : null;
   };
   const showDiffFileContextMenu = (filePath: string, event: MouseEvent<HTMLElement>): void => {
     const repositoryFile = repositoryFileTarget(filePath);
@@ -1392,13 +1442,7 @@ export default function DiffPanel({
                 className="w-72 min-w-0 max-w-[calc(100vw-1rem)] overflow-hidden"
               >
                 <ComboboxSearchInput
-                  placeholder={
-                    vcsTerminology.systemName === "Jujutsu"
-                      ? gt("Search {refNounPlural}...", {
-                          refNounPlural: vcsTerminology.refNounPlural,
-                        })
-                      : gt("Search refs...")
-                  }
+                  placeholder={gt("Search refs...")}
                   value={baseRefQuery}
                   onChange={(event) => setBaseRefQuery(event.target.value)}
                 />
@@ -1406,11 +1450,7 @@ export default function DiffPanel({
                   <span aria-hidden="true" />
                   <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_2rem] items-center">
                     <span>
-                      {vcsTerminology.systemName === "Jujutsu" ? (
-                        vcsTerminology.refNounTitle
-                      ) : (
-                        <T context="git branch">Branch</T>
-                      )}
+                      <T context="git branch">Branch</T>
                     </span>
                     <span className="text-right">
                       <T context="git remote">Remote</T>
@@ -1418,13 +1458,7 @@ export default function DiffPanel({
                   </div>
                 </div>
                 <ComboboxEmpty>
-                  {vcsTerminology.systemName === "Jujutsu" ? (
-                    gt("No matching {refNounPlural}.", {
-                      refNounPlural: vcsTerminology.refNounPlural,
-                    })
-                  ) : (
-                    <T>No matching refs.</T>
-                  )}
+                  <T>No matching refs.</T>
                 </ComboboxEmpty>
                 <ComboboxList className="min-w-0 overflow-x-hidden" scrollAreaClassName="max-h-64">
                   <ComboboxItem
@@ -1678,14 +1712,7 @@ export default function DiffPanel({
         </div>
       ) : !isGitRepo && !hasRepositoryChanges && !toolCallSelection ? (
         <div className="flex flex-1 items-center justify-center px-5 text-center text-xs text-muted-foreground/70">
-          {vcsTerminology.systemName === "Jujutsu" ? (
-            gt(
-              "Turn diffs are unavailable because this project is not a {systemName} repository.",
-              { systemName: vcsTerminology.systemName },
-            )
-          ) : (
-            <T>Turn diffs are unavailable because this project is not a git repository.</T>
-          )}
+          <T>Turn diffs are unavailable because this project is not a git repository.</T>
         </div>
       ) : selectedRunId !== null && orderedTurnDiffSummaries.length === 0 ? (
         <div className="flex flex-1 items-center justify-center px-5 text-center text-xs text-muted-foreground/70">
@@ -1880,6 +1907,8 @@ export default function DiffPanel({
                         }
                       : {})}
                     onFileCollapsedChange={setDiffFileCollapsed}
+                    imagePreviewPath={imagePreviewPath}
+                    renderImagePreview={renderImagePreview}
                     renderHeaderPrefix={(fileDiff, fileKey, collapsed) => {
                       return (
                         <DiffFileCollapseToggle

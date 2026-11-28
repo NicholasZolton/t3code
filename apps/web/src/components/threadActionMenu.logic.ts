@@ -1,5 +1,4 @@
 import type { ContextMenuItem } from "@t3tools/contracts";
-import type { VcsTerminology } from "@t3tools/shared/vcs";
 import type { SnoozePreset } from "@t3tools/client-runtime/state/thread-settled";
 import { msg } from "gt-react";
 
@@ -106,7 +105,6 @@ export interface ThreadActionMenuState {
     readonly label: string;
     readonly isActive: boolean;
   } | null;
-  readonly terminology?: VcsTerminology;
   readonly isPinned: boolean;
   readonly isSettled: boolean;
   readonly autoSettleEnabled: boolean;
@@ -308,10 +306,7 @@ export function buildThreadActionMenuItems(
           ? [
               {
                 id: "copy-branch" as const,
-                label:
-                  state.terminology?.systemName === "Jujutsu"
-                    ? state.terminology.refNounTitle
-                    : resolve(msg("Branch", { $context: "copy the git branch name" })),
+                label: resolve(msg("Branch", { $context: "copy the git branch name" })),
                 icon: "git-branch",
               },
             ]

@@ -1,35 +1,12 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { JJ_VCS_TERMINOLOGY, JJ_WORKING_COPY_REVISION } from "@t3tools/shared/vcs";
-
 import {
-  filterNewTaskBranches,
   fillNewTaskWorkspaceBranch,
   resolveNewTaskBranchLabel,
   resolveNewTaskBranchWorktreePath,
   resolveNewTaskLocalWorkspaceSelection,
-  resolveNewTaskWorkspaceLabel,
   resolveNewTaskWorkspaceSelection,
 } from "./new-task-context-presentation";
-
-describe("new task VCS nouns", () => {
-  it("names the local-mode workspace with jj nouns", () => {
-    expect(
-      resolveNewTaskWorkspaceLabel({
-        workspaceMode: "local",
-        worktreePath: null,
-        terminology: JJ_VCS_TERMINOLOGY,
-      }),
-    ).toBe("Current working copy");
-    expect(
-      resolveNewTaskWorkspaceLabel({
-        workspaceMode: "local",
-        worktreePath: "/ws",
-        terminology: JJ_VCS_TERMINOLOGY,
-      }),
-    ).toBe("Current workspace");
-  });
-});
 
 describe("resolveNewTaskWorkspaceSelection", () => {
   const fallback = { mode: "worktree", branch: null, worktreePath: null } as const;
@@ -157,92 +134,6 @@ describe("resolveNewTaskBranchWorktreePath", () => {
         branchWorktreePath: "/repo/.t3/worktrees/feature",
       }),
     ).toBeNull();
-  });
-});
-
-describe("resolveNewTaskBranchLabel", () => {
-  it("labels the working-copy base without applying the origin default", () => {
-    expect(
-      resolveNewTaskBranchLabel({
-        branchName: JJ_WORKING_COPY_REVISION,
-        startFromOrigin: true,
-        workspaceMode: "worktree",
-        terminology: JJ_VCS_TERMINOLOGY,
-      }),
-    ).toBe("From current working copy");
-  });
-
-  it("identifies a deferred PR checkout independently of the origin default", () => {
-    expect(
-      resolveNewTaskBranchLabel({
-        branchName: "fork/feature",
-        startFromOrigin: true,
-        workspaceMode: "worktree",
-        pullRequestReference: "https://github.com/acme/repo/pull/123",
-      }),
-    ).toBe("From PR #123");
-  });
-  it("shows the checked-out branch without a base-ref prefix", () => {
-    expect(
-      resolveNewTaskBranchLabel({
-        branchName: "feature/mobile",
-        startFromOrigin: true,
-        workspaceMode: "local",
-      }),
-    ).toBe("feature/mobile");
-  });
-
-  it("labels a local worktree base with From", () => {
-    expect(
-      resolveNewTaskBranchLabel({
-        branchName: "main",
-        startFromOrigin: false,
-        workspaceMode: "worktree",
-      }),
-    ).toBe("From main");
-  });
-
-  it("labels a remote worktree base with From origin", () => {
-    expect(
-      resolveNewTaskBranchLabel({
-        branchName: "main",
-        startFromOrigin: true,
-        workspaceMode: "worktree",
-      }),
-    ).toBe("From origin/main");
-  });
-
-  it("prompts when no branch is available", () => {
-    expect(
-      resolveNewTaskBranchLabel({
-        branchName: null,
-        startFromOrigin: true,
-        workspaceMode: "worktree",
-      }),
-    ).toBe("Choose branch");
-  });
-});
-
-describe("filterNewTaskBranches", () => {
-  const branches = [
-    { name: "main", isRemote: false },
-    { name: "Feature/Login-Page", isRemote: false },
-    { name: "origin/fix/remote-only", isRemote: true },
-  ];
-  const search = (query: string) =>
-    filterNewTaskBranches(branches, query).map((branch) => branch.name);
-
-  it("ignores case in both the query and the branch name", () => {
-    expect(search("feature/login")).toEqual(["Feature/Login-Page"]);
-    expect(search("MAIN")).toEqual(["main"]);
-  });
-
-  it("keeps remote-only branches searchable", () => {
-    expect(search("remote-only")).toEqual(["origin/fix/remote-only"]);
-  });
-
-  it("matches a typed space against the dash a branch name uses", () => {
-    expect(search("  login page ")).toEqual(["Feature/Login-Page"]);
   });
 });
 

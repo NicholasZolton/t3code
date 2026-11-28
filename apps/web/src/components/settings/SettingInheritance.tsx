@@ -8,7 +8,6 @@ import {
 } from "@t3tools/contracts";
 import { CheckIcon, ChevronRightIcon, LayersIcon } from "lucide-react";
 import * as Equal from "effect/Equal";
-import { DEFAULT_VCS_TERMINOLOGY } from "@t3tools/shared/vcs";
 import { msg, T, useGT, useMessages } from "gt-react";
 
 import { m, type MessageResolver } from "../../i18n/messages";
@@ -79,7 +78,7 @@ function formatValue(
   }
   if (typeof value === "string") {
     if (key === "defaultThreadEnvMode" && (value === "local" || value === "worktree")) {
-      return resolveEnvModeLabel(value, DEFAULT_VCS_TERMINOLOGY, resolve);
+      return resolveEnvModeLabel(value, resolve);
     }
     if (key === "worktreeSubmodules" && value in WORKTREE_SUBMODULES_LABELS) {
       return resolve(WORKTREE_SUBMODULES_LABELS[value as WorktreeSubmodules]);

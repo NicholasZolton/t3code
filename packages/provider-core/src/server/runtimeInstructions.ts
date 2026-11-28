@@ -22,7 +22,6 @@ export function buildRuntimeInstructions(runtime: {
   readonly model?: string | undefined;
   readonly modelName?: string | undefined;
   readonly reasoningEffort?: string | undefined;
-  readonly vcsAgentHint?: string | null | undefined;
   /** False when the session's system prompt already carries the linking instructions. */
   readonly pullRequestLinking?: boolean;
   /** Adds the folder list of a multi-folder thread. */
@@ -45,14 +44,7 @@ export function buildRuntimeInstructions(runtime: {
     runtime.pullRequestLinking === false
       ? runtimeInfo
       : `${runtimeInfo}\n\n${PULL_REQUEST_LINKING_INSTRUCTIONS}`;
-  return (
-    [linked + feedback, ...(workspace === "" ? [] : [workspace])].join("\n\n") +
-    buildVcsAgentContext(runtime.vcsAgentHint)
-  );
-}
-
-export function buildVcsAgentContext(hint: string | null | undefined): string {
-  return hint ? `\n\n<vcs_context>${hint}</vcs_context>` : "";
+  return [linked + feedback, ...(workspace === "" ? [] : [workspace])].join("\n\n");
 }
 
 function toSingleLine(value: string): string {

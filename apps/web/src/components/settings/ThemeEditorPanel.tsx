@@ -1,4 +1,4 @@
-import { searchItems } from "@t3tools/shared/searchRanking";
+import { searchItems } from "@t3tools/shared/weightedSearch";
 import { errorDisplayMessage } from "@t3tools/client-runtime/errors";
 import {
   MousePointer2Icon,

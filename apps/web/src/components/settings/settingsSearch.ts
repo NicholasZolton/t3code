@@ -1,5 +1,5 @@
 import { HOSTED_APP_CHANNEL } from "~/branding";
-import { scoreSearchFields, SEARCH_SECONDARY_FIELD_WEIGHT } from "@t3tools/shared/searchRanking";
+import { scoreSearchFields, SEARCH_SECONDARY_FIELD_WEIGHT } from "@t3tools/shared/weightedSearch";
 import { isElectron } from "~/env";
 import { isMacPlatform, isWindowsPlatform, normalizeSearchText } from "~/lib/utils";
 import { STATIC_KEYBINDING_COMMANDS, type KeybindingCommand } from "@t3tools/contracts";
@@ -289,6 +289,7 @@ export const SETTINGS_SEARCH_ITEMS = [
     to: "/settings/worktrees",
     scope: "project-defaults",
     searchTerms: [
+      msg("Delete worktrees with deleted threads"),
       msg(
         "disk storage automatic delete deleted archived threads old inactive merged settled unchanged worktrees retention days project inherit off custom",
       ),
@@ -323,7 +324,11 @@ export const SETTINGS_SEARCH_ITEMS = [
     id: "project-overview",
     title: msg("Project overview"),
     to: "/settings/projects",
-    searchTerms: [msg("name icon emoji image checkout remove delete")],
+    searchTerms: [
+      msg("Pin"),
+      msg("Pinned projects come first in project pickers."),
+      msg("name icon emoji image checkout remove delete"),
+    ],
   },
   {
     id: "default-model",
@@ -948,10 +953,7 @@ export const SETTINGS_SEARCH_ITEMS = [
     title: msg("Start from remote"),
     to: "/settings/worktrees",
     scope: "project-defaults",
-    searchTerms: [
-      msg("new worktrees start remote origin latest fetched branch local"),
-      "workspace bookmark",
-    ],
+    searchTerms: [msg("new worktrees start remote origin latest fetched branch local")],
   },
   {
     id: "add-project-starts-in",
@@ -1131,6 +1133,7 @@ export const SETTINGS_SEARCH_ITEMS = [
     title: msg("Providers"),
     to: "/settings/providers",
     searchTerms: [
+      msg("ChatGPT account"),
       msg(
         "agents cli codex claude cursor grok fx kiro opencode antigravity google sign in sign out install subscription instances authentication api key models configuration binary path config directory codex_home shadow home endpoint arguments environment variables display name accent color custom favorite hidden auto compact native sessions import resume",
       ),
@@ -1320,7 +1323,7 @@ export const SETTINGS_SEARCH_ITEMS = [
     to: "/settings/source-control",
     scope: "environment-defaults",
     searchTerms: [
-      `version control git jujutsu jj bookmark workspace change ${SOURCE_CONTROL_HOST_TERMS} hosting integrations credentials scan server environment`,
+      `version control git ${SOURCE_CONTROL_HOST_TERMS} hosting integrations credentials scan server environment`,
     ],
   },
   {
@@ -1330,19 +1333,9 @@ export const SETTINGS_SEARCH_ITEMS = [
     targetId: "background-activity",
     searchTerms: [
       msg("automatic remote branch refresh background credentials security keys seconds off"),
-      "bookmark jujutsu jj",
     ],
     environmentOnly: true,
     scope: "environment-defaults",
-  },
-  {
-    id: "vcs-agent-hints",
-    title: msg("VCS agent hints"),
-    to: "/settings/source-control",
-    scope: "project-defaults",
-    searchTerms: [
-      "version control git jujutsu jj agent context instructions injection hints disable",
-    ],
   },
   {
     id: "worktree-branch-naming",
@@ -1413,10 +1406,7 @@ export const SETTINGS_SEARCH_ITEMS = [
     id: "project-actions",
     title: msg("Actions"),
     to: "/settings/projects",
-    searchTerms: [
-      msg("commands scripts setup run dev server checkout worktree t3.json import"),
-      "jujutsu jj bookmark workspace change",
-    ],
+    searchTerms: [msg("commands scripts setup run dev server checkout worktree t3.json import")],
   },
   {
     id: "project-repositories",

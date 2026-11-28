@@ -81,8 +81,8 @@ import { pullRequestCompletionScope } from "./PullRequestMarkdownTextarea";
 import { PullRequestChangeBreakdownStat } from "./PullRequestChangeBreakdownStat";
 import { sourceControlClients } from "@t3tools/client-runtime/source-control-clients";
 import { PullRequestThreadLinks } from "./PullRequestThreadLinks";
-import { useVcsTerminology, vcsEnvironment } from "~/state/vcs";
-import { RelativeTime } from "../RelativeTime";
+import { vcsEnvironment } from "~/state/vcs";
+import { RelativeTime } from "~/components/RelativeTime";
 import { useUiStateStore } from "~/uiStateStore";
 
 import { Alert, AlertAction, AlertDescription } from "../ui/alert";
@@ -894,7 +894,6 @@ export function PullRequestDetailPanel({
   const actingEnvironmentId = acting?.environmentId ?? environmentId;
   const checkoutRoot =
     acting?.workspaceRoot ?? detail?.workspaceRoot ?? project?.workspaceRoot ?? null;
-  const vcsTerminology = useVcsTerminology(actingEnvironmentId, checkoutRoot);
   const canOperateThread = useEnvironmentScope(actingEnvironmentId, AuthOrchestrationOperateScope);
   const prepareThread = usePreparePullRequestThreadAction({
     environmentId: actingEnvironmentId,
@@ -1188,35 +1187,22 @@ export function PullRequestDetailPanel({
               title: mode === "local" ? m(msg("Checked out here")) : m(msg("Checked out")),
               description:
                 mode === "local"
-                  ? vcsTerminology.systemName === "Jujutsu"
-                    ? gt(
-                        "This repository is on the {singular}'s {refNoun}, with a thread open on it.",
-                        { singular: terminology.singular, refNoun: vcsTerminology.refNoun },
-                      )
-                    : m(
-                        msg(
-                          "This repository is on the {term, select, mr {merge request} cr {change request} other {pull request}}'s branch, with a thread open on it.",
-                          {
-                            term: changeRequestTermKind(terminology),
-                          },
-                        ),
-                      )
-                  : vcsTerminology.systemName === "Jujutsu"
-                    ? gt(
-                        "The {singular} is in its own {workspaceNoun}, with a thread open on it.",
+                  ? m(
+                      msg(
+                        "This repository is on the {term, select, mr {merge request} cr {change request} other {pull request}}'s branch, with a thread open on it.",
                         {
-                          singular: terminology.singular,
-                          workspaceNoun: vcsTerminology.workspaceNoun,
+                          term: changeRequestTermKind(terminology),
                         },
-                      )
-                    : m(
-                        msg(
-                          "The {term, select, mr {merge request} cr {change request} other {pull request}} is in its own worktree, with a thread open on it.",
-                          {
-                            term: changeRequestTermKind(terminology),
-                          },
-                        ),
                       ),
+                    )
+                  : m(
+                      msg(
+                        "The {term, select, mr {merge request} cr {change request} other {pull request}} is in its own worktree, with a thread open on it.",
+                        {
+                          term: changeRequestTermKind(terminology),
+                        },
+                      ),
+                    ),
             }
           : offHeadPullRequestCheckoutToast(terminology),
       );
