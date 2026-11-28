@@ -378,7 +378,6 @@ export interface ThreadFeedHistoryControls {
 }
 
 export interface ThreadFeedProps {
-  readonly vcsTerminology?: WorktreeSetupCardProps["vcsTerminology"];
   readonly toolCallVisibility?: ToolCallVisibility;
   readonly worktreeSetup?: WorktreeSetupCardProps | null;
   readonly preparingWorktree?: boolean;
@@ -3758,7 +3757,6 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
     formatMessageTime,
     worktreeSetup: props.worktreeSetup,
     preparingWorktree: props.preparingWorktree,
-    vcsTerminology: props.vcsTerminology,
     dispatchingMessageId: props.dispatchingMessageId,
     unsettledTurnId,
     copiedRowId,
@@ -4287,7 +4285,7 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
               onOpenDetails={openSetupDetails}
             />
           ) : props.preparingWorktree && info.index === setupAnchorIndex ? (
-            <WorktreePreparingHeader vcsTerminology={props.vcsTerminology} />
+            <WorktreePreparingHeader />
           ) : null}
         </ThreadMediaVisibility>
       </MessageImageGalleryScope>
@@ -4399,7 +4397,7 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
                     onOpenDetails={openSetupDetails}
                   />
                 ) : setupAnchorIndex < 0 && props.preparingWorktree ? (
-                  <WorktreePreparingHeader vcsTerminology={props.vcsTerminology} />
+                  <WorktreePreparingHeader />
                 ) : null}
                 {props.historyControls ? (
                   <ThreadFeedLoadEarlierControl {...props.historyControls} />

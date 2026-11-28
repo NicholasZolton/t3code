@@ -7,7 +7,6 @@ import { dedupeRemoteBranchesWithLocalMatches } from "@t3tools/shared/git";
 import { useBranches } from "./queries";
 import { useEnvironmentQuery } from "./query";
 import { sourceControlEnvironment } from "./sourceControl";
-import { useVcsTerminology } from "./vcs";
 import { useVcsActionState } from "./use-vcs-action-state";
 import type { GitRepositoryTarget } from "./thread-git-target";
 import { useThreadSelection } from "./use-thread-selection";
@@ -34,11 +33,6 @@ export function useSelectedThreadGitState(repository?: GitRepositoryTarget) {
         }),
   );
 
-  const vcsTerminology = useVcsTerminology(
-    selectedThread?.environmentId ?? null,
-    selectedThreadCwd,
-  );
-
   const selectedThreadBranchTarget = {
     environmentId: selectedThread?.environmentId ?? null,
     cwd: selectedThreadCwd,
@@ -55,7 +49,6 @@ export function useSelectedThreadGitState(repository?: GitRepositoryTarget) {
 
   return {
     gitOperationLabel: vcsActionLabelText(gitActionState, messages),
-    vcsTerminology,
     sourceControlDiscovery,
     selectedThreadBranches,
   };

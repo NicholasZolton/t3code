@@ -1,3 +1,5 @@
+import * as BackgroundPolicy from "../background/BackgroundPolicy.ts";
+import * as VcsStatusBroadcaster from "../vcs/VcsStatusBroadcaster.ts";
 import { type PullRequestActionInput, SourceControlProviderKind } from "@t3tools/contracts";
 // @effect-diagnostics nodeBuiltinImport:off
 import * as NodeFS from "node:fs";
@@ -11,8 +13,6 @@ import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import * as Deferred from "effect/Deferred";
-import * as Duration from "effect/Duration";
-import * as Exit from "effect/Exit";
 import * as Fiber from "effect/Fiber";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
@@ -29,7 +29,6 @@ import type {
   ChangeRequest,
   GitActionProgressEvent,
   GitPreparePullRequestThreadInput,
-  GitManagerServiceError,
   ModelSelection,
   ServerProvider,
 } from "@t3tools/contracts";
@@ -58,9 +57,6 @@ import * as GitVcsDriver from "../vcs/GitVcsDriver.ts";
 import * as VcsProcess from "../vcs/VcsProcess.ts";
 import * as VcsDriverRegistry from "../vcs/VcsDriverRegistry.ts";
 import * as VcsProjectConfig from "../vcs/VcsProjectConfig.ts";
-import * as VcsStatusBroadcaster from "../vcs/VcsStatusBroadcaster.ts";
-import { VcsAutomaticFetchInterval } from "../vcs/VcsAutomaticFetchInterval.ts";
-import * as BackgroundPolicy from "../background/BackgroundPolicy.ts";
 import * as GitWorkflowService from "./GitWorkflowService.ts";
 import type {
   SourceControlProvider,
@@ -811,163 +807,6 @@ const layerGitManagerTest = layerGitFixtureTemplates.pipe(
 );
 
 it.layer(layerGitManagerTest)("GitManager", (it) => {
-  it.effect("passive worktree status streams do not start remote refreshes", () =>
-    Effect.gen(function* () {
-      const repoDir = yield* makeTempDir("t3code-passive-vcs-");
-      yield* initRepo(repoDir);
-      const remoteDir = yield* createBareRemote();
-      yield* runGit(repoDir, ["remote", "add", "origin", remoteDir]);
-      yield* runGit(repoDir, ["push", "-u", "origin", "main"]);
-      const worktreeDir = NodePath.join(repoDir, "worktree");
-      yield* runGit(repoDir, ["worktree", "add", "-b", "feature/passive", worktreeDir]);
-      yield* runGit(worktreeDir, ["push", "-u", "origin", "feature/passive"]);
-
-      const { manager } = yield* makeManager();
-      let remoteReads = 0;
-      const workflowContext = yield* Layer.build(
-        GitWorkflowService.layer.pipe(
-          Layer.provide(
-            Layer.succeed(GitManager.GitManager, {
-              ...manager,
-              remoteStatus: (input, options) =>
-                manager.remoteStatus(input, options).pipe(
-                  Effect.tap(() =>
-                    Effect.sync(() => {
-                      remoteReads += 1;
-                    }),
-                  ),
-                ),
-            }),
-          ),
-          Layer.provide(
-            VcsDriverRegistry.layer.pipe(
-              Layer.provide(VcsProjectConfig.layer),
-              Layer.provide(VcsProcess.layer),
-            ),
-          ),
-        ),
-      );
-      const broadcasterContext = yield* Layer.build(
-        VcsStatusBroadcaster.layer.pipe(
-          Layer.provide(
-            Layer.succeed(VcsAutomaticFetchInterval, Effect.succeed(Duration.seconds(1))),
-          ),
-          Layer.provide(
-            Layer.succeed(
-              GitWorkflowService.GitWorkflowService,
-              Context.get(workflowContext, GitWorkflowService.GitWorkflowService),
-            ),
-          ),
-          Layer.provide(
-            Layer.mock(BackgroundPolicy.BackgroundPolicy)({
-              shouldRunScopeWork: () => Effect.succeed(true),
-            }),
-          ),
-        ),
-      );
-      const broadcaster = Context.get(
-        broadcasterContext,
-        VcsStatusBroadcaster.VcsStatusBroadcaster,
-      );
-      const passiveScope = yield* Scope.make();
-      const snapshots = yield* Deferred.make<void, GitManagerServiceError>();
-      const localUpdated = yield* Deferred.make<void>();
-      const remoteUpdated = yield* Deferred.make<void>();
-      let snapshotCount = 0;
-      for (const cwd of [repoDir, worktreeDir]) {
-        yield* Stream.runForEach(
-          broadcaster.streamStatus({ cwd, includeRemote: false }),
-          (event) => {
-            if (
-              cwd === worktreeDir &&
-              event._tag === "localUpdated" &&
-              event.local.hasWorkingTreeChanges
-            ) {
-              return Deferred.succeed(localUpdated, undefined);
-            }
-            if (cwd === worktreeDir && event._tag === "remoteUpdated") {
-              expect(event.remote?.hasUpstream).toBe(true);
-              return Deferred.succeed(remoteUpdated, undefined);
-            }
-            if (event._tag !== "snapshot") return Effect.void;
-            expect(event.local.isRepo).toBe(true);
-            expect(event.local.refName).toBe(cwd === repoDir ? "main" : "feature/passive");
-            snapshotCount += 1;
-            return snapshotCount === 2 ? Deferred.succeed(snapshots, undefined) : Effect.void;
-          },
-        ).pipe(
-          Effect.catchCause((cause) => Deferred.failCause(snapshots, cause)),
-          Effect.forkIn(passiveScope),
-        );
-      }
-      yield* Deferred.await(snapshots);
-      expect(remoteReads).toBe(0);
-      yield* TestClock.adjust("1 minute");
-      expect(remoteReads).toBe(0);
-
-      const fs = yield* FileSystem.FileSystem;
-      yield* fs.writeFileString(NodePath.join(worktreeDir, "README.md"), "changed\n");
-      yield* broadcaster.refreshLocalStatus(worktreeDir);
-      yield* Deferred.await(localUpdated);
-      expect(remoteReads).toBe(0);
-
-      const activeScope = yield* Scope.make();
-      yield* Stream.runDrain(broadcaster.streamStatus({ cwd: worktreeDir })).pipe(
-        Effect.forkIn(activeScope),
-      );
-      yield* Deferred.await(remoteUpdated);
-      expect(remoteReads).toBe(1);
-      yield* Scope.close(activeScope, Exit.void);
-      yield* TestClock.adjust("1 minute");
-      expect(remoteReads).toBe(1);
-      yield* Scope.close(passiveScope, Exit.void);
-    }),
-  );
-
-  it.effect("status includes draft PR metadata when branch already has a draft PR", () =>
-    Effect.gen(function* () {
-      const repoDir = yield* makeTempDir("t3code-git-manager-");
-      yield* initRepo(repoDir);
-      yield* runGit(repoDir, ["checkout", "-b", "feature/status-open-pr"]);
-      const remoteDir = yield* createBareRemote();
-      yield* runGit(repoDir, ["remote", "add", "origin", remoteDir]);
-      yield* runGit(repoDir, ["push", "-u", "origin", "feature/status-open-pr"]);
-
-      const { manager } = yield* makeManager({
-        providerScenario: {
-          prListSequence: [
-            [
-              {
-                number: 13,
-                title: "Existing PR",
-                url: "https://github.com/pingdotgg/codething-mvp/pull/13",
-                baseRefName: "main",
-                headRefName: "feature/status-open-pr",
-                isDraft: true,
-              },
-            ],
-          ],
-        },
-      });
-
-      const status = yield* manager.status({ cwd: repoDir });
-      expect(status.isRepo).toBe(true);
-      expect(status.hasPrimaryRemote).toBe(true);
-      expect(status.isDefaultRef).toBe(false);
-      expect(status.refName).toBe("feature/status-open-pr");
-      expect(status.pr).toEqual({
-        number: 13,
-        title: "Existing PR",
-        url: "https://github.com/pingdotgg/codething-mvp/pull/13",
-        baseRef: "main",
-        headRef: "feature/status-open-pr",
-        state: "open",
-        isDraft: true,
-        updatedAt: null,
-      });
-    }),
-  );
-
   it.effect(
     "publishes local Git changes during a held PR lookup without caching its old branch",
     () =>
@@ -7258,58 +7097,6 @@ it.layer(layerGitManagerTest)("GitManager", (it) => {
       }),
   );
 
-  it.effect("prepares pull request threads in worktree mode on the PR head branch", () =>
-    Effect.gen(function* () {
-      const repoDir = yield* makeTempDir("t3code-git-manager-");
-      yield* initRepo(repoDir);
-      const remoteDir = yield* createBareRemote();
-      yield* runGit(repoDir, ["remote", "add", "origin", remoteDir]);
-      yield* runGit(repoDir, ["push", "-u", "origin", "main"]);
-      yield* runGit(repoDir, ["checkout", "-b", "feature/pr-worktree"]);
-      NodeFS.writeFileSync(NodePath.join(repoDir, "worktree.txt"), "worktree\n");
-      yield* runGit(repoDir, ["add", "worktree.txt"]);
-      yield* runGit(repoDir, ["commit", "-m", "PR worktree branch"]);
-      yield* runGit(repoDir, ["push", "-u", "origin", "feature/pr-worktree"]);
-      yield* runGit(repoDir, ["push", "origin", "HEAD:refs/pull/77/head"]);
-      yield* runGit(repoDir, ["checkout", "main"]);
-      const worktreeDirectory = yield* makeTempDir("t3code-pr-worktrees-");
-
-      const { manager } = yield* makeManager({
-        serverSettings: { worktreesDirectory: worktreeDirectory },
-        providerScenario: {
-          pullRequest: {
-            number: 77,
-            title: "Worktree PR",
-            url: "https://github.com/pingdotgg/codething-mvp/pull/77",
-            baseRefName: "main",
-            headRefName: "feature/pr-worktree",
-            state: "open",
-          },
-        },
-      });
-
-      const result = yield* preparePullRequestThread(manager, {
-        cwd: repoDir,
-        reference: "77",
-        mode: "worktree",
-      });
-
-      expect(result.branch).toBe("feature/pr-worktree");
-      expect(result.worktreePath).not.toBeNull();
-      const worktreePath = result.worktreePath!;
-      expect(NodePath.dirname(worktreePath)).toBe(
-        NodePath.join(worktreeDirectory, NodePath.basename(repoDir)),
-      );
-      expect(NodePath.basename(worktreePath)).toMatch(/^feature-pr-worktree-[0-9a-f]{16}$/);
-      expect(NodeFS.existsSync(worktreePath)).toBe(true);
-      const worktreeBranch = (yield* runGit(worktreePath, [
-        "branch",
-        "--show-current",
-      ])).stdout.trim();
-      expect(worktreeBranch).toBe("feature/pr-worktree");
-    }),
-  );
-
   it.effect("prepares a worktree from the head branch when the host has no pull ref", () =>
     Effect.gen(function* () {
       const repoDir = yield* makeTempDir("t3code-git-manager-");
@@ -7970,7 +7757,7 @@ it.layer(layerGitManagerTest)("GitManager", (it) => {
     { isCrossRepository: true, padding: 0 },
     { isCrossRepository: true, padding: 110 },
   ])(
-    "reuses an existing PR worktree among $padding other matching branches (fork: $isCrossRepository)",
+    "reuses an existing PR worktree with $padding preceding matching branches (fork: $isCrossRepository)",
     ({ isCrossRepository, padding }) =>
       Effect.gen(function* () {
         const repoDir = yield* makeTempDir("t3code-git-manager-");
@@ -8003,7 +7790,7 @@ it.layer(layerGitManagerTest)("GitManager", (it) => {
           refresh: true,
         });
         expect(page.nextCursor !== null).toBe(padding > 0);
-        expect(page.refs.some((ref) => ref.name === localBranch)).toBe(true);
+        expect(page.refs.some((ref) => ref.name === localBranch)).toBe(padding === 0);
         const { manager } = yield* makeManager({
           providerScenario: {
             repositoryCloneUrls: forkDir

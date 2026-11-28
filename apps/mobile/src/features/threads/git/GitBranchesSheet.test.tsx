@@ -1,7 +1,6 @@
 import { act, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import { expect, it, vi } from "vite-plus/test";
-import { DEFAULT_VCS_TERMINOLOGY } from "@t3tools/shared/vcs";
 
 type InputProps = {
   accessibilityLabel: string;
@@ -26,12 +25,6 @@ vi.mock("@react-navigation/native", () => ({
     goBack: () => state.goBackCalls++,
     isFocused: () => state.focused,
   }),
-}));
-vi.mock("react-native", () => ({
-  View: ({ children }: { children: ReactNode }) => children,
-}));
-vi.mock("../../../components/ui/AppText", () => ({
-  AppText: ({ children }: { children: ReactNode }) => children,
 }));
 vi.mock("../../../components/ui/SheetHeader", () => ({ SheetHeader: () => null }));
 vi.mock("../../../components/ui/FitSheet", () => ({
@@ -72,7 +65,6 @@ vi.mock("../../../state/use-selected-thread-worktree", () => ({
 }));
 vi.mock("../../../state/use-selected-thread-git-state", () => ({
   useSelectedThreadGitState: () => ({
-    vcsTerminology: DEFAULT_VCS_TERMINOLOGY,
     selectedThreadBranches: [{ name: "release/stable", worktreePath: null }],
     gitOperationLabel: null,
   }),

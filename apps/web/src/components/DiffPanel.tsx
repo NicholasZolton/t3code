@@ -108,7 +108,6 @@ import {
   DropdownMenuTrigger,
 } from "./ui/menu";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
-import { resolveVcsTerminology } from "@t3tools/shared/vcs";
 import { SharedTooltipTrigger } from "./ui/shared-tooltip";
 import { useEnvironmentQuery, useEnvironmentQueryRefresh } from "../state/query";
 import { useAtomCommand } from "../state/use-atom-command";
@@ -717,7 +716,6 @@ export default function DiffPanel({
     ...(baseRefQuery.trim().length === 0 ? [AUTOMATIC_BASE_REF] : []),
     ...matchingBaseRefChoices.map(valueForBaseRefChoice),
   ];
-  const vcsTerminology = resolveVcsTerminology(gitStatusQuery.data);
   const canOpenInCrit =
     isGitRepo &&
     activeThread != null &&
@@ -1392,13 +1390,7 @@ export default function DiffPanel({
                 className="w-72 min-w-0 max-w-[calc(100vw-1rem)] overflow-hidden"
               >
                 <ComboboxSearchInput
-                  placeholder={
-                    vcsTerminology.systemName === "Jujutsu"
-                      ? gt("Search {refNounPlural}...", {
-                          refNounPlural: vcsTerminology.refNounPlural,
-                        })
-                      : gt("Search refs...")
-                  }
+                  placeholder={gt("Search refs...")}
                   value={baseRefQuery}
                   onChange={(event) => setBaseRefQuery(event.target.value)}
                 />
@@ -1406,11 +1398,7 @@ export default function DiffPanel({
                   <span aria-hidden="true" />
                   <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_2rem] items-center">
                     <span>
-                      {vcsTerminology.systemName === "Jujutsu" ? (
-                        vcsTerminology.refNounTitle
-                      ) : (
-                        <T context="git branch">Branch</T>
-                      )}
+                      <T context="git branch">Branch</T>
                     </span>
                     <span className="text-right">
                       <T context="git remote">Remote</T>
@@ -1418,13 +1406,7 @@ export default function DiffPanel({
                   </div>
                 </div>
                 <ComboboxEmpty>
-                  {vcsTerminology.systemName === "Jujutsu" ? (
-                    gt("No matching {refNounPlural}.", {
-                      refNounPlural: vcsTerminology.refNounPlural,
-                    })
-                  ) : (
-                    <T>No matching refs.</T>
-                  )}
+                  <T>No matching refs.</T>
                 </ComboboxEmpty>
                 <ComboboxList className="min-w-0 overflow-x-hidden" scrollAreaClassName="max-h-64">
                   <ComboboxItem
@@ -1678,14 +1660,7 @@ export default function DiffPanel({
         </div>
       ) : !isGitRepo && !hasRepositoryChanges && !toolCallSelection ? (
         <div className="flex flex-1 items-center justify-center px-5 text-center text-xs text-muted-foreground/70">
-          {vcsTerminology.systemName === "Jujutsu" ? (
-            gt(
-              "Turn diffs are unavailable because this project is not a {systemName} repository.",
-              { systemName: vcsTerminology.systemName },
-            )
-          ) : (
-            <T>Turn diffs are unavailable because this project is not a git repository.</T>
-          )}
+          <T>Turn diffs are unavailable because this project is not a git repository.</T>
         </div>
       ) : selectedRunId !== null && orderedTurnDiffSummaries.length === 0 ? (
         <div className="flex flex-1 items-center justify-center px-5 text-center text-xs text-muted-foreground/70">

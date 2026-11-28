@@ -223,16 +223,6 @@ const VcsStatusChangeRequest = Schema.Struct({
 
 const VcsStatusLocalShape = {
   isRepo: Schema.Boolean,
-  /**
-   * Absent for Git. Legacy Jujutsu workspaces report `unsupportedReason` instead of being
-   * treated as a Git checkout or an uninitialized folder.
-   */
-  vcs: Schema.optional(
-    Schema.Struct({
-      kind: VcsDriverKind,
-      unsupportedReason: Schema.optional(TrimmedNonEmptyStringSchema),
-    }),
-  ),
   sourceControlProvider: Schema.optional(SourceControlProviderInfo),
   hasPrimaryRemote: Schema.Boolean,
   isDefaultRef: Schema.Boolean,

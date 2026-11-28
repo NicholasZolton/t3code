@@ -34,7 +34,8 @@ export const layer = Layer.mergeAll(
   }),
   layerNoTaskFolders,
   Layer.mock(GitWorkflow.GitWorkflowService)({
-    ensureWorkspace: () => Effect.void,
+    pruneWorktrees: () => Effect.void,
+    createWorktree: () => Effect.succeed({} as never),
   }),
   Layer.mock(ProjectService.ProjectService)({
     getById: () => Effect.succeedNone,

@@ -1274,8 +1274,6 @@ const make = Effect.gen(function* () {
         return "worktree is a symbolic link";
       if (!roots.some((root) => inside(root, realPath)))
         return "outside the managed worktree folder";
-      if (yield* fs.exists(path.join(worktreePath, ".jj")))
-        return "Jujutsu workspace cleanup is not supported";
       const linked = yield* isLinkedWorktree(worktreePath).pipe(
         Effect.catchReason("PlatformError", "NotFound", () => Effect.succeed(false)),
       );
@@ -1929,7 +1927,7 @@ const make = Effect.gen(function* () {
               // Git requires force for submodules; recursive checks above cannot make removal atomic.
               force: submodules.force,
               execute: git.execute,
-              run: (args) => cleanupGit(repository, [...args], "git worktree remove"),
+              run: (args, cwd) => cleanupGit(cwd, [...args], "git worktree remove"),
             }).pipe(Effect.tapError(() => noteLeftover(adminDir, entry)));
             entries.push({ ...entry, outcome: "removed", reason: sentence(removalReason), bytes });
             yield* gitManager.invalidateStatus(project.workspaceRoot);

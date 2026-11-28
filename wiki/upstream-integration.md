@@ -212,8 +212,8 @@ sources:
     resource: https://github.com/pingdotgg/t3code/commit/dd6c05ec313c6c870c7a7688e87143da5084031d
     title: Pinned upstream tip incorporated into the local integration branch
   - id: workspace-recovery
-    resource: ../apps/server/src/git/GitWorkflowService.ts
-    title: Shared workspace recovery with backend ownership and branch-base fallback
+    resource: https://github.com/NicholasZolton/t3code/blob/78652ff272a042fa645dbce0ec4f59a5ca9e3ea2/apps/server/src/git/GitWorkflowService.ts
+    title: Historical mixed-backend workspace recovery and branch-base fallback
   - id: opencode-child-tracking
     resource: ../packages/provider-opencode/src/server/v2/adapter.ts
     title: Upstream OpenCode lifecycle with fork reused-child and input-delivery safeguards
@@ -287,8 +287,8 @@ sources:
     resource: https://github.com/pingdotgg/t3code/compare/5070a83a3248c537d3baaf063e719f179c49bb52...e9221e44dadd78126c83d2eeed0b51c25dcf0fb4
     title: Two subsequently inspected upstream commits, not included in PR 46
   - id: shared-pr-workflow
-    resource: ../apps/server/src/jj/JjWorkflow.ts
-    title: Jujutsu adapter feeds named bases into the shared change-request workflow
+    resource: https://github.com/NicholasZolton/t3code/blob/78652ff272a042fa645dbce0ec4f59a5ca9e3ea2/apps/server/src/jj/JjWorkflow.ts
+    title: Historical shared Git/Jujutsu change-request workflow
   - id: crit-tailnet-forwarding
     resource: ../apps/server/src/process/CritManager.ts
     title: Review-owned Crit forwarding, implemented on this branch; deployment is separate
@@ -1111,8 +1111,14 @@ The November 28 retirement change is local and has not shipped. It removes the n
 ported from [upstream #13816](https://github.com/pingdotgg/t3code/pull/13816). Keep `jj` as a CLI
 workflow. T3 uses Git for new worktree threads.[^upstream-jujutsu][^fork-jujutsu]
 
-Keep the legacy `.jj` marker and recorded ownership checks when syncing upstream. Colocated JJ
-workspaces also look like Git worktrees, but Git restore and cleanup must not operate on them.
+The follow-up restores upstream Git and worktree flows against
+[`4765c96485`](https://github.com/pingdotgg/t3code/commit/4765c96485a08e5c7c0832381f67b76c646b4dd2)
+without merging that revision. Custom temporary branch prefixes, folder grouping, and opt-in PR
+approval waits remain.
+
+Keep the `.jj` checkpoint-restore guard: a valid Git checkpoint does not make it safe to overwrite
+a legacy Jujutsu checkout. Normal Git cleanup may remove a colocated checkout if it is registered
+as a Git worktree. Missing worktrees use upstream Git recovery, not saved Jujutsu ownership.
 See [existing Jujutsu workspaces](../docs/user/source-control.md#existing-jujutsu-workspaces)
 and the [marker guard](../apps/server/src/vcs/JjRepo.ts).
 

@@ -3669,22 +3669,6 @@ describe("storage cleanup reports and local file policies", () => {
       }),
     ),
   );
-  it.live("preserves Jujutsu workspaces instead of applying Git cleanup", () =>
-    runCleanupTest(
-      Effect.gen(function* () {
-        const { service, fs, worktree } = yield* cleanupFixture();
-        yield* fs.makeDirectory(`${worktree}/.jj`);
-        yield* fs.writeFileString(`${worktree}/.jj/workspace-state`, "jj-owned state");
-        const report = yield* service.runNow;
-        expect(report.entries[0]).toMatchObject({
-          outcome: "kept",
-          reason: "Jujutsu workspace cleanup is not supported",
-        });
-        expect(yield* fs.readFileString(`${worktree}/.jj/workspace-state`)).toBe("jj-owned state");
-      }),
-    ),
-  );
-
   it.live.each([
     ["any-local-files", ".env", "kept"],
     ["uncommitted-changes", ".env", "removed"],

@@ -23,7 +23,6 @@ import { cn } from "~/lib/utils";
 import { parsePullRequestReference } from "@t3tools/client-runtime/pull-request-link-input";
 import { getSourceControlPresentation } from "~/sourceControlPresentation";
 import { useEnvironmentQuery } from "~/state/query";
-import { resolveVcsTerminology } from "@t3tools/shared/vcs";
 import { readEnvironmentScope, useEnvironmentScope } from "~/state/session";
 import { vcsEnvironment } from "~/state/vcs";
 import { offHeadPullRequestCheckoutToast } from "./pullRequest/pullRequestCheckoutToast";
@@ -100,7 +99,6 @@ export function PullRequestThreadDialog({
   );
   const sourceControlPresentation = getSourceControlPresentation(gitStatus?.sourceControlProvider);
   const terminology = sourceControlPresentation.terminology;
-  const vcsTerminology = resolveVcsTerminology(gitStatus);
   const term = changeRequestTermKind(terminology);
   const SourceControlIcon = sourceControlPresentation.Icon;
 
@@ -349,15 +347,9 @@ export function PullRequestThreadDialog({
               preparePullRequestThreadAction.isPending
             }
           >
-            {vcsTerminology.systemName === "Jujutsu"
-              ? preparingMode === "worktree"
-                ? gt("Preparing {workspaceNoun}...", {
-                    workspaceNoun: vcsTerminology.workspaceNoun,
-                  })
-                : vcsTerminology.workspaceNounTitle
-              : preparingMode === "worktree"
-                ? gt("Preparing worktree...")
-                : gt("Worktree", { $context: "checkout in a new git worktree" })}
+            {preparingMode === "worktree"
+              ? gt("Preparing worktree...")
+              : gt("Worktree", { $context: "checkout in a new git worktree" })}
           </Button>
         </DialogFooter>
       </DialogPopup>

@@ -3,8 +3,6 @@ import type { ChangeTypes, FileDiffMetadata } from "@pierre/diffs/types";
 import type { ThreadCheckpointSummary } from "@t3tools/client-runtime/state/thread-checkpoints";
 import { turnChanges, turnHasChanges } from "@t3tools/client-runtime/state/thread-repositories";
 import type { ReviewDiffPreviewSource } from "@t3tools/contracts";
-import type { VcsDriverKind } from "@t3tools/contracts";
-import { getVcsTerminology, type VcsTerminology } from "@t3tools/shared/vcs";
 import { quoteGitPatchPath } from "@t3tools/shared/gitPatchPath";
 import * as Arr from "effect/Array";
 import { pipe } from "effect/Function";
@@ -186,20 +184,14 @@ const readyCheckpointOrder = Order.make<ThreadCheckpointSummary>(
   compareCheckpointTurnCountDescending,
 );
 
-function gitSubtitle(
-  section: ReviewDiffPreviewSource,
-  terminology: VcsTerminology,
-  resolve: MessageResolver,
-): string | null {
+function gitSubtitle(section: ReviewDiffPreviewSource, resolve: MessageResolver): string | null {
   if (section.kind === "working-tree") {
     return resolve(UNCOMMITTED_SUBTITLE);
   }
   if (section.baseRef) {
     return `${section.baseRef} ... ${section.headRef ?? "HEAD"}`;
   }
-  return terminology.systemName === "Git"
-    ? resolve(msg("Base branch unavailable"))
-    : resolve(msg("Base {refNoun} unavailable", { refNoun: terminology.refNoun }));
+  return resolve(msg("Base branch unavailable"));
 }
 
 function stripTrailingNewline(value: string): string {
@@ -582,13 +574,11 @@ export function buildReviewSectionItems(input: {
   readonly checkpoints: ReadonlyArray<ThreadCheckpointSummary>;
   readonly gitSections: ReadonlyArray<ReviewDiffPreviewSource>;
   readonly turnDiffById: Readonly<Record<string, string | undefined>>;
-  readonly vcsKind?: VcsDriverKind | null;
   readonly gitSectionStates: Readonly<Record<ReviewGitSectionKind, "loading" | "failed" | null>>;
   /** Names the thread folder's own files beside its repositories. */
   readonly rootName?: string;
   readonly resolve?: MessageResolver;
 }): ReadonlyArray<ReviewSectionItem> {
-  const terminology = getVcsTerminology(input.vcsKind);
   const resolve = input.resolve ?? m;
   const turnItems = getReadyReviewCheckpoints(input.checkpoints).map<ReviewSectionItem>(
     (checkpoint) => {
@@ -620,7 +610,7 @@ export function buildReviewSectionItems(input: {
           id: `git:${kind}`,
           kind,
           title: section.title,
-          subtitle: gitSubtitle(section, terminology, resolve),
+          subtitle: gitSubtitle(section, resolve),
           diff: section.diff,
           source: section,
           ...(section.files ? { files: section.files } : {}),

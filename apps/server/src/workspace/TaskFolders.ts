@@ -46,7 +46,6 @@ import * as ProjectStore from "../orchestration-v2/ProjectStore.ts";
 import * as ManagedPolicy from "../policy/ManagedPolicy.ts";
 import * as ServerSettings from "../serverSettings.ts";
 import * as GitVcsDriver from "../vcs/GitVcsDriver.ts";
-import { isLegacyJjWorkspace, legacyJjWorkspaceMessage } from "../vcs/JjRepo.ts";
 import * as VcsProcess from "../vcs/VcsProcess.ts";
 import {
   removeEmptyDirectory,
@@ -505,8 +504,11 @@ const make = Effect.gen(function* () {
     const pointer = yield* fileSystem
       .readFileString(path.join(folder, ".git"))
       .pipe(Effect.orElseSucceed(() => ""));
-    const gitDir = /^gitdir:\s*(.+?)\s*$/m.exec(pointer)?.[1];
-    return gitDir === undefined ? null : path.resolve(folder, gitDir);
+    const prefix = "gitdir: ";
+    const gitDir = pointer.startsWith(prefix)
+      ? pointer.slice(prefix.length).replace(/[\r\n]+$/u, "")
+      : "";
+    return gitDir === "" ? null : path.resolve(folder, gitDir);
   });
   // A repository that is itself a linked worktree registers worktrees under the Git dir it shares.
   const commonGitDir = Effect.fnUntraced(function* (repositoryPath: string) {
@@ -578,9 +580,6 @@ const make = Effect.gen(function* () {
   const plan: TaskFolders["Service"]["plan"] = Effect.fn("TaskFolders.plan")(function* (input) {
     const project = yield* readProject("plan", input.projectId);
     const projectRoot = path.resolve(project.workspaceRoot);
-    if (yield* isLegacyJjWorkspace(fileSystem, path, projectRoot)) {
-      return yield* new TaskFolderError({ operation: "plan", detail: legacyJjWorkspaceMessage });
-    }
     const classified = yield* Effect.forEach(
       yield* trackedFolders(project),
       (folder) => {
@@ -897,9 +896,8 @@ const make = Effect.gen(function* () {
     const verdict = Effect.fnUntraced(function* (checkout: TaskFolderCheckout) {
       const known = verdicts.get(checkout.worktreePath);
       if (known !== undefined) return known;
-      const decided = (yield* isLegacyJjWorkspace(fileSystem, path, checkout.worktreePath))
-        ? { keep: legacyJjWorkspaceMessage, force: false }
-        : input.inspect === undefined
+      const decided =
+        input.inspect === undefined
           ? { keep: null, force: input.force }
           : yield* input.inspect(checkout);
       verdicts.set(checkout.worktreePath, decided);

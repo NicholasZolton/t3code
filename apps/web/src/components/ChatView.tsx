@@ -12,7 +12,6 @@ import { resolveNewThreadModelSelection } from "@t3tools/shared/usageLimits";
 import { queuedRunEditBlockedReason } from "@t3tools/client-runtime/queued-run-edit";
 import { ScrollToEndButton, WorkspaceFileDropOverlay } from "./chat/TimelineOverlays";
 import { usePasteToFocusComposer } from "./chat/usePasteToFocusComposer";
-import { resolveVcsTerminology } from "@t3tools/shared/vcs";
 import { useFocusComposerOnThreadOpen } from "./chat/useFocusComposerOnThreadOpen";
 import { configuredHostedAppUrl } from "../hostedPairing";
 import {
@@ -1885,7 +1884,6 @@ export default function ChatView(props: ChatViewProps) {
   const activeWorkspaceRoot = activeThreadWorktreePath ?? activeProjectCwd ?? undefined;
   const activeTerminalLaunchContext =
     terminalUiLaunchContext?.threadId === activeThreadId ? terminalUiLaunchContext : null;
-  const vcsTerminology = resolveVcsTerminology(gitStatusQuery.data);
   const liveIsGitRepo = gitStatusQuery.data?.isRepo;
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- records live git repo status in the session cache read while the status query is unavailable
   useEffect(() => {
@@ -2876,7 +2874,6 @@ export default function ChatView(props: ChatViewProps) {
       ...systemComposerBannerItems,
       branchMismatchBannerItem(
         {
-          refNoun: vcsTerminology.refNoun,
           mismatchKey: activeBranchMismatchKey,
           mismatch: localCheckoutBranchMismatch,
           restoreDisabled: !canWriteSourceControl || isRestoringThreadBranch,
@@ -3894,7 +3891,6 @@ export default function ChatView(props: ChatViewProps) {
                             ) : null}
                             {!composerMounted ? null : (
                               <ChatComposer
-                                workspaceNoun={vcsTerminology.workspaceNoun}
                                 canOperateThread={canOperateThread}
                                 reportedModelSelection={reportedModelSelection}
                                 multipleModelSelections={multipleModelSelections}

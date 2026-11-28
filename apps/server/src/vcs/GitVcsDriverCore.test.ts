@@ -7018,32 +7018,6 @@ it.layer(layerTest)("GitVcsDriver core integration", (it) => {
   });
 
   describe("refName operations", () => {
-    it.effect("ranks fuzzy ref matches before paginating the complete catalog", () =>
-      Effect.gen(function* () {
-        const cwd = yield* makeTmpDir();
-        yield* initRepoWithCommit(cwd);
-        const driver = yield* GitVcsDriver.GitVcsDriver;
-        yield* driver.createRef({ cwd, refName: "feature/review-menu" });
-        yield* driver.createRef({ cwd, refName: "rvm" });
-        yield* driver.createRef({ cwd, refName: "unrelated" });
-
-        const first = yield* driver.listRefs({ cwd, query: "rvm", limit: 1 });
-        assert.deepEqual(
-          first.refs.map((ref) => ref.name),
-          ["rvm"],
-        );
-        assert.equal(first.totalCount, 2);
-        assert.equal(first.nextCursor, 1);
-
-        const second = yield* driver.listRefs({ cwd, query: "rvm", cursor: 1, limit: 1 });
-        assert.deepEqual(
-          second.refs.map((ref) => ref.name),
-          ["feature/review-menu"],
-        );
-        assert.equal(second.nextCursor, null);
-      }),
-    );
-
     it.effect("optionally includes remote refs that match local branches", () =>
       Effect.gen(function* () {
         const cwd = yield* makeTmpDir();
@@ -7524,29 +7498,6 @@ it.layer(layerTest)("GitVcsDriver core integration", (it) => {
   });
 
   describe("worktree operations", () => {
-    it.effect("preserves a colocated Jujutsu workspace when Git force removal is requested", () =>
-      Effect.gen(function* () {
-        const cwd = yield* makeTmpDir();
-        yield* initRepoWithCommit(cwd);
-        const target = NodePath.join(yield* makeTmpDir("git-worktrees-"), "legacy");
-        yield* git(cwd, ["worktree", "add", "--detach", target]);
-        const fs = yield* FileSystem.FileSystem;
-        yield* fs.makeDirectory(NodePath.join(target, ".jj"));
-        yield* writeTextFile(target, "uncommitted.txt", "keep this work\n");
-
-        const driver = yield* GitVcsDriver.GitVcsDriver;
-        const failure = yield* driver
-          .removeWorktree({ cwd, path: target, force: true })
-          .pipe(Effect.flip);
-        assert.match(failure.message, /Jujutsu/);
-        assert.equal(
-          yield* fs.readFileString(NodePath.join(target, "uncommitted.txt")),
-          "keep this work\n",
-        );
-        assert.include(yield* git(cwd, ["worktree", "list", "--porcelain"]), target);
-      }),
-    );
-
     it.effect.each(["current", "legacy"] as const)(
       "preserves another creator's worktree on its new branch at the same path (%s)",
       (version) =>
@@ -9029,6 +8980,115 @@ it.layer(layerTest)("GitVcsDriver core integration", (it) => {
         assert.isTrue(NodeFS.lstatSync(link).isSymbolicLink());
         assert.deepEqual(NodeFS.readdirSync(pathService.dirname(worktreePath)), ["linked"]);
       }),
+    );
+
+    // A read-only folder stops the delete partway, as a process still writing into it does.
+    it.effect.skipIf(HostProcess.Platform.defaultValue() === "win32" || process.getuid?.() === 0)(
+      "keeps a worktree Git can remove again when its folder cannot be fully deleted",
+      () =>
+        Effect.gen(function* () {
+          const cwd = yield* makeTmpDir();
+          const { initialBranch } = yield* initRepoWithCommit(cwd);
+          const pathService = yield* Path.Path;
+          const worktreePath = pathService.join(yield* makeTmpDir("git-worktrees-"), "stuck");
+          const driver = yield* GitVcsDriver.GitVcsDriver;
+          yield* driver.createWorktree({
+            cwd,
+            path: worktreePath,
+            refName: initialBranch,
+            newRefName: "feature/stuck",
+          });
+          const locked = pathService.join(worktreePath, "build");
+          yield* writeTextFile(worktreePath, "build/out.txt", "output\n");
+          NodeFS.chmodSync(locked, 0o555);
+
+          const result = yield* Effect.result(
+            driver.removeWorktree({ cwd, path: worktreePath, force: true }),
+          );
+          NodeFS.chmodSync(locked, 0o755);
+
+          assert.isTrue(Result.isFailure(result));
+          assert.include(yield* git(cwd, ["worktree", "list", "--porcelain"]), worktreePath);
+          yield* git(worktreePath, ["rev-parse", "--git-dir"]);
+          yield* driver.removeWorktree({ cwd, path: worktreePath, force: true });
+          assert.isFalse(NodeFS.existsSync(worktreePath));
+        }),
+    );
+
+    it.effect("removes a worktree when called from inside it", () =>
+      Effect.gen(function* () {
+        const cwd = yield* makeTmpDir();
+        const { initialBranch } = yield* initRepoWithCommit(cwd);
+        const pathService = yield* Path.Path;
+        const worktreePath = pathService.join(yield* makeTmpDir("git-worktrees-"), "self");
+        const driver = yield* GitVcsDriver.GitVcsDriver;
+        yield* driver.createWorktree({
+          cwd,
+          path: worktreePath,
+          refName: initialBranch,
+          newRefName: "feature/self",
+        });
+
+        yield* driver.removeWorktree({ cwd: worktreePath, path: worktreePath, force: true });
+
+        assert.isFalse(NodeFS.existsSync(worktreePath));
+        assert.notInclude(yield* git(cwd, ["worktree", "list", "--porcelain"]), worktreePath);
+      }),
+    );
+
+    it.effect.skipIf(!symlinksSupported)("removes a worktree given through a symlink to it", () =>
+      Effect.gen(function* () {
+        const cwd = yield* makeTmpDir();
+        const { initialBranch } = yield* initRepoWithCommit(cwd);
+        const pathService = yield* Path.Path;
+        const root = yield* makeTmpDir("git-worktrees-");
+        const worktreePath = pathService.join(root, "actual");
+        const alias = pathService.join(root, "alias");
+        const driver = yield* GitVcsDriver.GitVcsDriver;
+        yield* driver.createWorktree({
+          cwd,
+          path: worktreePath,
+          refName: initialBranch,
+          newRefName: "feature/aliased",
+        });
+        NodeFS.symlinkSync(worktreePath, alias, "junction");
+
+        yield* driver.removeWorktree({ cwd, path: alias, force: true });
+
+        assert.isFalse(NodeFS.existsSync(worktreePath));
+        assert.notInclude(yield* git(cwd, ["worktree", "list", "--porcelain"]), "actual");
+      }),
+    );
+
+    it.effect.skipIf(HostProcess.Platform.defaultValue() === "win32")(
+      "keeps a hard-linked copy of a worktree that Git does not list",
+      () =>
+        Effect.gen(function* () {
+          const cwd = yield* makeTmpDir();
+          const { initialBranch } = yield* initRepoWithCommit(cwd);
+          const pathService = yield* Path.Path;
+          const root = yield* makeTmpDir("git-worktrees-");
+          const worktreePath = pathService.join(root, "original");
+          const copy = pathService.join(root, "copy");
+          const driver = yield* GitVcsDriver.GitVcsDriver;
+          yield* driver.createWorktree({
+            cwd,
+            path: worktreePath,
+            refName: initialBranch,
+            newRefName: "feature/copied",
+          });
+          NodeFS.mkdirSync(copy);
+          for (const name of NodeFS.readdirSync(worktreePath))
+            NodeFS.linkSync(pathService.join(worktreePath, name), pathService.join(copy, name));
+
+          const result = yield* Effect.result(
+            driver.removeWorktree({ cwd, path: copy, force: true }),
+          );
+
+          assert.isTrue(Result.isFailure(result));
+          assert.isTrue(NodeFS.existsSync(pathService.join(copy, ".git")));
+          assert.include(yield* git(cwd, ["worktree", "list", "--porcelain"]), "original");
+        }),
     );
 
     it.effect("prunes stale registrations when removing an already-gone worktree", () =>

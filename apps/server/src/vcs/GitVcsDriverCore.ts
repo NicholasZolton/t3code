@@ -39,7 +39,6 @@ import {
 } from "@t3tools/contracts";
 import { splitsSurrogatePair } from "@t3tools/shared/assistantCitations";
 import { dedupeRemoteBranchesWithLocalMatches } from "@t3tools/shared/git";
-import { searchItems } from "@t3tools/shared/searchRanking";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import { compactTraceAttributes } from "@t3tools/shared/observability";
 import { decodeJsonResult } from "@t3tools/shared/schemaJson";
@@ -53,7 +52,7 @@ import { removeEmptyDirectory, type RemoveEmptyDirectoryError } from "./removeEm
 import { VcsAutomaticFetchInterval } from "./VcsAutomaticFetchInterval.ts";
 import { gitConfigEnv, serverGitConfigEnv, unsetInheritedRepositoryEnv } from "./VcsProcess.ts";
 import { makeWorktreeCheckoutCache } from "./worktreeCheckoutCache.ts";
-import { removeLinkedWorktree } from "./worktreeRemoval.ts";
+import { removeLinkedWorktree, WORKTREE_REMOVE_TIMEOUT_MS } from "./worktreeRemoval.ts";
 import { resolveWorktreesDirectory } from "../worktreesDirectory.ts";
 import {
   parseRemoteNames,
@@ -82,7 +81,6 @@ const backgroundGitProcesses = Semaphore.makeUnsafe(2);
 // the last fetch; on busy repositories that alone outlasts the 30s default.
 const FETCH_REMOTE_TIMEOUT_MS = Duration.toMillis(Duration.minutes(5));
 const WORKTREE_INDEX_REFRESH_TIMEOUT_MS = Duration.toMillis(Duration.minutes(5));
-const WORKTREE_REMOVE_TIMEOUT_MS = Duration.toMillis(Duration.minutes(5));
 const DEFAULT_MAX_OUTPUT_BYTES = 1_000_000;
 const REF_SNAPSHOT_MAX_OUTPUT_BYTES = 16 * 1024 * 1024;
 const OUTPUT_TRUNCATED_MARKER = "\n\n[truncated]";
@@ -320,7 +318,8 @@ function filterBranchesForListQuery(
     return refs;
   }
 
-  return searchItems(refs, query, (refName) => [refName.name]);
+  const normalizedQuery = query.toLowerCase();
+  return refs.filter((refName) => refName.name.toLowerCase().includes(normalizedQuery));
 }
 
 function paginateBranches(input: {
@@ -7419,7 +7418,7 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
     "removeWorktree",
   )(function* (input) {
     // Git also matches a worktree by its short name, which can name a different
-    // folder than this path. Resolving it once keeps Git, the Windows deletion
+    // folder than this path. Resolving it once keeps Git, the folder deletion
     // in removeLinkedWorktree, and the leftover cleanup below on one directory.
     const target = path.resolve(input.cwd, input.path);
     const result = yield* removeLinkedWorktree({
@@ -7428,8 +7427,8 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
       worktreePath: target,
       force: input.force === true,
       execute,
-      run: (args) =>
-        executeGitWithStableDiagnostics("GitVcsDriver.removeWorktree", input.cwd, args, {
+      run: (args, cwd) =>
+        executeGitWithStableDiagnostics("GitVcsDriver.removeWorktree", cwd, args, {
           timeoutMs: WORKTREE_REMOVE_TIMEOUT_MS,
           allowNonZeroExit: true,
         }).pipe(Effect.map((result) => ({ ...result, args }))),

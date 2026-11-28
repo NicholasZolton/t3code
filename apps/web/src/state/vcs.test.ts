@@ -63,11 +63,6 @@ describe("chatGitStatusAtom", () => {
     // A new object with the same data, as each remote status refresh sends.
     registry.set(source, status({ ...linked, pr: pr() }));
     expect(notified).toHaveLength(3);
-
-    const vcs: NonNullable<VcsStatusResult["vcs"]> = { kind: "jj" };
-    registry.set(source, status({ ...linked, pr: pr(), vcs }));
-    expect(registry.get(selected)).toMatchObject({ vcs });
-    expect(notified).toHaveLength(4);
     unsubscribe();
   });
 });

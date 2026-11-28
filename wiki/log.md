@@ -2,7 +2,7 @@
 
 ## 2026-11-28
 
-- Recorded the [Jujutsu retirement](upstream-integration.md#jujutsu-retirement) and the guards that preserve old JJ workspaces.
+- Recorded the [Jujutsu retirement](upstream-integration.md#jujutsu-retirement): normal Git removal can delete registered worktrees; Git checkpoint restore still protects legacy Jujutsu files.
 
 ## 2026-11-27
 

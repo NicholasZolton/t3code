@@ -95,7 +95,8 @@ Open **Issues** from the sidebar utility row or **Open issues** in the command p
 
 ## Existing Jujutsu workspaces
 
-T3 Code no longer creates or manages Jujutsu workspaces. Existing folders and conversations stay
-where they are, but T3 cannot recreate a missing Jujutsu workspace or restore its checkpoints.
-Use `jj` directly to manage those files. To start new worktree threads, open a separate Git
-checkout as a project.
+T3 Code no longer creates Jujutsu workspaces or restores their checkpoints. Use `jj` to manage
+them, or open a separate Git checkout to start new worktree threads.
+
+If an old workspace is also registered as a Git worktree, normal worktree removal can delete
+the whole folder, including `.jj`. Keep the worktree if you still need its files.

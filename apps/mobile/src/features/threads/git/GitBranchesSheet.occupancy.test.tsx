@@ -1,7 +1,6 @@
 import { act, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import { expect, it, vi } from "vite-plus/test";
-import { DEFAULT_VCS_TERMINOLOGY } from "@t3tools/shared/vcs";
 
 const checkout = vi.hoisted(() => ({
   projectRoot: "",
@@ -12,12 +11,6 @@ const checkout = vi.hoisted(() => ({
 vi.mock("@react-navigation/native", () => ({
   useFocusEffect: () => {},
   useNavigation: () => ({}),
-}));
-vi.mock("react-native", () => ({
-  View: ({ children }: { children: ReactNode }) => <div>{children}</div>,
-}));
-vi.mock("../../../components/ui/AppText", () => ({
-  AppText: ({ children }: { children: ReactNode }) => <span>{children}</span>,
 }));
 vi.mock("../../../components/ui/SheetHeader", () => ({ SheetHeader: () => null }));
 vi.mock("../../../components/ui/FitSheet", () => ({
@@ -53,7 +46,6 @@ vi.mock("../../../state/use-thread-detail", () => ({
 }));
 vi.mock("../../../state/use-selected-thread-git-state", () => ({
   useSelectedThreadGitState: () => ({
-    vcsTerminology: DEFAULT_VCS_TERMINOLOGY,
     selectedThreadBranches: checkout.branches,
     gitOperationLabel: null,
   }),

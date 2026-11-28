@@ -5,7 +5,6 @@ import {
   isRepositoryRootProject,
 } from "@t3tools/client-runtime/state/project-grouping";
 import type { EnvironmentProject } from "@t3tools/client-runtime/state/shell";
-import { searchItems, SEARCH_SECONDARY_FIELD_WEIGHT } from "@t3tools/shared/searchRanking";
 import { repositoryGroupingKeyOf, type EnvironmentId, type ServerConfig } from "@t3tools/contracts";
 import { fileBasename } from "@t3tools/shared/path";
 
@@ -67,14 +66,17 @@ export function filterProjectScopes(
   scopes: ReadonlyArray<HomeProjectScope>,
   searchText: string,
 ): ReadonlyArray<HomeProjectScope> {
-  if (!searchText.trim()) return scopes;
-  return searchItems(scopes, searchText, (scope) => [
-    scope.title,
-    ...scope.projects.flatMap((project) => [
-      project.title,
-      { value: project.workspaceRoot, weight: SEARCH_SECONDARY_FIELD_WEIGHT },
-    ]),
-  ]);
+  const query = searchText.trim().toLowerCase();
+  if (!query) return scopes;
+  return scopes.filter(
+    (scope) =>
+      scope.title.toLowerCase().includes(query) ||
+      scope.projects.some(
+        (project) =>
+          project.title.toLowerCase().includes(query) ||
+          project.workspaceRoot.toLowerCase().includes(query),
+      ),
+  );
 }
 
 // Cached configuration reserves the row; connection readiness only gates activation.

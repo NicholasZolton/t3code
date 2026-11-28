@@ -18,8 +18,6 @@ import {
   sessionGrantsScope,
 } from "@t3tools/contracts";
 import { resolveWorktreeCleanup } from "@t3tools/shared/projectSettings";
-import { resolveVcsTerminology } from "@t3tools/shared/vcs";
-import * as Option from "effect/Option";
 import * as Cause from "effect/Cause";
 import * as Schema from "effect/Schema";
 import { AsyncResult } from "effect/reactivity";
@@ -528,20 +526,6 @@ export function useThreadActions() {
       environmentId: threadRef.environmentId,
       projectId: thread.projectId,
     });
-    const terminology = resolveVcsTerminology(
-      threadProject
-        ? Option.getOrNull(
-            AsyncResult.value(
-              appAtomRegistry.get(
-                vcsEnvironment.status({
-                  environmentId: threadRef.environmentId,
-                  input: { cwd: threadProject.workspaceRoot },
-                }),
-              ),
-            ),
-          )
-        : null,
-    );
     const deletedIds =
       opts.deletedThreadKeys && opts.deletedThreadKeys.size > 0
         ? new Set<ThreadId>(
@@ -611,14 +595,10 @@ export function useThreadActions() {
       const confirmationResult = await settlePromise(() =>
         localApi.dialogs.confirm(
           [
-            terminology.systemName === "Git"
-              ? m(msg("This thread is the only one linked to this worktree:"))
-              : `This thread is the only one linked to this ${terminology.workspaceNoun}:`,
+            m(msg("This thread is the only one linked to this worktree:")),
             displayWorktreePath ?? orphanedWorktreePath,
             "",
-            terminology.systemName === "Git"
-              ? m(msg("Delete the worktree too?"))
-              : `Delete the ${terminology.workspaceNoun} too?`,
+            m(msg("Delete the worktree too?")),
           ].join("\n"),
           { variant: "destructive" },
         ),
@@ -747,21 +727,8 @@ export function useThreadActions() {
         stackedThreadToast({
           type: "error",
           title: removalFailed
-            ? terminology.systemName === "Git"
-              ? m(msg("Failed to delete worktree"))
-              : m(
-                  msg("Failed to delete {workspaceNoun}", {
-                    workspaceNoun: terminology.workspaceNoun,
-                  }),
-                )
-            : terminology.systemName === "Git"
-              ? m(msg("Worktree deleted, but Git status refresh failed"))
-              : m(
-                  msg("{workspaceNounTitle} deleted, but {systemName} status refresh failed", {
-                    workspaceNounTitle: terminology.workspaceNounTitle,
-                    systemName: terminology.systemName,
-                  }),
-                ),
+            ? m(msg("Failed to delete worktree"))
+            : m(msg("Worktree deleted, but Git status refresh failed")),
           description: removalFailed
             ? m(
                 msg("Could not remove {path}. {message}", {

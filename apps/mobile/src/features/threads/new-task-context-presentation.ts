@@ -1,13 +1,4 @@
 import { sanitizeNewRefName } from "@t3tools/shared/git";
-import type { VcsDriverKind } from "@t3tools/contracts";
-import { searchItems } from "@t3tools/shared/searchRanking";
-import {
-  DEFAULT_VCS_TERMINOLOGY,
-  JJ_WORKING_COPY_LABEL,
-  JJ_WORKING_COPY_REVISION,
-  resolveWorktreeBaseRef,
-  type VcsTerminology,
-} from "@t3tools/shared/vcs";
 import { sourceControlClients } from "@t3tools/client-runtime/source-control-clients";
 import { changeRequestTermKind } from "../../lib/changeRequestTerm";
 import { resolveSendEnvMode } from "@t3tools/shared/projectSettings";
@@ -44,24 +35,13 @@ export function resolveNewTaskWorkspaceLabel(
   input: {
     readonly workspaceMode: WorkspaceMode;
     readonly worktreePath: string | null;
-    readonly terminology?: VcsTerminology;
   },
   resolve: MessageResolver = m,
 ): string {
-  const terminology = input.terminology ?? DEFAULT_VCS_TERMINOLOGY;
   if (input.workspaceMode === "worktree") {
-    return terminology.systemName === "Git"
-      ? resolve(msg("New worktree"))
-      : resolve(msg("New {workspaceNoun}", { workspaceNoun: terminology.workspaceNoun }));
+    return resolve(msg("New worktree"));
   }
-  if (terminology.systemName === "Git") {
-    return input.worktreePath ? resolve(msg("Current worktree")) : resolve(msg("Current checkout"));
-  }
-  return input.worktreePath
-    ? resolve(msg("Current {workspaceNoun}", { workspaceNoun: terminology.workspaceNoun }))
-    : resolve(
-        msg("Current {currentRefFallback}", { currentRefFallback: terminology.currentRefFallback }),
-      );
+  return input.worktreePath ? resolve(msg("Current worktree")) : resolve(msg("Current checkout"));
 }
 
 export function resolveNewTaskBranchWorktreePath(input: {
@@ -117,7 +97,6 @@ export function resolveNewTaskBranchLabel(
     readonly startFromOrigin: boolean;
     readonly workspaceMode: WorkspaceMode;
     readonly pullRequestReference?: string;
-    readonly terminology?: VcsTerminology;
   },
   resolve: MessageResolver = m,
 ): string {
@@ -135,20 +114,17 @@ export function resolveNewTaskBranchLabel(
       );
   }
   if (!input.branchName) {
-    return input.terminology?.systemName === "Jujutsu"
-      ? resolve(msg("Choose {refNoun}", { refNoun: input.terminology.refNoun }))
-      : resolve(msg("Choose branch"));
+    return resolve(msg("Choose branch"));
   }
 
   if (input.workspaceMode === "local") {
     return input.branchName;
   }
 
-  if (input.branchName === JJ_WORKING_COPY_REVISION) {
-    return resolve(msg("From {revision}", { revision: JJ_WORKING_COPY_LABEL.toLowerCase() }));
-  }
-  const baseRef = input.startFromOrigin ? `origin/${input.branchName}` : input.branchName;
-  return resolve(msg("From {branchName}", { branchName: baseRef }));
+  // Only the server can determine a local branch's configured remote.
+  return input.startFromOrigin
+    ? resolve(msg("From {branchName} (remote)", { branchName: input.branchName }))
+    : resolve(msg("From {branchName}", { branchName: input.branchName }));
 }
 
 export function shouldCheckoutNewTaskBranch(input: {
@@ -163,7 +139,10 @@ export function filterNewTaskBranches<T extends { readonly name: string }>(
   branches: ReadonlyArray<T>,
   rawQuery: string,
 ): ReadonlyArray<T> {
-  return searchItems(branches, sanitizeNewRefName(rawQuery), (branch) => [branch.name]);
+  const query = sanitizeNewRefName(rawQuery).toLowerCase();
+  return query.length === 0
+    ? branches
+    : branches.filter((branch) => branch.name.toLowerCase().includes(query));
 }
 
 /**
@@ -183,19 +162,17 @@ export function fillNewTaskWorkspaceBranch(input: {
   }>;
   readonly projectCwd: string | null;
   readonly worktreeDefaultSettled: boolean;
-  readonly vcsKind?: VcsDriverKind | undefined;
 }): ComposerDraftWorkspaceSelection {
   const { selection } = input;
   if (selection.branch !== null) return selection;
   if (selection.mode === "worktree") {
     // The default may only exist as origin/<default>, so search remote refs too.
-    const base = resolveWorktreeBaseRef({
-      defaultRef: input.branches.find((branch) => branch.isDefault)?.name ?? null,
-      currentRef: input.branches.find((branch) => !branch.isRemote && branch.current)?.name ?? null,
-      vcsKind: input.vcsKind,
-    });
+    const base =
+      input.branches.find((branch) => branch.isDefault) ??
+      input.branches.find((branch) => !branch.isRemote && branch.current) ??
+      null;
     return input.worktreeDefaultSettled && base
-      ? { ...selection, branch: base, worktreePath: null }
+      ? { ...selection, branch: base.name, worktreePath: null }
       : selection;
   }
   if (!selection.followsCurrentCheckout || input.projectCwd === null) return selection;
@@ -223,7 +200,6 @@ export function resolveNewTaskDraftWorkspace(input: {
   readonly tracksGitRepositories?: boolean | undefined;
   readonly branches: Parameters<typeof fillNewTaskWorkspaceBranch>[0]["branches"];
   readonly projectCwd: string | null;
-  readonly vcsKind?: VcsDriverKind | undefined;
 }): ComposerDraftWorkspaceSelection {
   const selection = input.canChooseWorkspace ? input.selection : undefined;
   return fillNewTaskWorkspaceBranch({
@@ -236,6 +212,5 @@ export function resolveNewTaskDraftWorkspace(input: {
     branches: input.branches,
     projectCwd: input.projectCwd,
     worktreeDefaultSettled: selection?.mode !== undefined || input.defaultModeSettled,
-    vcsKind: input.vcsKind,
   });
 }

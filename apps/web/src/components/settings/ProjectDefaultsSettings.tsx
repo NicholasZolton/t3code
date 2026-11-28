@@ -14,7 +14,6 @@ import {
   defaultModelSelectionsAreMixed,
   getCustomModelOptionsByInstance,
 } from "../../modelSelection";
-import { useVcsTerminology } from "../../state/vcs";
 import { providerInstanceEntriesFor } from "../../providerInstances";
 import { useEnvironmentProviders, useEnvironments } from "../../state/environments";
 import { firstManagedDenial } from "../../state/managedPolicy";
@@ -64,10 +63,6 @@ export function ProjectDefaultsSettings({ category }: { category: ProjectSetting
   const representative = target
     ? environments.find((environment) => environment.environmentId === target.environmentId)
     : undefined;
-  const workspaceRoot =
-    scope.members.find((member) => member.environmentId === target?.environmentId)?.workspaceRoot ??
-    null;
-  const vcsTerminology = useVcsTerminology(target?.environmentId ?? null, workspaceRoot);
   const providers =
     (representative?.serverConfig
       ? providersByEnvironment.get(representative.environmentId)
@@ -258,7 +253,7 @@ export function ProjectDefaultsSettings({ category }: { category: ProjectSetting
             <SelectValue>
               {(value: string | null) =>
                 value === "local" || value === "worktree"
-                  ? resolveEnvModeLabel(value, vcsTerminology, m)
+                  ? resolveEnvModeLabel(value, m)
                   : unavailable
                     ? gt("Unavailable", { $context: "setting value cannot be read" })
                     : gt("Mixed", { $context: "values differ across targets" })
@@ -266,10 +261,8 @@ export function ProjectDefaultsSettings({ category }: { category: ProjectSetting
             </SelectValue>
           </SelectTrigger>
           <SelectPopup align="end" alignItemWithTrigger={false}>
-            <SelectItem value="local">{resolveEnvModeLabel("local", vcsTerminology, m)}</SelectItem>
-            <SelectItem value="worktree">
-              {resolveEnvModeLabel("worktree", vcsTerminology, m)}
-            </SelectItem>
+            <SelectItem value="local">{resolveEnvModeLabel("local", m)}</SelectItem>
+            <SelectItem value="worktree">{resolveEnvModeLabel("worktree", m)}</SelectItem>
           </SelectPopup>
         </Select>
       }

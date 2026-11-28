@@ -2,8 +2,6 @@ import { sanitizeFeatureBranchName } from "@t3tools/shared/git";
 import { useNavigation, type StaticScreenProps } from "@react-navigation/native";
 import { useGT } from "gt-react-native";
 import { useState } from "react";
-import { View } from "react-native";
-import { AppText as Text } from "../../../components/ui/AppText";
 
 import { SheetHeader } from "../../../components/ui/SheetHeader";
 import { FitSheet } from "../../../components/ui/FitSheet";
@@ -29,7 +27,7 @@ export function GitBranchesSheet(_props: GitBranchesSheetProps) {
   const gt = useGT();
   const navigation = useNavigation();
   const { selectedThread } = useThreadSelection();
-  const { selectedThreadCwd, selectedThreadWorktreePath } = useSelectedThreadWorktree();
+  const { selectedThreadCwd } = useSelectedThreadWorktree();
   useRefreshBranchesOnFocus(selectedThread?.environmentId, selectedThreadCwd);
   const gitState = useSelectedThreadGitState();
   const gitActions = useSelectedThreadGitActions();
@@ -44,9 +42,8 @@ export function GitBranchesSheet(_props: GitBranchesSheetProps) {
       : null,
   );
 
-  const { vcsTerminology } = gitState;
   const currentBranch = gitStatus.data?.refName ?? selectedThread?.branch ?? null;
-  const currentWorktreePath = selectedThreadWorktreePath;
+  const currentWorktreePath = selectedThreadCwd;
   const branchPages = usePaginatedBranches({
     environmentId: selectedThread?.environmentId ?? null,
     cwd: selectedThreadCwd,
@@ -72,7 +69,7 @@ export function GitBranchesSheet(_props: GitBranchesSheetProps) {
 
   const disabledExistingBranchNames: Array<string> = [];
   for (const branch of availableBranches) {
-    if (branch.worktreePath !== null && branch.worktreePath !== selectedThreadCwd) {
+    if (branch.worktreePath !== null && branch.worktreePath !== currentWorktreePath) {
       disabledExistingBranchNames.push(branch.name);
     }
   }
@@ -81,14 +78,7 @@ export function GitBranchesSheet(_props: GitBranchesSheetProps) {
   return (
     <FitSheet
       header={
-        <SheetHeader
-          title={
-            vcsTerminology.systemName === "Jujutsu"
-              ? `${vcsTerminology.refNounPlural} & ${vcsTerminology.workspaceNounPlural}`
-              : gt("Branches & worktrees")
-          }
-          onClose={() => navigation.goBack()}
-        />
+        <SheetHeader title={gt("Branches & worktrees")} onClose={() => navigation.goBack()} />
       }
       keyboardShouldPersistTaps="handled"
       showsVerticalScrollIndicator={false}
@@ -119,22 +109,14 @@ export function GitBranchesSheet(_props: GitBranchesSheetProps) {
 
       <FormSection title={gt("New worktree")}>
         <FormField
-          label={
-            vcsTerminology.systemName === "Jujutsu"
-              ? gt("Base {refNoun}", { refNoun: vcsTerminology.refNoun })
-              : gt("Base branch")
-          }
+          label={gt("Base branch")}
           value={worktreeBaseBranch}
           onChangeText={setWorktreeBaseBranchOverride}
           placeholder="main"
           accessibilityLabel={gt("Worktree base branch")}
         />
         <FormField
-          label={
-            vcsTerminology.systemName === "Jujutsu"
-              ? gt("New {refNoun}", { refNoun: vcsTerminology.refNoun })
-              : gt("New branch")
-          }
+          label={gt("New branch")}
           value={worktreeBranchName}
           onChangeText={setWorktreeBranchName}
           placeholder="feature/mobile-thread"
@@ -142,11 +124,7 @@ export function GitBranchesSheet(_props: GitBranchesSheetProps) {
         />
         <SheetActionButton
           icon="square.split.2x1"
-          label={
-            vcsTerminology.systemName === "Jujutsu"
-              ? gt("Create {workspaceNoun}", { workspaceNoun: vcsTerminology.workspaceNoun })
-              : gt("Create worktree")
-          }
+          label={gt("Create worktree")}
           tone="primary"
           disabled={
             !canChangeThreadBranch ||
@@ -169,26 +147,6 @@ export function GitBranchesSheet(_props: GitBranchesSheetProps) {
         />
       </FormSection>
 
-      {currentWorktreePath ? (
-        <View className="gap-3 rounded-[20px] bg-card p-4">
-          <Text className="text-foreground-secondary text-sm">{currentWorktreePath}</Text>
-          <SheetActionButton
-            icon="trash"
-            label={
-              gitActions.pendingWorkspaceMetadataCleanup
-                ? gt("Retry clearing thread workspace")
-                : gt("Remove {workspaceNoun}", { workspaceNoun: vcsTerminology.workspaceNoun })
-            }
-            disabled={busy}
-            onPress={() => {
-              void gitActions.onRemoveSelectedThreadWorkspace().then((removed) => {
-                if (removed) navigation.goBack();
-              });
-            }}
-          />
-        </View>
-      ) : null}
-
       <ListSection
         title={gt("Existing branches")}
         footer={
@@ -202,18 +160,12 @@ export function GitBranchesSheet(_props: GitBranchesSheetProps) {
         {availableBranches.map((branch, index) => {
           const disabled = disabledExistingBranches.has(branch.name);
           const subtitle = branch.worktreePath
-            ? branch.worktreePath === selectedThreadCwd
+            ? branch.worktreePath === currentWorktreePath
               ? gt("Checked out in this thread")
-              : vcsTerminology.systemName === "Jujutsu"
-                ? `Checked out in another ${vcsTerminology.workspaceNoun}`
-                : gt("Checked out in another worktree")
+              : gt("Checked out in another worktree")
             : branch.isDefault
-              ? vcsTerminology.systemName === "Jujutsu"
-                ? `Default ${vcsTerminology.refNoun}`
-                : gt("Default branch")
-              : vcsTerminology.systemName === "Jujutsu"
-                ? `Local ${vcsTerminology.refNoun}`
-                : gt("Local branch");
+              ? gt("Default branch")
+              : gt("Local branch");
 
           return (
             <ListChoiceRow

@@ -12,7 +12,6 @@ import {
   resolveFeatureBranchUnavailableReason,
   resolveLiveThreadBranchUpdate,
   resolveQuickAction,
-  resolveThreadBranchUpdate,
   getMenuActionDisabledReason,
 } from "./GitActionsControl.logic";
 
@@ -208,7 +207,7 @@ describe("when: ref has no upstream configured", () => {
     });
   });
 
-  it("resolveQuickAction publishes when no origin remote exists and the surface can publish", () => {
+  it("resolveQuickAction publishes when no origin remote exists", () => {
     const quick = resolveQuickAction(
       status({
         hasUpstream: false,
@@ -218,28 +217,12 @@ describe("when: ref has no upstream configured", () => {
       false,
       false,
       false,
-      true,
     );
     assert.deepEqual(quick, {
       kind: "open_publish",
       label: "Publish repository",
       disabled: false,
     });
-  });
-
-  it("resolveQuickAction never publishes on a surface without the flow", () => {
-    const quick = resolveQuickAction(
-      status({
-        hasUpstream: false,
-        aheadCount: 2,
-        pr: null,
-      }),
-      false,
-      false,
-      false,
-    );
-    assert.equal(quick.kind, "show_hint");
-    assert.isTrue(quick.disabled);
   });
 });
 
@@ -267,7 +250,7 @@ describe("when: the ref is on GitLab", () => {
       includesCommit: false,
       terminology: sourceControlClients.get("gitlab").changeRequest,
     });
-    assert.equal(copy.title, "Push & create MR from default branch?");
+    assert.equal(copy.title, "Push & create MR from default ref?");
     assert.include(copy.description, "create a merge request on");
   });
 });
@@ -281,102 +264,6 @@ describe("requiresDefaultBranchConfirmation", () => {
     assert.isTrue(requiresDefaultBranchConfirmation("commit_push_pr", true));
     assert.isFalse(requiresDefaultBranchConfirmation("commit_push", false));
     assert.isFalse(requiresDefaultBranchConfirmation("push", false));
-  });
-});
-
-describe("resolveDefaultBranchActionDialogCopy", () => {
-  it("uses push-only copy when pushing without a commit", () => {
-    const copy = resolveDefaultBranchActionDialogCopy({
-      action: "commit_push",
-      branchName: "main",
-      includesCommit: false,
-    });
-
-    assert.deepEqual(copy, {
-      title: "Push to default branch?",
-      description:
-        'This action will push local commits on "main". You can continue on this branch or create a feature branch and run the same action there.',
-      continueLabel: "Push to main",
-    });
-  });
-
-  it("uses push-and-pr copy when creating a PR without a commit", () => {
-    const copy = resolveDefaultBranchActionDialogCopy({
-      action: "commit_push_pr",
-      branchName: "main",
-      includesCommit: false,
-    });
-
-    assert.deepEqual(copy, {
-      title: "Push & create PR from default branch?",
-      description:
-        'This action will push local commits and create a pull request on "main". You can continue on this branch or create a feature branch and run the same action there.',
-      continueLabel: "Push & create PR",
-    });
-  });
-
-  it("keeps commit copy when the action includes a commit", () => {
-    const copy = resolveDefaultBranchActionDialogCopy({
-      action: "commit_push_pr",
-      branchName: "main",
-      includesCommit: true,
-    });
-
-    assert.deepEqual(copy, {
-      title: "Commit, push & create PR from default branch?",
-      description:
-        'This action will commit, push, and create a pull request on "main". You can continue on this branch or create a feature branch and run the same action there.',
-      continueLabel: "Commit, push & create PR",
-    });
-  });
-});
-
-describe("resolveThreadBranchUpdate", () => {
-  it("returns a branch update when the action created a new branch", () => {
-    const update = resolveThreadBranchUpdate({
-      action: "commit_push_pr",
-      branch: {
-        status: "created",
-        name: "feature/fix-toast-copy",
-      },
-      commit: {
-        status: "created",
-        commitSha: "89abcdef01234567",
-        subject: "feat: add ref sync",
-      },
-      push: { status: "pushed", branch: "feature/fix-toast-copy" },
-      pr: { status: "skipped_not_requested" },
-      toast: {
-        title: "Pushed 89abcde to origin/feature/fix-toast-copy",
-        cta: { kind: "none" },
-      },
-    });
-
-    assert.deepEqual(update, {
-      branch: "feature/fix-toast-copy",
-    });
-  });
-
-  it("returns null when the action stayed on the existing branch", () => {
-    const update = resolveThreadBranchUpdate({
-      action: "commit_push",
-      branch: {
-        status: "skipped_not_requested",
-      },
-      commit: {
-        status: "created",
-        commitSha: "89abcdef01234567",
-        subject: "feat: add ref sync",
-      },
-      push: { status: "pushed", branch: "feature/fix-toast-copy" },
-      pr: { status: "skipped_not_requested" },
-      toast: {
-        title: "Pushed 89abcde to origin/feature/fix-toast-copy",
-        cta: { kind: "none" },
-      },
-    });
-
-    assert.equal(update, null);
   });
 });
 

@@ -1,4 +1,3 @@
-import { DEFAULT_VCS_TERMINOLOGY, type VcsTerminology } from "@t3tools/shared/vcs";
 import { msg, T, useGT, useMessages } from "gt-react-native";
 
 import type { MessageResolver } from "../../i18n/messages";
@@ -21,7 +20,6 @@ import { ShimmeringWorkContent } from "./thread-work-log";
 import { useVisibleSecondClock } from "./use-visible-second-clock";
 
 export interface WorktreeSetupCardProps {
-  vcsTerminology?: VcsTerminology;
   snapshot: WorktreeSetupSnapshot;
   turnStarted: boolean;
   onCancel: () => void;
@@ -75,7 +73,7 @@ export function WorktreeSetupCard(props: WorktreeSetupCardProps & SetupDetailsCo
 }
 
 function WorktreeSetupHeaderCard(props: WorktreeSetupCardProps & SetupDetailsControl) {
-  const { snapshot, detailsOpen, vcsTerminology = DEFAULT_VCS_TERMINOLOGY } = props;
+  const { snapshot, detailsOpen } = props;
   const gt = useGT();
   const messages = useMessages();
   const running = snapshot.phase === "running";
@@ -83,32 +81,17 @@ function WorktreeSetupHeaderCard(props: WorktreeSetupCardProps & SetupDetailsCon
   const failed =
     snapshot.phase === "failed" || snapshot.stages.some((stage) => stage.status === "failed");
   const label = running
-    ? vcsTerminology.systemName === "Jujutsu"
-      ? `Setting up ${vcsTerminology.workspaceNoun}…`
-      : gt("Setting up worktree…")
+    ? gt("Setting up worktree…")
     : snapshot.phase === "cancelled"
-      ? vcsTerminology.systemName === "Jujutsu"
-        ? `${vcsTerminology.workspaceNounTitle} setup cancelled`
-        : gt("Worktree setup cancelled")
+      ? gt("Worktree setup cancelled")
       : snapshot.phase === "failed"
-        ? vcsTerminology.systemName === "Jujutsu"
-          ? `${vcsTerminology.workspaceNounTitle} setup failed`
-          : gt("Worktree setup failed")
+        ? gt("Worktree setup failed")
         : failed
           ? gt("Setup script failed")
-          : vcsTerminology.systemName === "Jujutsu"
-            ? `${vcsTerminology.workspaceNounTitle} ready`
-            : gt("Worktree ready");
+          : gt("Worktree ready");
 
   return (
-    <View
-      accessibilityLabel={
-        vcsTerminology.systemName === "Jujutsu"
-          ? `${vcsTerminology.workspaceNounTitle} setup`
-          : gt("Worktree setup")
-      }
-      className="py-1"
-    >
+    <View accessibilityLabel={gt("Worktree setup")} className="py-1">
       <View className="min-h-11 flex-row items-center gap-2 border-b border-border px-1">
         <HeaderLabel label={label} active={running && !detailsOpen} failed={failed} />
         <Text
@@ -119,13 +102,7 @@ function WorktreeSetupHeaderCard(props: WorktreeSetupCardProps & SetupDetailsCon
         </Text>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={
-            vcsTerminology.systemName === "Jujutsu"
-              ? gt("{workspaceNounTitle} setup details", {
-                  workspaceNounTitle: vcsTerminology.workspaceNounTitle,
-                })
-              : gt("Worktree setup details")
-          }
+          accessibilityLabel={gt("Worktree setup details")}
           accessibilityState={{ expanded: detailsOpen }}
           onPress={props.onOpenDetails}
           className="min-h-11 max-w-[55%] justify-center px-2"
@@ -152,7 +129,6 @@ function WorktreeSetupHeaderCard(props: WorktreeSetupCardProps & SetupDetailsCon
             <StageRow
               key={stage.id}
               stage={stage}
-              vcsTerminology={vcsTerminology}
               scriptName={snapshot.setupScript?.name ?? null}
               now={now}
               compact
@@ -214,22 +190,16 @@ function setupWentWrong(snapshot: WorktreeSetupSnapshot): boolean {
 }
 
 function WorktreeSetupSummaryRow(props: WorktreeSetupCardProps & SetupDetailsControl) {
-  const { snapshot, vcsTerminology = DEFAULT_VCS_TERMINOLOGY } = props;
+  const { snapshot } = props;
   const gt = useGT();
   const messages = useMessages();
   const now = useVisibleSecondClock(false);
   const label =
     snapshot.phase === "failed"
-      ? vcsTerminology.systemName === "Jujutsu"
-        ? `${vcsTerminology.workspaceNounTitle} setup failed`
-        : gt("Worktree setup failed")
+      ? gt("Worktree setup failed")
       : snapshot.phase === "cancelled"
-        ? vcsTerminology.systemName === "Jujutsu"
-          ? `${vcsTerminology.workspaceNounTitle} setup cancelled`
-          : gt("Worktree setup cancelled")
-        : vcsTerminology.systemName === "Jujutsu"
-          ? `${vcsTerminology.workspaceNounTitle} ready, setup script failed`
-          : gt("Worktree ready, setup script failed");
+        ? gt("Worktree setup cancelled")
+        : gt("Worktree ready, setup script failed");
   return (
     <Pressable
       accessibilityRole="button"
@@ -277,34 +247,16 @@ const PREPARING_STAGES: ReadonlyArray<WorktreeSetupStage> = WORKTREE_SETUP_STAGE
   tail: [],
 }));
 
-export function WorktreePreparingHeader({
-  vcsTerminology = DEFAULT_VCS_TERMINOLOGY,
-}: {
-  vcsTerminology?: VcsTerminology;
-}) {
+export function WorktreePreparingHeader() {
   const gt = useGT();
   return (
     <View className="py-1">
       <View className="min-h-11 flex-row items-center border-b border-border px-1">
-        <HeaderLabel
-          label={
-            vcsTerminology.systemName === "Jujutsu"
-              ? gt("Setting up {workspaceNoun}…", { workspaceNoun: vcsTerminology.workspaceNoun })
-              : gt("Setting up worktree…")
-          }
-          active
-        />
+        <HeaderLabel label={gt("Setting up worktree…")} active />
       </View>
       <View className="pt-1 pb-2">
         {PREPARING_STAGES.map((stage) => (
-          <StageRow
-            key={stage.id}
-            stage={stage}
-            vcsTerminology={vcsTerminology}
-            scriptName={null}
-            now={0}
-            compact
-          />
+          <StageRow key={stage.id} stage={stage} scriptName={null} now={0} compact />
         ))}
       </View>
     </View>
@@ -345,7 +297,6 @@ function HeaderLabel({
 function SetupDetailsSheet({
   snapshot,
   turnStarted,
-  vcsTerminology = DEFAULT_VCS_TERMINOLOGY,
   onCancel,
   onWorkLocally,
   onClose,
@@ -355,14 +306,7 @@ function SetupDetailsSheet({
   const insets = useSafeAreaInsets();
   const canCancel = snapshot.phase === "running" && !turnStarted;
   return (
-    <Sheet
-      title={
-        vcsTerminology.systemName === "Jujutsu"
-          ? `${vcsTerminology.workspaceNounTitle} setup`
-          : gt("Worktree setup")
-      }
-      onClose={onClose}
-    >
+    <Sheet title={gt("Worktree setup")} onClose={onClose}>
       <ScrollView
         contentInsetAdjustmentBehavior="automatic"
         bounces={false}
@@ -376,12 +320,7 @@ function SetupDetailsSheet({
           .filter((stage) => stage.id !== "agent")
           .map((stage) => (
             <View key={stage.id}>
-              <StageRow
-                stage={stage}
-                vcsTerminology={vcsTerminology}
-                scriptName={snapshot.setupScript?.name ?? null}
-                now={now}
-              />
+              <StageRow stage={stage} scriptName={snapshot.setupScript?.name ?? null} now={now} />
               {stage.id === "setup-script" &&
               (stage.status === "running" || stage.status === "failed" || stage.tail.length > 0) ? (
                 <OutputTail lines={stage.tail} failed={stage.status === "failed"} />
@@ -398,13 +337,7 @@ function SetupDetailsSheet({
             <Button
               label={gt("Cancel setup")}
               tone="danger"
-              accessibilityLabel={
-                vcsTerminology.systemName === "Jujutsu"
-                  ? gt("Cancel {workspaceNoun} setup", {
-                      workspaceNoun: vcsTerminology.workspaceNoun,
-                    })
-                  : gt("Cancel worktree setup")
-              }
+              accessibilityLabel={gt("Cancel worktree setup")}
               onPress={() => {
                 onClose();
                 onCancel();
@@ -429,14 +362,12 @@ function SetupDetailsSheet({
 
 function StageRow({
   stage,
-  vcsTerminology,
   scriptName,
   now,
   compact = false,
   animate = true,
 }: {
   stage: WorktreeSetupStage;
-  vcsTerminology: VcsTerminology;
   scriptName: string | null;
   now: number;
   compact?: boolean;
@@ -445,11 +376,9 @@ function StageRow({
   const gt = useGT();
   const m = useMessages();
   const label =
-    stage.id === "fetch" && vcsTerminology.systemName === "Jujutsu"
-      ? `Fetch base ${vcsTerminology.refNoun}`
-      : stage.id === "setup-script"
-        ? (scriptName ?? m(stageLabels[stage.id]))
-        : m(stageLabels[stage.id]);
+    stage.id === "setup-script"
+      ? (scriptName ?? m(stageLabels[stage.id]))
+      : m(stageLabels[stage.id]);
   const detail =
     stage.status === "pending"
       ? null

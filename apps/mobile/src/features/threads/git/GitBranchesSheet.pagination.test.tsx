@@ -1,5 +1,4 @@
 import type { VcsListRefsInput, VcsListRefsResult, VcsRef } from "@t3tools/contracts";
-import { DEFAULT_VCS_TERMINOLOGY } from "@t3tools/shared/vcs";
 import { RegistryContext } from "@effect/atom-react";
 import { AsyncResult, Atom, AtomRegistry } from "effect/reactivity";
 import { act, type ReactNode } from "react";
@@ -24,8 +23,6 @@ vi.mock("@react-navigation/native", () => ({
   useFocusEffect: () => {},
   useNavigation: () => ({ goBack: () => {}, isFocused: () => true }),
 }));
-vi.mock("react-native", () => ({ View: () => null }));
-vi.mock("../../../components/ui/AppText", () => ({ AppText: () => null }));
 vi.mock("../../../components/ui/SheetHeader", () => ({ SheetHeader: () => null }));
 vi.mock("../../../components/ui/FitSheet", () => ({
   FitSheet: ({ children }: { children: ReactNode }) => children,
@@ -56,10 +53,7 @@ vi.mock("../../../state/use-thread-selection", () => ({
   useThreadSelection: () => ({ selectedThread: { environmentId: "environment-1", branch: null } }),
 }));
 vi.mock("../../../state/use-selected-thread-worktree", () => ({
-  useSelectedThreadWorktree: () => ({
-    selectedThreadCwd: harness.cwd,
-    selectedThreadWorktreePath: null,
-  }),
+  useSelectedThreadWorktree: () => ({ selectedThreadCwd: harness.cwd }),
 }));
 vi.mock("../../../state/use-selected-thread-git-actions", () => ({
   useSelectedThreadGitActions: () => ({
@@ -84,7 +78,6 @@ vi.mock("../../../state/projects", () => ({ projectEnvironment: {} }));
 vi.mock("../../../state/orchestration", () => ({ orchestrationEnvironment: {} }));
 vi.mock("../../../state/threads", () => ({ olderSettledThreads: {}, threadFamilies: {} }));
 vi.mock("../../../state/vcs", () => ({
-  useVcsTerminology: () => DEFAULT_VCS_TERMINOLOGY,
   vcsEnvironment: {
     branch: () => null,
     listRefs: ({ input }: { input: VcsListRefsInput }) => {

@@ -421,7 +421,6 @@ export interface ChatComposerProps {
   isRevertingCheckpoint?: boolean;
   sendDisabledReason: string | null;
   isPreparingWorktree: boolean;
-  workspaceNoun: string;
   canSteer: boolean;
   bannerItems: readonly ComposerBannerStackItem[];
   resumeCompactionTokens: number | null;
@@ -572,7 +571,6 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     isRevertingCheckpoint = false,
     sendDisabledReason: externalSendDisabledReason,
     isPreparingWorktree,
-    workspaceNoun,
     canSteer,
     environmentUnavailable,
     activePendingApproval: incomingPendingApproval,
@@ -4137,7 +4135,6 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                       sendDisabledReason={primaryActionSendDisabledReason}
                       isEnvironmentUnavailable={primaryActionEnvironmentUnavailable}
                       isPreparingWorktree={false}
-                      workspaceNoun={workspaceNoun}
                       hasSendableContent={false}
                       preserveComposerFocusOnPointerDown
                       onPreviousPendingQuestion={onPreviousActivePendingUserInputQuestion}
@@ -4230,7 +4227,6 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                     sendDisabledReason={primaryActionSendDisabledReason}
                     isEnvironmentUnavailable={primaryActionEnvironmentUnavailable}
                     isPreparingWorktree={isPreparingWorktree}
-                    workspaceNoun={workspaceNoun}
                     hasSendableContent={hasMessageToSend || voiceInputActive}
                     canResume={showResumeAction}
                     preserveComposerFocusOnPointerDown={isMobileViewport}

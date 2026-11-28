@@ -133,15 +133,15 @@ export const make = Effect.gen(function* () {
     yield* assertWorkspaceBoundCwd("ReviewService.getDiffFileContents", input.cwd);
 
     const handle = yield* vcsRegistry.detect({ cwd: input.cwd, requestedKind: "auto" });
-    if (handle?.kind === "git") {
-      return yield* git.getReviewDiffFileContents(input);
+    if (handle?.kind !== "git") {
+      return yield* new VcsUnsupportedOperationError({
+        operation: "ReviewService.getDiffFileContents",
+        kind: handle?.kind ?? "unknown",
+        detail: "Unchanged diff expansion currently requires a Git repository.",
+      });
     }
 
-    return yield* new VcsUnsupportedOperationError({
-      operation: "ReviewService.getDiffFileContents",
-      kind: handle?.kind ?? "unknown",
-      detail: "Unchanged diff expansion is not available for this version control system.",
-    });
+    return yield* git.getReviewDiffFileContents(input);
   });
 
   return ReviewService.of({

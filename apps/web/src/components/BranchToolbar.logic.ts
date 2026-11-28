@@ -11,13 +11,6 @@ import type { ThreadStructureRuntime } from "@t3tools/client-runtime/state/shell
 import * as Schema from "effect/Schema";
 import { msg } from "gt-react";
 import { sanitizeNewRefName } from "@t3tools/shared/git";
-import { scoreSearchFields } from "@t3tools/shared/searchRanking";
-import {
-  DEFAULT_VCS_TERMINOLOGY,
-  JJ_WORKING_COPY_LABEL,
-  JJ_WORKING_COPY_REVISION,
-  type VcsTerminology,
-} from "@t3tools/shared/vcs";
 import { workspaceRelativeFilePath } from "@t3tools/shared/path";
 import { toSortableTimestamp } from "@t3tools/client-runtime/state/thread-sort";
 import { m, type MessageResolver } from "../i18n/messages";
@@ -126,18 +119,8 @@ export function resolveContextStripLabelsCompact(input: {
     : input.neededWidth > input.availableWidth;
 }
 
-export function resolveEnvModeLabel(
-  mode: EnvMode,
-  terminology: VcsTerminology = DEFAULT_VCS_TERMINOLOGY,
-  resolve: MessageResolver = m,
-): string {
-  if (terminology.systemName === "Git")
-    return mode === "worktree" ? resolve(msg("New worktree")) : resolve(msg("Current checkout"));
-  return mode === "worktree"
-    ? resolve(msg("New {workspaceNoun}", { workspaceNoun: terminology.workspaceNoun }))
-    : resolve(
-        msg("Current {currentRefFallback}", { currentRefFallback: terminology.currentRefFallback }),
-      );
+export function resolveEnvModeLabel(mode: EnvMode, resolve: MessageResolver = m): string {
+  return mode === "worktree" ? resolve(msg("New worktree")) : resolve(msg("Current checkout"));
 }
 
 export const WORKTREE_SUBMODULES_LABELS: Record<WorktreeSubmodules, string> = {
@@ -148,37 +131,23 @@ export const WORKTREE_SUBMODULES_LABELS: Record<WorktreeSubmodules, string> = {
 
 export function resolveCurrentWorkspaceLabel(
   activeWorktreePath: string | null,
-  terminology: VcsTerminology = DEFAULT_VCS_TERMINOLOGY,
   resolve: MessageResolver = m,
 ): string {
-  if (terminology.systemName !== "Git") {
-    return activeWorktreePath
-      ? resolve(msg("Current {workspaceNoun}", { workspaceNoun: terminology.workspaceNoun }))
-      : resolveEnvModeLabel("local", terminology, resolve);
-  }
   return activeWorktreePath
     ? resolve(msg("Current worktree"))
-    : resolveEnvModeLabel("local", terminology, resolve);
+    : resolveEnvModeLabel("local", resolve);
 }
 
 export function resolveLockedWorkspaceLabel(
   activeWorktreePath: string | null,
   effectiveEnvMode: EnvMode,
-  terminology: VcsTerminology = DEFAULT_VCS_TERMINOLOGY,
   resolve: MessageResolver = m,
 ): string {
   if (activeWorktreePath)
-    return (
-      activeWorktreePath.split(/[\\/]/).findLast(Boolean) ??
-      (terminology.systemName === "Git" ? resolve(msg("Worktree")) : terminology.workspaceNounTitle)
-    );
+    return activeWorktreePath.split(/[\\/]/).findLast(Boolean) ?? resolve(msg("Worktree"));
   return effectiveEnvMode === "worktree"
-    ? resolveEnvModeLabel("worktree", terminology, resolve)
-    : terminology.systemName === "Git"
-      ? resolve(msg("Local checkout"))
-      : resolve(
-          msg("Local {currentRefFallback}", { currentRefFallback: terminology.currentRefFallback }),
-        );
+    ? resolveEnvModeLabel("worktree", resolve)
+    : resolve(msg("Local checkout"));
 }
 
 export interface PreviousWorktreeSeed {
@@ -221,19 +190,8 @@ export function resolvePreviousWorktreeSeed(input: {
 
 export function resolvePreviousWorktreeLabel(
   seed: PreviousWorktreeSeed,
-  terminology: VcsTerminology = DEFAULT_VCS_TERMINOLOGY,
   resolve: MessageResolver = m,
 ): string {
-  if (terminology.systemName !== "Git") {
-    return seed.branch
-      ? resolve(
-          msg("Previous {workspaceNoun} ({branch})", {
-            workspaceNoun: terminology.workspaceNoun,
-            branch: seed.branch,
-          }),
-        )
-      : resolve(msg("Previous {workspaceNoun}", { workspaceNoun: terminology.workspaceNoun }));
-  }
   return seed.branch
     ? resolve(msg("Previous worktree ({branch})", { branch: seed.branch }))
     : resolve(msg("Previous worktree"));
@@ -329,7 +287,6 @@ export function resolveBranchTriggerLabel(
     effectiveEnvMode: EnvMode;
     resolvedActiveBranch: string | null;
     resolvedActiveBranchIsRemote: boolean | null;
-    terminology?: VcsTerminology;
     startFromOrigin: boolean;
   },
   resolve: MessageResolver = m,
@@ -340,15 +297,11 @@ export function resolveBranchTriggerLabel(
     resolvedActiveBranch,
     resolvedActiveBranchIsRemote,
     startFromOrigin,
-    terminology = DEFAULT_VCS_TERMINOLOGY,
   } = input;
   if (!resolvedActiveBranch) {
-    return resolve(msg("Select {refNoun}", { refNoun: terminology.refNoun }));
+    return resolve(msg("Select ref"));
   }
   if (effectiveEnvMode === "worktree" && !activeWorktreePath) {
-    if (resolvedActiveBranch === JJ_WORKING_COPY_REVISION) {
-      return resolve(msg("From {revision}", { revision: JJ_WORKING_COPY_LABEL.toLowerCase() }));
-    }
     // Only the server can determine a local branch's configured remote.
     return startFromOrigin && resolvedActiveBranchIsRemote === false
       ? resolve(msg("From {branch} (remote)", { branch: resolvedActiveBranch }))
@@ -465,11 +418,8 @@ export function shouldIncludeBranchPickerItem(input: {
     return true;
   }
 
-  const lowerItemValue =
-    itemValue === JJ_WORKING_COPY_REVISION
-      ? JJ_WORKING_COPY_LABEL.toLowerCase()
-      : itemValue.toLowerCase();
-  if (scoreSearchFields([lowerItemValue], normalizedQuery) !== null) {
+  const lowerItemValue = itemValue.toLowerCase();
+  if (lowerItemValue.includes(normalizedQuery)) {
     return true;
   }
 
@@ -477,6 +427,6 @@ export function shouldIncludeBranchPickerItem(input: {
   return (
     sanitizedQuery.length > 0 &&
     sanitizedQuery !== normalizedQuery &&
-    scoreSearchFields([lowerItemValue], sanitizedQuery) !== null
+    lowerItemValue.includes(sanitizedQuery)
   );
 }

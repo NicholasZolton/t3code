@@ -15,17 +15,6 @@ import * as GitVcsDriver from "../vcs/GitVcsDriver.ts";
 import * as VcsDriverRegistry from "../vcs/VcsDriverRegistry.ts";
 
 it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))("GitWorkflowService", (it) => {
-  const liveWorkflow = GitWorkflowService.layer.pipe(
-    Layer.provide(Layer.mock(GitManager.GitManager)({})),
-    Layer.provideMerge(
-      Layer.merge(GitVcsDriver.layer, VcsDriverRegistry.layer).pipe(
-        Layer.provideMerge(VcsProcess.layer),
-        Layer.provideMerge(ServerConfig.layerTest(process.cwd(), { prefix: "t3-git-workflow-" })),
-        Layer.provideMerge(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)),
-      ),
-    ),
-  );
-
   it.effect("finds a name among the refs of every namespace", () =>
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
@@ -46,40 +35,27 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))("GitWorkflowServi
         (refName) => workflow.hasRefNamed({ cwd, refName }),
       );
       assert.deepEqual(found, [true, true, true, true, false, false]);
-    }).pipe(Effect.provide(liveWorkflow)),
-  );
-
-  it.effect("does not recreate a missing worktree recorded as Jujutsu", () =>
-    Effect.gen(function* () {
-      const fs = yield* FileSystem.FileSystem;
-      const path = yield* Path.Path;
-      const cwd = yield* fs.realPath(
-        yield* fs.makeTempDirectoryScoped({ prefix: "t3-retired-jj-" }),
-      );
-      const target = path.join(cwd, "legacy-workspace");
-      const driver = yield* GitVcsDriver.GitVcsDriver;
-      yield* driver.execute({ operation: "test.setupRepo", cwd, args: ["init", "-b", "main"] });
-      const digest = yield* Effect.promise(() =>
-        crypto.subtle.digest("SHA-256", new TextEncoder().encode(target)),
-      );
-      yield* driver.execute({
-        operation: "test.recordWorkspaceOwner",
-        cwd,
-        args: [
-          "config",
-          "--local",
-          `t3.workspace-${Buffer.from(digest).toString("hex")}.kind`,
-          "jj",
-        ],
-      });
-
-      const workflow = yield* GitWorkflowService.GitWorkflowService;
-      const failure = yield* workflow
-        .ensureWorkspace({ cwd, path: target, refName: "main" })
-        .pipe(Effect.flip);
-      assert.match(failure.message, /Jujutsu/);
-      assert.isFalse(yield* fs.exists(target));
-    }).pipe(Effect.provide(liveWorkflow)),
+    }).pipe(
+      Effect.scoped,
+      Effect.provide(
+        GitWorkflowService.layer.pipe(
+          Layer.provide(
+            Layer.mock(VcsDriverRegistry.VcsDriverRegistry)({
+              resolve: () => Effect.succeed({ kind: "git" } as VcsDriverRegistry.VcsDriverHandle),
+            }),
+          ),
+          Layer.provide(Layer.mock(GitManager.GitManager)({})),
+          Layer.provideMerge(GitVcsDriver.layer),
+          Layer.provideMerge(VcsProcess.layer),
+          Layer.provideMerge(
+            ServerConfig.layerTest(process.cwd(), { prefix: "t3-ref-named-" }).pipe(
+              Layer.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)),
+            ),
+          ),
+          Layer.provideMerge(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)),
+        ),
+      ),
+    ),
   );
 
   it.effect("reads no HEAD path from a removed worktree without spawning Git", () =>
@@ -100,6 +76,56 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))("GitWorkflowServi
               execute: (input) => Effect.die(`spawned Git in ${input.cwd}`),
             }),
           ),
+        ),
+      ),
+    ),
+  );
+
+  it.effect("removes a registered Git worktree from a colocated Jujutsu project", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const parent = yield* fs.makeTempDirectoryScoped({ prefix: "t3-remove-colocated-" });
+      const cwd = path.join(parent, "repo");
+      const target = path.join(parent, "worktree");
+      yield* fs.makeDirectory(cwd);
+      const git = yield* GitVcsDriver.GitVcsDriver;
+      for (const args of [
+        ["init", "-b", "main"],
+        ["-c", "user.email=t@t", "-c", "user.name=t", "commit", "--allow-empty", "-m", "init"],
+        ["worktree", "add", "--detach", target],
+      ]) {
+        yield* git.execute({ operation: "test.setupRepo", cwd, args });
+      }
+      yield* fs.makeDirectory(path.join(cwd, ".jj"));
+      yield* fs.makeDirectory(path.join(target, ".jj"));
+      yield* fs.writeFileString(path.join(target, ".jj", "state"), "legacy workspace");
+
+      const workflow = yield* GitWorkflowService.GitWorkflowService;
+      assert.isNull(yield* workflow.repositoryRoot(cwd));
+      yield* workflow.removeWorktree({ cwd, path: target, force: true });
+      assert.isFalse(yield* fs.exists(target));
+      assert.isTrue(yield* fs.exists(path.join(cwd, ".jj")));
+      const listing = yield* git.execute({
+        operation: "test.listWorktrees",
+        cwd,
+        args: ["worktree", "list", "--porcelain"],
+      });
+      assert.notInclude(listing.stdout, target);
+    }).pipe(
+      Effect.scoped,
+      Effect.provide(
+        GitWorkflowService.layer.pipe(
+          Layer.provide(VcsDriverRegistry.layer),
+          Layer.provide(Layer.mock(GitManager.GitManager)({})),
+          Layer.provideMerge(GitVcsDriver.layer),
+          Layer.provideMerge(VcsProcess.layer),
+          Layer.provideMerge(
+            ServerConfig.layerTest(process.cwd(), { prefix: "t3-remove-colocated-" }).pipe(
+              Layer.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)),
+            ),
+          ),
+          Layer.provideMerge(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)),
         ),
       ),
     ),

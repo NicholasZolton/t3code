@@ -1,7 +1,6 @@
 import { AuthOrchestrationOperateScope, AuthSourceControlWriteScope } from "@t3tools/contracts";
 import type { VcsListRefsResult } from "@t3tools/contracts";
 import { resolveAutoFeatureBranchName } from "@t3tools/shared/git";
-import { DEFAULT_VCS_TERMINOLOGY } from "@t3tools/shared/vcs";
 import * as Cause from "effect/Cause";
 import { AsyncResult } from "effect/reactivity";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
@@ -32,9 +31,7 @@ const state = vi.hoisted(() => ({
 vi.mock("react", () => ({
   useCallback: (callback: unknown) => callback,
   useMemo: (factory: () => unknown) => factory(),
-  useState: <T>(initial: T) => [initial, vi.fn()],
 }));
-vi.mock("../components/ui/Dialog", () => ({ alert: vi.fn() }));
 vi.mock("@effect/atom-react", () => ({ useAtomMount: () => {} }));
 vi.mock("./session", () => ({
   useEnvironmentScope: (environmentId: unknown, scope: string) =>
@@ -88,7 +85,6 @@ vi.mock("./threads", () => ({
   },
 }));
 vi.mock("./vcs", () => ({
-  useVcsTerminology: () => DEFAULT_VCS_TERMINOLOGY,
   vcsEnvironment: {
     readRefs: state.readRefs,
     refreshStatus: async () => {
