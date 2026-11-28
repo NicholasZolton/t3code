@@ -6,25 +6,28 @@ tags: [upstream, fork, integration]
 status: stable
 generated:
   by: opencode/gpt-6.2-sol
-  at: 2026-11-28T03:55:00+00:00
+  at: 2026-11-28T04:03:04+00:00
 verified:
   - by: opencode/gpt-6.2-sol
-    at: 2026-11-28T03:55:00+00:00
+    at: 2026-11-28T04:03:04+00:00
 snapshot:
-  at: 2026-11-28T03:55:00+00:00
+  at: 2026-11-28T04:03:04+00:00
   fork_main: 78652ff272a042fa645dbce0ec4f59a5ca9e3ea2
-  upstream_main: a91808a108efa4ff121d29c80ddab72c4699d980
+  upstream_main: 3d05b8a3d3498edc47703baa8e3666c444a4eb23
   shared_baseline: 2c019f21ecbdf4b6cae9dfbfe13a3b002f28eba6
   last_main_integration: 6b24ab644b8afb0c9f191eb1928ca40302775589
   last_main_upstream: 2c019f21ecbdf4b6cae9dfbfe13a3b002f28eba6
-  missing_upstream_on_main: 188
-  branch_integration: 985216ee39e634eb06bde0da6e77f25460e8be9f
-  branch_code_tip: 985216ee39e634eb06bde0da6e77f25460e8be9f
+  missing_upstream_on_main: 191
+  branch_integration: ae91e78ea3fa887916c4ea143c83b93d40ad198f
+  branch_code_tip: ae91e78ea3fa887916c4ea143c83b93d40ad198f
   missing_upstream_on_branch: 0
 sources:
   - id: november-28-upstream
-    resource: https://github.com/pingdotgg/t3code/commit/a91808a108efa4ff121d29c80ddab72c4699d980
+    resource: https://github.com/pingdotgg/t3code/commit/3d05b8a3d3498edc47703baa8e3666c444a4eb23
     title: Pinned upstream tip for the November 28 integration
+  - id: november-28-pr
+    resource: https://github.com/NicholasZolton/t3code/pull/97
+    title: November 28 upstream integration and Jujutsu retirement
   - id: upstream-nov23-policy
     resource: https://github.com/pingdotgg/t3code/blob/700a4644a44afc1b127a4df323e7d833abd8779b/apps/server/src/provider/model-manifest.json
     title: Version-scoped OpenCode advisories
@@ -449,10 +452,11 @@ sources:
 
 # Upstream integration
 
-The November 28 candidate preserves upstream ancestry and combines all 188 commits through
-`a91808a108` with the [native Jujutsu retirement](#jujutsu-retirement). Merge `fba52d2a05`
-incorporates `22cd21bad5`; merge `985216ee39` adds the last five commits. At the snapshot above,
-fork `main` has not incorporated the candidate.[^november-28-upstream]
+[PR #97](https://github.com/NicholasZolton/t3code/pull/97) preserves upstream ancestry and
+combines all 191 commits through `3d05b8a3d3` with the
+[native Jujutsu retirement](#jujutsu-retirement). Merge `fba52d2a05` incorporates `22cd21bad5`;
+merges `985216ee39` and `ae91e78ea3` include eight newer commits. At the snapshot above,
+fork `main` has not incorporated the candidate.[^november-28-upstream][^november-28-pr]
 
 ## November 27 sync
 
@@ -1382,6 +1386,8 @@ git log --reverse --oneline origin/main..upstream/main
 [^fork-jujutsu]: The original fork port and its historical mixed-backend behavior.
 
 [^november-28-upstream]: The upstream revision incorporated by the November 28 candidate.
+
+[^november-28-pr]: The integration PR tracks the merge and verification status after this snapshot.
 
 [^private-android-signing]: Fork signing policy and the fnox-backed APK signing helper.
 
