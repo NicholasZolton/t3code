@@ -1,6 +1,7 @@
 import { T, useGT, useMessages, Var } from "gt-react";
 import type { SideThreadOpenIntent } from "@t3tools/client-runtime/side-thread";
 import type { ThreadRunSummary } from "@t3tools/client-runtime/state/models";
+import type { RunOutputRates } from "@t3tools/client-runtime/fork/run-output-rate";
 import { threadErrorText } from "@t3tools/client-runtime/state/threads";
 import { threadEnvironment } from "../../state/threads";
 import { useAtomCommand } from "../../state/use-atom-command";
@@ -269,6 +270,7 @@ interface MessagesTimelineProps {
   listRef: React.RefObject<LegendListRef | null>;
   timelineEntries: ReadonlyArray<TimelineEntry>;
   latestRun: TimelineLatestRun | null;
+  runOutputRates?: RunOutputRates | undefined;
   usageLimitRunId?: RunId | null;
   /** The run the screen reader announcer follows; see announcedRun. */
   announcedRun?: { readonly runId: RunId; readonly status: TimelineLatestRun["status"] } | null;
@@ -396,6 +398,7 @@ const ConversationTimeline = memo(function ConversationTimeline({
   activeFindMatch = null,
   findNavigationId = 0,
   latestRun,
+  runOutputRates,
   usageLimitRunId = null,
   announcedRun = null,
   detailBehindShell = false,
@@ -765,6 +768,7 @@ const ConversationTimeline = memo(function ConversationTimeline({
     timelineEntries,
     pendingApprovalRequestIds,
     latestRun,
+    runOutputRates,
     usageLimitRunId,
     runningRunId,
     expandedRunIds: visibleExpandedRunIds,

@@ -1113,13 +1113,14 @@ it("/feedback with a pending reply runs as feedback and keeps the reply when the
     ...DEFAULT_CLIENT_SETTINGS,
     onboardingCompletedAt: "2026-01-01T00:00:00.000Z",
   });
-  const router = getRouter(createMemoryHistory({ initialEntries: ["/"] }));
+  const router = getRouter(
+    createMemoryHistory({ initialEntries: [`/${ENVIRONMENT_ID}/${thread.id}`] }),
+  );
   await router.load();
   await using _app = await render(<AppRoot router={router} />, {
     // AppRoot brings its own router.
     router: false,
   });
-  await page.getByTestId("sidebar-row-card").first().click();
   await expect.element(page.getByText(`Answer 0 for ${thread.id}.`)).toBeVisible();
   await page.getByRole("button", { name: "Reply to this response" }).first().click();
   const replyBar = page.getByText("Replying to", { exact: true });

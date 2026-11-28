@@ -6,6 +6,10 @@ import { linkRequestTargetName } from "@t3tools/client-runtime/link-request";
 import { turnItemIsWorkspacePreparation } from "@t3tools/client-runtime/state/turn-item-presentation";
 import { formatSubagentDisplayTitle } from "@t3tools/client-runtime/state/subagent-display";
 import {
+  formatRunOutputRateLabel,
+  type RunOutputRates,
+} from "@t3tools/client-runtime/fork/run-output-rate";
+import {
   isLiveSubagentTurnItem,
   waitingOnSubagentsLabel,
 } from "@t3tools/client-runtime/state/subagentRuntime";
@@ -1222,6 +1226,7 @@ function deriveThreadFeedRunFolds(
   latestRun: ThreadFeedLatestRun | null,
   runlessWorkActive: boolean,
   feedFailedRunIds: ReadonlySet<RunId>,
+  runOutputRates: RunOutputRates | undefined,
   resolve: MessageResolver,
 ): ReadonlyMap<string, ThreadFeedRunFold> {
   const terminalAssistantMessageIdByRun = new Map<RunId, string>();
@@ -1364,9 +1369,8 @@ function deriveThreadFeedRunFolds(
       ? duration
         ? resolve(msg("You stopped after {duration}", { duration }))
         : resolve(msg("You stopped this response"))
-      : duration
-        ? resolve(msg("Worked for {duration}", { duration }))
-        : resolve(msg("Worked"));
+      : (formatRunOutputRateLabel(runOutputRates?.get(runId), resolve) ??
+        (duration ? resolve(msg("Worked for {duration}", { duration })) : resolve(msg("Worked"))));
     // The top row keeps the whole turn's time. Work after a steer folds under
     // its own row below that steer, keyed apart so each segment opens alone.
     const segments = [
@@ -1556,6 +1560,7 @@ function presentationRestart(
     previous.runlessWorkActive !== runlessWorkActive ||
     previous.display.toolCallVisibility !== display.toolCallVisibility ||
     previous.display.revealedMessageId !== display.revealedMessageId ||
+    previous.display.runOutputRates !== display.runOutputRates ||
     !setsEqual(previous.expandedRunIds, expandedRunIds) ||
     !setsEqual(previous.expandedWorkGroupIds, expandedWorkGroupIds)
   ) {
@@ -1708,6 +1713,7 @@ function liveAnswerPreview(feed: ReadonlyArray<ThreadFeedEntry>): string | null 
 export interface ThreadFeedDisplay {
   readonly toolCallVisibility: ToolCallVisibility;
   readonly revealedMessageId: MessageId | null;
+  readonly runOutputRates?: RunOutputRates | undefined;
 }
 
 const DEFAULT_THREAD_FEED_DISPLAY: ThreadFeedDisplay = {
@@ -1829,6 +1835,7 @@ export function deriveThreadFeedPresentation(
         latestRun,
         isWorking && runlessWorkActive,
         failedRunIds,
+        display.runOutputRates,
         resolve,
       );
   const collapsedEntryIds = new Set<string>();

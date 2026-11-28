@@ -3,6 +3,10 @@ import { msg } from "gt-react";
 import { worktreeSetupAgentStarted } from "@t3tools/client-runtime/worktree-setup";
 import { resolveUserMessagePresentation } from "@t3tools/client-runtime/user-message";
 import {
+  formatRunOutputRateLabel,
+  type RunOutputRates,
+} from "@t3tools/client-runtime/fork/run-output-rate";
+import {
   isLiveSubagentTurnItem,
   waitingOnSubagentsLabel,
 } from "@t3tools/client-runtime/state/subagentRuntime";
@@ -1090,6 +1094,7 @@ function deriveTurnFolds(input: {
   runlessWorkActive: boolean;
   liveSubagentEntryIds: ReadonlySet<string>;
   retainedAssistantReplyEntryIds: ReadonlySet<string>;
+  runOutputRates?: RunOutputRates | undefined;
   resolve: MessageResolver;
 }): ReadonlyMap<string, TurnFold> {
   const interruptedRunIds = new Set<RunId>();
@@ -1277,9 +1282,8 @@ function deriveTurnFolds(input: {
       ? duration
         ? resolve(msg("You stopped after {duration}", { duration }))
         : resolve(msg("You stopped this response"))
-      : duration
-        ? resolve(msg("Worked for {duration}", { duration }))
-        : resolve(msg("Worked"));
+      : (formatRunOutputRateLabel(input.runOutputRates?.get(runId), resolve) ??
+        (duration ? resolve(msg("Worked for {duration}", { duration })) : resolve(msg("Worked"))));
 
     // The top row keeps the whole turn's time, steers included. Work after a
     // steer folds under its own row below that steer, keyed apart from the run
@@ -1633,6 +1637,7 @@ export function deriveMessagesTimelineRows(
     timelineEntries: ReadonlyArray<TimelineEntry>;
     pendingApprovalRequestIds?: ReadonlySet<RuntimeRequestId>;
     latestRun?: TimelineLatestRun | null;
+    runOutputRates?: RunOutputRates | undefined;
     /** The usage-limited run whose failure row the recovery notice replaces. */
     usageLimitRunId?: RunId | null;
     runningRunId?: RunId | null;
@@ -1709,6 +1714,7 @@ export function deriveMessagesTimelineRows(
           timelineEntries: timelineEntries,
           terminalAssistantMessageIds,
           latestRun: input.latestRun ?? null,
+          runOutputRates: input.runOutputRates,
           unfoldedRunIds: new Set([...activeVisualResponseRunIds, ...failedRunIds]),
           runlessWorkActive,
           liveSubagentEntryIds,
