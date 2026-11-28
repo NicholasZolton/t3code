@@ -1,7 +1,4 @@
-import { resolveProjectSettings } from "@t3tools/shared/projectSettings";
-import * as VcsDriverRegistry from "../vcs/VcsDriverRegistry.ts";
 import {
-  DEFAULT_SERVER_SETTINGS,
   isRuntimeModeAbove,
   managedRuntimeModeCeilingMessage,
   ModelSelection,
@@ -144,8 +141,6 @@ export const layerFromProjectStore: Layer.Layer<
     const projects = yield* ProjectStore.ProjectStoreV2;
     const workspaceFolders = yield* WorkspaceFolders.WorkspaceFolders;
     const providerInstances = yield* ProviderInstanceRegistry.ProviderInstanceRegistry;
-    const settingsService = yield* Effect.serviceOption(ServerSettings.ServerSettingsService);
-    const vcs = yield* Effect.serviceOption(VcsDriverRegistry.VcsDriverRegistry);
     // The same ceiling the orchestrator enforces, fixed for the server's life.
     const { managedPolicy } = yield* ServerSettings.ServerSettingsService;
     const maxRuntimeMode = managedPolicy?.limits?.maxRuntimeMode;
@@ -182,24 +177,6 @@ export const layerFromProjectStore: Layer.Layer<
               }),
             ),
           ));
-        const settings = Option.isSome(settingsService)
-          ? yield* settingsService.value.getSettings.pipe(
-              Effect.mapError(
-                (cause) =>
-                  new RuntimePolicyResolveError({
-                    projectId: input.thread.projectId,
-                    providerInstanceId: input.modelSelection.instanceId,
-                    cause,
-                  }),
-              ),
-            )
-          : DEFAULT_SERVER_SETTINGS;
-        const effectiveSettings = resolveProjectSettings(settings, input.thread.projectId).settings;
-        const handle =
-          effectiveSettings.enableVcsAgentHints && Option.isSome(vcs)
-            ? yield* vcs.value.detect({ cwd }).pipe(Effect.orElseSucceed(() => null))
-            : null;
-        const vcsAgentHint = handle?.driver.agentContextHint;
         // The turn can still run in its own cwd, as a single-folder thread does.
         const workspace = yield* workspaceFolders
           .forThread({
@@ -214,7 +191,6 @@ export const layerFromProjectStore: Layer.Layer<
             ),
           );
         return ProviderAdapter.ProviderAdapterV2RuntimePolicy.make({
-          ...(vcsAgentHint === undefined ? {} : { vcsAgentHint }),
           runtimeMode: providerRuntimeMode(input.thread.runtimeMode, supportedRuntimeModes),
           interactionMode: input.thread.interactionMode,
           cwd,

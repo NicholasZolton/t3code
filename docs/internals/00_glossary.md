@@ -40,14 +40,3 @@ Shared vocabulary across T3 Code. Architecture and lifecycle constraints belong 
 | Runtime mode      | The thread's permission policy. See [permission modes](../user/permission-modes.md).                         |
 | Interaction mode  | How the agent approaches the task, such as planning. Separate from permission policy.                        |
 | Checkpoint        | A saved workspace state used for diffs and restore, stored as a hidden Git ref.                              |
-
-## Version control
-
-Jujutsu terms, and how they differ from the Git and T3 Code terms above. See
-[Jujutsu](./jujutsu.md).
-
-| Term           | Meaning                                                                                                                                                                 |
-| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Workspace (jj) | A Jujutsu working copy with its own `@`, sharing one repository. Threads use one instead of a worktree in a Jujutsu project. Unrelated to T3 Code's own workspace root. |
-| Bookmark       | A named pointer to a change, and the same ref as a Git branch (`refs/heads/<name>`) in a colocated repository. Unlike a branch it does not follow new commits.          |
-| Change         | A Jujutsu commit, with a change id stable across rewrites. `@` is the working-copy change; `@-` is what Git calls `HEAD`.                                               |

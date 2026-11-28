@@ -1,5 +1,9 @@
 # Wiki update log
 
+## 2026-11-28
+
+- Recorded the [Jujutsu retirement](upstream-integration.md#jujutsu-retirement) and the guards that preserve old JJ workspaces.
+
 ## 2026-11-27
 
 - Recorded the [upstream candidate](upstream-integration.md) through `2c019f21ec` and the Jujutsu checkpoint, mobile branch, and shortcut-search compatibility decisions.

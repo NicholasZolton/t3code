@@ -93,55 +93,9 @@ Open **Issues** from the sidebar utility row or **Open issues** in the command p
 - **Push fails**: Check Git SSH/HTTPS credentials separately from API auth.
 - **Fork PR badge missing**: Set upstream with `git branch --set-upstream-to=<remote>/<branch>`.
 
-## Jujutsu repositories
+## Existing Jujutsu workspaces
 
-T3 Code works with [Jujutsu](https://jj-vcs.github.io/jj/) repositories that are colocated with Git,
-which is what `jj git init --colocate` creates. Pull requests, cloning, and publishing still run
-against the Git store in that repository, so a Jujutsu project gets the same hosting integration as a
-Git one. Install Jujutsu 0.42.0 or newer on the machine running the server.
-
-Terms follow the repository: bookmarks instead of branches, workspaces instead of worktrees, changes
-instead of commits. Checkpoints and revert work the same way. A revert restores your
-working copy with `jj restore`, so `jj undo` takes it back.
-
-New workspaces can start from **Current working copy**, including its snapshotted files, without an
-existing bookmark. This is the default when no default or current bookmark is available. It always
-uses the local working copy, regardless of **Start from origin**.
-
-### Choosing the version control system
-
-T3 Code uses the nearest marker directory, so a checkout holding `.jj` is Jujutsu and a Git checkout
-inside it is still Git. Threads that already run in a Git worktree keep working as Git.
-
-To pin a project, add `.t3code/vcs.json` in its root:
-
-```json
-{ "vcs": { "kind": "git" } }
-```
-
-Use `"jj"` to force Jujutsu, or delete the file to go back to detection. For a directory with no
-version control yet, **Initialize Jujutsu** sits alongside **Initialize Git** and runs
-`jj git init --colocate`.
-For an existing Git repository, choose **Enable Jujutsu** from the repository actions on web,
-desktop, or mobile. It keeps the Git history, remotes, and working files while adding a colocated
-Jujutsu workspace. Run it from the main checkout; Git worktrees continue to use Git.
-
-### What is different under Jujutsu
-
-- Turn diffs include all changes between checkpoints, including changes brought in by a pull or rebase.
-- Automatic storage cleanup does not remove Jujutsu workspaces.
-- **Git hooks do not run** for commits made through T3 Code. Hooks that read the Git index, such as
-  `lint-staged` or a staged-diff format check, see nothing under Jujutsu, so T3 Code skips them
-  rather than reporting a hook run that did nothing. Run them yourself if you depend on them.
-- A change with conflicts cannot be pushed until you resolve it, and its diff shows one side of each
-  conflicted file rather than the markers on disk.
-- T3 Code snapshots new files up to **10 MiB**. Unexpected files outside a checkpoint are reported
-  in the thread's activity; ignored files are excluded normally. Reverting a turn leaves excluded
-  files on disk. Files already tracked remain covered when they grow beyond that limit.
-- A repository that is not colocated, a missing `jj`, or a version below 0.42.0 leaves source control
-  actions disabled with the reason, instead of silently falling back to Git. Install or upgrade
-  Jujutsu, or run `jj git init --colocate` in the repository.
-
-Agents receive a short Jujutsu hint for their current workspace. Turn off **VCS agent hints** in
-**Settings → Source Control** to stop injecting these hints, including when resuming existing threads.
-This setting can also be overridden for a project.
+T3 Code no longer creates or manages Jujutsu workspaces. Existing folders and conversations stay
+where they are, but T3 cannot recreate a missing Jujutsu workspace or restore its checkpoints.
+Use `jj` directly to manage those files. To start new worktree threads, open a separate Git
+checkout as a project.

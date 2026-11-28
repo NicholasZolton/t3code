@@ -228,13 +228,10 @@ import {
 } from "../../provider/claudeUsageLimits.ts";
 import type { ManagedServerProvider } from "@t3tools/provider-core/server/snapshot";
 import {
-  buildRuntimeInstructions,
-  buildVcsAgentContext,
-} from "@t3tools/provider-core/server/runtimeInstructions";
-import {
   T3_CODE_DEVICE_TOOL_INSTRUCTIONS_WITH_TOOL_SEARCH,
   T3_CODE_ORCHESTRATION_INSTRUCTIONS,
 } from "@t3tools/provider-core/server/orchestrationInstructions";
+import { buildRuntimeInstructions } from "@t3tools/provider-core/server/runtimeInstructions";
 import {
   mcpToolPresentation,
   normalizeMcpText,
@@ -14656,7 +14653,7 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
                       uuid: promptUuid,
                     }
                   : yield* makeClaudeUserMessageWithAttachments({
-                      text: promptText + buildVcsAgentContext(turnInput.runtimePolicy.vcsAgentHint),
+                      text: promptText,
                       // Mentions in inline handoff history are history, not this turn's skill.
                       ...(turnInput.inlineContextLength === undefined
                         ? {}

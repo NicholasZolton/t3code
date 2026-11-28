@@ -381,7 +381,7 @@ function isPullRequestWorktreeLocalBranchName(branch: string): boolean {
   return /^t3code[/-]pr-\d+[/-]/u.test(branch);
 }
 
-export function resolvePullRequestWorktreeLocalBranchName(
+function resolvePullRequestWorktreeLocalBranchName(
   pullRequest: ResolvedPullRequest & PullRequestHeadRemoteInfo,
   localBranches: ReadonlySet<string>,
 ): string {
@@ -672,7 +672,7 @@ function withDescription(title: string, description: string | undefined) {
 }
 
 /** Shared with the Jujutsu lane: the toast copy is about the action's result, not about Git. */
-export function summarizeGitActionResult(
+function summarizeGitActionResult(
   result: Pick<GitRunStackedActionResult, "commit" | "push" | "pr">,
   terms: ChangeRequestTerminology,
 ): {
@@ -762,7 +762,7 @@ export interface CommitAndBranchSuggestion {
   commitMessage: string;
 }
 
-export function isCommitAction(
+function isCommitAction(
   action: GitStackedAction,
 ): action is "commit" | "commit_push" | "commit_push_pr" {
   return action === "commit" || action === "commit_push" || action === "commit_push_pr";
@@ -846,13 +846,13 @@ function toStatusPr(pr: PullRequestInfo): {
   };
 }
 
-export function normalizePullRequestReference(reference: string): string {
+function normalizePullRequestReference(reference: string): string {
   const trimmed = reference.trim();
   const hashNumber = /^#(\d+)$/.exec(trimmed);
   return hashNumber?.[1] ?? trimmed;
 }
 
-export function toResolvedPullRequest(pr: {
+function toResolvedPullRequest(pr: {
   number: number;
   title: string;
   url: string;
@@ -925,7 +925,7 @@ const readRepositoryInstructions = Effect.fn("GitManager.readRepositoryInstructi
   Effect.orElseSucceed(() => ""),
 );
 
-export const readRecentCommitSubjects = (executeGit: ExecuteGit, cwd: string, revision?: string) =>
+const readRecentCommitSubjects = (executeGit: ExecuteGit, cwd: string, revision?: string) =>
   executeGit({
     operation: "GitManager.readRecentCommitSubjects",
     cwd,
@@ -1341,7 +1341,7 @@ const resolveBaseRangeRef = Effect.fn("resolveBaseRangeRef")(function* (
  * The commit message (and, for a feature-branch action, the branch name) a stacked action commits
  * with. Only the working-copy context read is VCS-specific, so it is the one thing passed in.
  */
-export const resolveCommitAndBranchSuggestion = Effect.fn("resolveCommitAndBranchSuggestion")(
+const resolveCommitAndBranchSuggestion = Effect.fn("resolveCommitAndBranchSuggestion")(
   function* (input: {
     readonly cwd: string;
     readonly branch: string | null;
@@ -1614,54 +1614,52 @@ export const runChangeRequestStep = Effect.fn("runChangeRequestStep")(function* 
  * Environment settings with the acting project's overrides applied, resolved to the writer model
  * and style both the commit and the change-request phases generate with.
  */
-export const resolveTextGenerationSettings = Effect.fn("resolveTextGenerationSettings")(
-  function* (input: {
-    readonly operation: string;
-    readonly cwd: string;
-    readonly threadId?: ThreadId | undefined;
-    readonly projectId?: ProjectId | undefined;
-  }): Effect.fn.Return<
-    SourceControlTextGenerationSettings,
-    GitManagerError,
-    ServerSettings.ServerSettingsService | ProviderRegistry.ProviderRegistry
-  > {
-    const serverSettingsService = yield* ServerSettings.ServerSettingsService;
-    const providerRegistry = yield* ProviderRegistry.ProviderRegistry;
-    return yield* Effect.gen(function* () {
-      const { settings: projectSettings, projectId } = yield* workspaceSettings(input).pipe(
-        Effect.provideService(ServerSettings.ServerSettingsService, serverSettingsService),
-      );
+const resolveTextGenerationSettings = Effect.fn("resolveTextGenerationSettings")(function* (input: {
+  readonly operation: string;
+  readonly cwd: string;
+  readonly threadId?: ThreadId | undefined;
+  readonly projectId?: ProjectId | undefined;
+}): Effect.fn.Return<
+  SourceControlTextGenerationSettings,
+  GitManagerError,
+  ServerSettings.ServerSettingsService | ProviderRegistry.ProviderRegistry
+> {
+  const serverSettingsService = yield* ServerSettings.ServerSettingsService;
+  const providerRegistry = yield* ProviderRegistry.ProviderRegistry;
+  return yield* Effect.gen(function* () {
+    const { settings: projectSettings, projectId } = yield* workspaceSettings(input).pipe(
+      Effect.provideService(ServerSettings.ServerSettingsService, serverSettingsService),
+    );
 
-      if (projectSettings.sourceControlWriterModelSelection === null) {
-        return {
-          modelSelection: projectSettings.textGenerationModelSelection,
-          projectId,
-          style: projectSettings.sourceControlWritingStyle,
-        };
-      }
-      const providers = yield* providerRegistry.getProviders;
+    if (projectSettings.sourceControlWriterModelSelection === null) {
       return {
-        modelSelection: ServerSettings.resolveSourceControlWriterModelSelection(
-          projectSettings,
-          providers,
-          projectId,
-        ),
+        modelSelection: projectSettings.textGenerationModelSelection,
         projectId,
         style: projectSettings.sourceControlWritingStyle,
       };
-    }).pipe(
-      Effect.mapError(
-        (cause) =>
-          new GitManagerError({
-            operation: input.operation,
-            cwd: input.cwd,
-            detail: "Failed to get server settings.",
-            cause,
-          }),
+    }
+    const providers = yield* providerRegistry.getProviders;
+    return {
+      modelSelection: ServerSettings.resolveSourceControlWriterModelSelection(
+        projectSettings,
+        providers,
+        projectId,
       ),
-    );
-  },
-);
+      projectId,
+      style: projectSettings.sourceControlWritingStyle,
+    };
+  }).pipe(
+    Effect.mapError(
+      (cause) =>
+        new GitManagerError({
+          operation: input.operation,
+          cwd: input.cwd,
+          detail: "Failed to get server settings.",
+          cause,
+        }),
+    ),
+  );
+});
 
 export const make = Effect.gen(function* () {
   const withWorkspaceQueries = yield* makeWorkspaceQueries;

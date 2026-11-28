@@ -72,7 +72,6 @@ const PAGE_PROJECT_KEYS: Record<SettingsPage, readonly ProjectScopedServerSettin
   "source-control": ["defaultAutoPull", "removeAgentCreditsOnMerge"],
   worktrees: [
     "newWorktreesStartFromOrigin",
-    "enableVcsAgentHints",
     "worktreeSubmodules",
     "branchNamingMode",
     "branchNamePrefix",
@@ -485,17 +484,6 @@ function ServerSettingsDetail(props: { readonly page: SettingsPage }) {
                     value={uniform("newWorktreesStartFromOrigin")}
                     disabled={disabledFor("newWorktreesStartFromOrigin")}
                     onValueChange={(value) => write({ newWorktreesStartFromOrigin: value })}
-                  />
-                  <SettingsSwitchRow
-                    icon="text.bubble"
-                    label={gt("VCS agent hints")}
-                    subtitle={managedSubtitle(
-                      "enableVcsAgentHints",
-                      "Give agents a version-control hint on each turn, including resumed threads.",
-                    )}
-                    value={uniform("enableVcsAgentHints")}
-                    disabled={disabledFor("enableVcsAgentHints")}
-                    onValueChange={(value) => write({ enableVcsAgentHints: value })}
                   />
                   <WorktreeSettingField
                     label={gt("Worktree location")}

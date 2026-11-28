@@ -7524,6 +7524,29 @@ it.layer(layerTest)("GitVcsDriver core integration", (it) => {
   });
 
   describe("worktree operations", () => {
+    it.effect("preserves a colocated Jujutsu workspace when Git force removal is requested", () =>
+      Effect.gen(function* () {
+        const cwd = yield* makeTmpDir();
+        yield* initRepoWithCommit(cwd);
+        const target = NodePath.join(yield* makeTmpDir("git-worktrees-"), "legacy");
+        yield* git(cwd, ["worktree", "add", "--detach", target]);
+        const fs = yield* FileSystem.FileSystem;
+        yield* fs.makeDirectory(NodePath.join(target, ".jj"));
+        yield* writeTextFile(target, "uncommitted.txt", "keep this work\n");
+
+        const driver = yield* GitVcsDriver.GitVcsDriver;
+        const failure = yield* driver
+          .removeWorktree({ cwd, path: target, force: true })
+          .pipe(Effect.flip);
+        assert.match(failure.message, /Jujutsu/);
+        assert.equal(
+          yield* fs.readFileString(NodePath.join(target, "uncommitted.txt")),
+          "keep this work\n",
+        );
+        assert.include(yield* git(cwd, ["worktree", "list", "--porcelain"]), target);
+      }),
+    );
+
     it.effect.each(["current", "legacy"] as const)(
       "preserves another creator's worktree on its new branch at the same path (%s)",
       (version) =>

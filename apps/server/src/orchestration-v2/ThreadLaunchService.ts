@@ -33,7 +33,6 @@ import * as Context from "effect/Context";
 import * as DateTime from "effect/DateTime";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
-import { JJ_WORKING_COPY_REVISION } from "@t3tools/shared/vcs";
 import * as Exit from "effect/Exit";
 import * as Fiber from "effect/Fiber";
 import * as FileSystem from "effect/FileSystem";
@@ -769,9 +768,7 @@ const make = Effect.gen(function* () {
         let startRef = requestedBaseRef;
         let baseRefName = requestedBaseRef;
         const remote =
-          input.workspaceStrategy.startFromOrigin === true &&
-          projectIsRepository &&
-          input.workspaceStrategy.baseRef !== JJ_WORKING_COPY_REVISION
+          input.workspaceStrategy.startFromOrigin === true && projectIsRepository
             ? yield* git
                 .resolveWorktreeBaseRemote({
                   cwd: project.workspaceRoot,

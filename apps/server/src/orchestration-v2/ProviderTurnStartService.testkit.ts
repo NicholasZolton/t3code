@@ -19,7 +19,6 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 
 import * as GitWorkflow from "../git/GitWorkflowService.ts";
-import * as JjWorkflow from "../jj/JjWorkflow.ts";
 import * as ProjectService from "../project/ProjectService.ts";
 import * as TaskFolders from "../workspace/TaskFolders.ts";
 
@@ -47,7 +46,6 @@ export const layerRealGit = GitWorkflow.layer.pipe(
   Layer.provide(GitManager.layer),
   Layer.provide(
     Layer.mergeAll(
-      Layer.mock(JjWorkflow.JjWorkflow)({}),
       Layer.mock(SourceControlProviderRegistry.SourceControlProviderRegistry)({
         resolveLink: () => undefined,
         resolve: ({ cwd }) =>

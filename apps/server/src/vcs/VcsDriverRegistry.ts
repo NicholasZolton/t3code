@@ -10,7 +10,7 @@ import * as Path from "effect/Path";
 import type { VcsDriverKind, VcsError, VcsRepositoryIdentity } from "@t3tools/contracts";
 import { VcsUnsupportedOperationError } from "@t3tools/contracts";
 import * as GitVcsDriver from "./GitVcsDriver.ts";
-import * as JjVcsDriver from "./JjVcsDriver.ts";
+import { isLegacyJjWorkspace, legacyJjWorkspaceMessage } from "./JjRepo.ts";
 import * as VcsProjectConfig from "./VcsProjectConfig.ts";
 import * as VcsDriver from "./VcsDriver.ts";
 
@@ -37,7 +37,6 @@ export class VcsDriverRegistry extends Context.Service<
       input: VcsDriverResolveInput,
     ) => Effect.Effect<VcsDriverHandle | null, VcsError>;
     readonly resolve: (input: VcsDriverResolveInput) => Effect.Effect<VcsDriverHandle, VcsError>;
-    readonly invalidate: (cwd: string) => Effect.Effect<void>;
   }
 >()("t3/vcs/VcsDriverRegistry") {}
 
@@ -64,10 +63,8 @@ export const make = Effect.gen(function* () {
   const path = yield* Path.Path;
   const projectConfig = yield* VcsProjectConfig.VcsProjectConfig;
   const git = yield* GitVcsDriver.makeVcsDriver;
-  const jj = yield* JjVcsDriver.makeVcsDriver;
   const drivers: Partial<Record<VcsDriverKind, VcsDriver.VcsDriver["Service"]>> = {
     git,
-    jj,
   };
 
   const get: VcsDriverRegistry["Service"]["get"] = (kind) => {
@@ -120,11 +117,6 @@ export const make = Effect.gen(function* () {
       return yield* detectWithDriver(requestedKind, driver, input.cwd);
     }
 
-    // jj is probed first because a colocated repo answers yes to both probes, and probing git first would write git worktrees into a jj repo.
-    const jjDetected = yield* detectWithDriver("jj", jj, input.cwd);
-    if (jjDetected) {
-      return jjDetected;
-    }
     return yield* detectWithDriver("git", git, input.cwd);
   });
 
@@ -141,6 +133,7 @@ export const make = Effect.gen(function* () {
 
   const readDiskState = (cwd: string, repository: VcsRepositoryIdentity) =>
     Effect.all({
+      legacyJj: isLegacyJjWorkspace(fileSystem, path, cwd),
       gitEntries: Effect.forEach(foldersBelowRoot(cwd, repository.rootPath), (folder) =>
         fileSystem.exists(path.join(folder, ".git")),
       ),
@@ -177,12 +170,14 @@ export const make = Effect.gen(function* () {
   const detect: VcsDriverRegistry["Service"]["detect"] = Effect.fn("VcsDriverRegistry.detect")(
     function* (input) {
       const requestedKind = yield* projectConfig.resolveKind(input);
+      if (requestedKind === "jj") return null;
       const key = detectionCacheKey({ cwd: input.cwd, requestedKind });
       const cached = yield* Cache.get(detectionCache, key);
       if (cached === null) return null;
       const disk = yield* readDiskState(input.cwd, cached.handle.repository);
       if (
         disk?.repositoryOnDisk &&
+        !disk.legacyJj &&
         disk.gitEntries.length === cached.gitEntries.length &&
         disk.gitEntries.every((exists, index) => exists === cached.gitEntries[index])
       ) {
@@ -200,6 +195,16 @@ export const make = Effect.gen(function* () {
         return detected;
       }
 
+      if (
+        (yield* projectConfig.resolveKind(input)) === "jj" ||
+        (yield* isLegacyJjWorkspace(fileSystem, path, input.cwd))
+      ) {
+        return yield* new VcsUnsupportedOperationError({
+          operation: "VcsDriverRegistry.resolve",
+          kind: "jj",
+          detail: legacyJjWorkspaceMessage,
+        });
+      }
       const requestedKind = input.requestedKind ?? "auto";
       return yield* new VcsUnsupportedOperationError({
         operation: "VcsDriverRegistry.resolve",
@@ -216,13 +221,6 @@ export const make = Effect.gen(function* () {
     get,
     detect,
     resolve,
-    invalidate: Effect.fn("VcsDriverRegistry.invalidate")((cwd) =>
-      Effect.all([
-        Cache.invalidate(detectionCache, detectionCacheKey({ cwd, requestedKind: "auto" })),
-        Cache.invalidate(detectionCache, detectionCacheKey({ cwd, requestedKind: "git" })),
-        Cache.invalidate(detectionCache, detectionCacheKey({ cwd, requestedKind: "jj" })),
-      ]).pipe(Effect.asVoid),
-    ),
   });
 });
 

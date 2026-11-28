@@ -44,8 +44,7 @@ export const make = Effect.gen(function* () {
   )(function* (input) {
     const kind = yield* resolveRequestedKind(input.kind);
     const driver = yield* registry.get(kind);
-    yield* driver.initRepository(input);
-    yield* registry.invalidate(input.cwd);
+    return yield* driver.initRepository(input);
   });
 
   return VcsProvisioningService.of({

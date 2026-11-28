@@ -7,10 +7,8 @@ import type * as FileSystem from "effect/FileSystem";
 import type * as Path from "effect/Path";
 import { GitCommandError } from "@t3tools/contracts";
 import type * as GitVcsDriver from "./GitVcsDriver.ts";
-import { findVcsMarkerRoot, resolveJjRepoPaths } from "./JjRepo.ts";
 
-export const WorkspaceKind = Schema.Literals(["git", "jj"]);
-export type WorkspaceKind = typeof WorkspaceKind.Type;
+const WorkspaceKind = Schema.Literals(["git", "jj"]);
 const decodeKind = Schema.decodeUnknownEffect(WorkspaceKind);
 
 export function makeWorkspaceOwnership(deps: {
@@ -19,12 +17,6 @@ export function makeWorkspaceOwnership(deps: {
   readonly execute: GitVcsDriver.GitVcsDriver["Service"]["execute"];
 }) {
   const { fileSystem, path, execute } = deps;
-  const repositoryCwd = Effect.fn("WorkspaceOwnership.repositoryCwd")(function* (cwd: string) {
-    const marker = yield* findVcsMarkerRoot(fileSystem, path, cwd);
-    return marker?.marker === "jj"
-      ? (yield* resolveJjRepoPaths(fileSystem, path, marker.root)).mainWorkspaceRoot
-      : cwd;
-  });
   const normalize = Effect.fn("WorkspaceOwnership.normalize")(function* (value: string) {
     const absolute = path.resolve(value);
     let current = path.dirname(absolute);
@@ -42,7 +34,7 @@ export function makeWorkspaceOwnership(deps: {
     readonly cwd: string;
     readonly path: string;
   }) {
-    const cwd = yield* repositoryCwd(input.cwd);
+    const cwd = input.cwd;
     const common = yield* execute({
       operation: "WorkspaceOwnership.commonDir",
       cwd,
@@ -88,17 +80,5 @@ export function makeWorkspaceOwnership(deps: {
       ),
     );
   });
-  const remember = Effect.fn("WorkspaceOwnership.remember")(function* (input: {
-    readonly cwd: string;
-    readonly path: string;
-    readonly kind: WorkspaceKind;
-  }) {
-    const target = yield* location(input);
-    yield* execute({
-      operation: "WorkspaceOwnership.remember",
-      cwd: target.cwd,
-      args: ["config", "--file", target.config, "--replace-all", target.key, input.kind],
-    });
-  });
-  return { read, remember, normalize, repositoryCwd };
+  return { read };
 }

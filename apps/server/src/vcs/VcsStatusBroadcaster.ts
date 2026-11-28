@@ -612,7 +612,7 @@ export const make = Effect.gen(function* () {
           },
           { publish: true },
         );
-        if (divergence.details !== undefined) upstreamReads.set(cwd, divergence.details);
+        upstreamReads.set(cwd, divergence.details);
       }
     }
     return local;
@@ -636,7 +636,7 @@ export const make = Effect.gen(function* () {
       { cwd },
       {
         ...remoteOptions,
-        ...(poll !== null ? { refreshUpstream: false } : {}),
+        ...(readPollInputs ? { refreshUpstream: false } : {}),
         ...(details?.branch === branch ? { statusDetails: details } : {}),
       },
     );

@@ -1105,25 +1105,16 @@ account separate from OpenCode Go limits; it must not change routing or apply Co
 exhaustion to unrelated OpenCode models. Preserve this read-only boundary during syncs.
 [^november-4-opencode-usage-removal][^opencode-codex-limits-restoration]
 
-## Jujutsu migration boundary
+## Jujutsu retirement
 
-The fork selectively ports [upstream #13816](https://github.com/pingdotgg/t3code/pull/13816)
-with additional recovery safeguards. New isolated threads inherit the project's backend;
-existing Git worktrees remain Git, including after cleanup and recreation. Ownership is
-recorded in shared Git config rather than a new thread field. A colocated main checkout
-and Jujutsu 0.42.0 or newer are required on each server host.[^upstream-jujutsu][^fork-jujutsu]
+The November 28 retirement change is local and has not shipped. It removes the native backend
+ported from [upstream #13816](https://github.com/pingdotgg/t3code/pull/13816). Keep `jj` as a CLI
+workflow. T3 uses Git for new worktree threads.[^upstream-jujutsu][^fork-jujutsu]
 
-Preserve this mixed-backend boundary during future syncs. The
-[architecture notes](../docs/internals/jujutsu.md) explain checkpoint preservation and
-explicit ref synchronization; the [user guide](../docs/user/source-control.md#jujutsu-repositories)
-covers enabling Jujutsu and disabling VCS agent hints globally or per project.
-
-The completed October 12 sync uses upstream Git-only storage cleanup and retains every
-Jujutsu workspace instead of maintaining a separate automatic removal path.
-Jujutsu checkpoints still pin native snapshots: they lack the extra Git checkpoint
-commit's capture-time HEAD metadata, so authored-path filtering stays disabled and
-turn diffs retain all changes. Snapshot capture and restore remain available.
-[^october-12-branch-integration]
+Keep the legacy `.jj` marker and recorded ownership checks when syncing upstream. Colocated JJ
+workspaces also look like Git worktrees, but Git restore and cleanup must not operate on them.
+See [existing Jujutsu workspaces](../docs/user/source-control.md#existing-jujutsu-workspaces)
+and the [marker guard](../apps/server/src/vcs/JjRepo.ts).
 
 ## SSH runtime release handoff
 

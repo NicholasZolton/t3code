@@ -224,10 +224,8 @@ const VcsStatusChangeRequest = Schema.Struct({
 const VcsStatusLocalShape = {
   isRepo: Schema.Boolean,
   /**
-   * Version control system backing this workspace. Emitted only when it is not Git, so existing
-   * payloads are unchanged; absent means Git. `unsupportedReason` is set when the detected system
-   * is present but unusable (a non-colocated Jujutsu repository, or a `jj` below the supported
-   * minimum). Its presence is the signal and the string is the user-facing reason.
+   * Absent for Git. Legacy Jujutsu workspaces report `unsupportedReason` instead of being
+   * treated as a Git checkout or an uninitialized folder.
    */
   vcs: Schema.optional(
     Schema.Struct({

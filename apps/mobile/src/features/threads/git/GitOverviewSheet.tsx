@@ -1,5 +1,4 @@
 import { changeRequestTermKind } from "../../../lib/changeRequestTerm";
-import * as Dialog from "../../../components/ui/Dialog";
 import { useOpenPullRequest } from "../../../native/useOpenPullRequest";
 import {
   type GitActionRequestInput,
@@ -7,13 +6,9 @@ import {
   getGitActionDisabledReason,
   requiresDefaultBranchConfirmation,
 } from "@t3tools/client-runtime/state/vcs";
-import { resolveVcsTerminology } from "@t3tools/shared/vcs";
+import { resolveVcsTerminology, resolveVcsUnsupportedReason } from "@t3tools/shared/vcs";
 import type { ThreadRepositorySection } from "@t3tools/client-runtime/state/thread-repositories";
 import { EnvironmentId, ThreadId } from "@t3tools/contracts";
-import {
-  isAtomCommandInterrupted,
-  squashAtomCommandFailure,
-} from "@t3tools/client-runtime/state/runtime";
 import {
   CommonActions,
   StackActions,
@@ -22,7 +17,6 @@ import {
 } from "@react-navigation/native";
 import { useGT, useMessages } from "gt-react-native";
 import { use, useEffect, useState } from "react";
-import { Platform, View } from "react-native";
 import { RefreshControl } from "../../../components/ui/RefreshControl";
 import { NativeScrollView } from "../../../native/NativeScrollViewMarker";
 
@@ -51,7 +45,6 @@ import { useSelectedThreadGitActions } from "../../../state/use-selected-thread-
 import { useSelectedThreadGitState } from "../../../state/use-selected-thread-git-state";
 import { useSelectedThreadWorktree } from "../../../state/use-selected-thread-worktree";
 import { vcsEnvironment } from "../../../state/vcs";
-import { useAtomCommand } from "../../../state/use-atom-command";
 import { menuItemIconName, statusSummary } from "./gitSheetComponents";
 import { ThreadRepositoryRows } from "./ThreadRepositoryRows";
 import {
@@ -119,8 +112,6 @@ function GitOverviewSheetContent(props: GitOverviewSheetProps) {
   });
   const gitState = useSelectedThreadGitState(repository);
   const gitActions = useSelectedThreadGitActions(repository);
-  const initRepository = useAtomCommand(vcsEnvironment.init, { reportFailure: false });
-  const [isConverting, setIsConverting] = useState(false);
   const { canWriteSourceControl, canChangeThreadBranch } = gitActions;
 
   const gitStatus = useEnvironmentQuery(
@@ -133,6 +124,7 @@ function GitOverviewSheetContent(props: GitOverviewSheetProps) {
   );
 
   const vcsTerminology = resolveVcsTerminology(gitStatus.data);
+  const vcsUnsupportedReason = resolveVcsUnsupportedReason(gitStatus.data);
   const isRepo = gitStatus.data?.isRepo ?? true;
   // A plain folder that tracks repositories has no branch of its own; its turns still have diffs.
   const projectRepositoryCount = selectedThreadProject?.trackedFolders?.length ?? 0;
@@ -274,43 +266,6 @@ function GitOverviewSheetContent(props: GitOverviewSheetProps) {
   };
 
   const behindCount = gitStatus.data?.behindCount ?? 0;
-  const canConvertToJj =
-    gitStatus.data?.isRepo === true &&
-    (gitStatus.data.vcs?.kind === undefined || gitStatus.data.vcs.kind === "git") &&
-    selectedThreadWorktreePath === null;
-  const convertToJj = () => {
-    if (!selectedThreadCwd || !selectedThread || isConverting) return;
-    Dialog.alert(
-      gt("Enable Jujutsu?"),
-      gt(
-        "Jujutsu will use this repository's Git store. Commits, branches, remotes, and uncommitted files stay in place. Existing Git worktrees continue to use Git.",
-      ),
-      [
-        { text: gt("Cancel"), style: "cancel" },
-        {
-          text: gt("Enable Jujutsu"),
-          onPress: () => {
-            setIsConverting(true);
-            void initRepository({
-              environmentId: selectedThread.environmentId,
-              input: { cwd: selectedThreadCwd, kind: "jj" },
-            }).then(async (result) => {
-              setIsConverting(false);
-              if (result._tag === "Success") {
-                await gitActions.refreshSelectedThreadGitStatus();
-              } else if (!isAtomCommandInterrupted(result)) {
-                const error = squashAtomCommandFailure(result);
-                Dialog.alert(
-                  gt("Jujutsu initialization failed"),
-                  error instanceof Error ? error.message : gt("An error occurred."),
-                );
-              }
-            });
-          },
-        },
-      ],
-    );
-  };
 
   const openRepository = (section: ThreadRepositorySection) => {
     const params = {
@@ -351,7 +306,7 @@ function GitOverviewSheetContent(props: GitOverviewSheetProps) {
         <RefreshControl refreshing={isRefreshing} onRefresh={() => void handleRefresh()} />
       }
     >
-      {sheetMenuItems.length > 0 || behindCount > 0 || canConvertToJj ? (
+      {sheetMenuItems.length > 0 || behindCount > 0 ? (
         <ListSection>
           {sheetMenuItems.map(({ item, disabledReason }) => (
             <ListRow
@@ -379,20 +334,9 @@ function GitOverviewSheetContent(props: GitOverviewSheetProps) {
               onPress={() => void gitActions.onPullSelectedThreadBranch()}
             />
           ) : null}
-          {canConvertToJj ? (
-            <>
-              {Platform.OS !== "android" ? <View className="ml-12 h-px bg-border" /> : null}
-              <ListRow
-                icon="arrow.triangle.branch"
-                label={gt("Enable Jujutsu")}
-                description={gt("Use Jujutsu with this Git repository")}
-                disabled={!canWriteSourceControl || busy || isConverting}
-                onPress={convertToJj}
-              />
-            </>
-          ) : null}
         </ListSection>
       ) : null}
+      {vcsUnsupportedReason !== null ? <Text>{vcsUnsupportedReason}</Text> : null}
 
       {listsRepositories ? (
         <ThreadRepositoryRows

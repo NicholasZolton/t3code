@@ -1320,7 +1320,7 @@ export const SETTINGS_SEARCH_ITEMS = [
     to: "/settings/source-control",
     scope: "environment-defaults",
     searchTerms: [
-      `version control git jujutsu jj bookmark workspace change ${SOURCE_CONTROL_HOST_TERMS} hosting integrations credentials scan server environment`,
+      `version control git ${SOURCE_CONTROL_HOST_TERMS} hosting integrations credentials scan server environment`,
     ],
   },
   {
@@ -1330,19 +1330,9 @@ export const SETTINGS_SEARCH_ITEMS = [
     targetId: "background-activity",
     searchTerms: [
       msg("automatic remote branch refresh background credentials security keys seconds off"),
-      "bookmark jujutsu jj",
     ],
     environmentOnly: true,
     scope: "environment-defaults",
-  },
-  {
-    id: "vcs-agent-hints",
-    title: msg("VCS agent hints"),
-    to: "/settings/source-control",
-    scope: "project-defaults",
-    searchTerms: [
-      "version control git jujutsu jj agent context instructions injection hints disable",
-    ],
   },
   {
     id: "worktree-branch-naming",

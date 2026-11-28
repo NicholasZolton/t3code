@@ -133,10 +133,6 @@ export const make = Effect.gen(function* () {
     yield* assertWorkspaceBoundCwd("ReviewService.getDiffFileContents", input.cwd);
 
     const handle = yield* vcsRegistry.detect({ cwd: input.cwd, requestedKind: "auto" });
-    const driverGetDiffFileContents = handle?.driver.getDiffFileContents;
-    if (driverGetDiffFileContents) {
-      return yield* driverGetDiffFileContents(input);
-    }
     if (handle?.kind === "git") {
       return yield* git.getReviewDiffFileContents(input);
     }

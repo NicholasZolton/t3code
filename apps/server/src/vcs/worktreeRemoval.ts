@@ -6,6 +6,7 @@ import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 
 import type * as GitVcsDriver from "./GitVcsDriver.ts";
+import { requireNonJjWorkspace } from "./JjRepo.ts";
 
 const INDEX_LIST_MAX_BYTES = 64 * 1024 * 1024;
 
@@ -65,6 +66,7 @@ export const removeLinkedWorktree = Effect.fn("WorktreeRemoval.removeLinkedWorkt
   const fileSystem = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const worktreePath = input.worktreePath;
+  yield* requireNonJjWorkspace(fileSystem, path, input.operation, worktreePath);
   const gitFile = path.join(worktreePath, ".git");
   // Git refuses to remove a worktree with untracked files unless forced, but
   // its check honors `status.showUntrackedFiles=no` and would delete them.

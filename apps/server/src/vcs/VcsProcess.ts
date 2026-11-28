@@ -80,12 +80,6 @@ export const GIT_INDEX_LOCKED_DETAIL =
 
 export const CHECKPOINT_CAPTURE_OPERATION = "GitVcsDriver.checkpoints.captureCheckpoint";
 
-function isCheckpointCapture(operation: string): boolean {
-  return (
-    operation === CHECKPOINT_CAPTURE_OPERATION ||
-    operation === "JjVcsDriver.checkpoints.captureCheckpoint"
-  );
-}
 // Caller operations are diagnostic strings; only known labels may become metric attributes.
 const gitMetricOperations = new Set([
   CHECKPOINT_CAPTURE_OPERATION,
@@ -185,7 +179,7 @@ export const unsetInheritedRepositoryEnv = (
       .map((name) => [name, undefined]),
   );
 
-export const classifyNonZeroExit = (
+const classifyNonZeroExit = (
   stderr: string,
   classifyFailure: VcsProcessInput["classifyFailure"],
 ): VcsProcessExitFailureKind => {
@@ -340,7 +334,7 @@ export const make = Effect.gen(function* () {
 
     if (
       hostPlatform === "darwin" &&
-      isCheckpointCapture(input.operation) &&
+      input.operation === CHECKPOINT_CAPTURE_OPERATION &&
       !input.allowNonZeroExit &&
       result.code !== null &&
       result.code !== 0 &&
@@ -410,7 +404,7 @@ export const make = Effect.gen(function* () {
     const bounded = vcsProcesses.withPermits(1)(runUnbounded(input));
     if (
       input.command === "git" &&
-      isCheckpointCapture(input.operation) &&
+      input.operation === CHECKPOINT_CAPTURE_OPERATION &&
       input.onStdoutChunk === undefined
     ) {
       return yield* bounded.pipe(

@@ -26,30 +26,7 @@ const normalizeGitArgs = (args: ReadonlyArray<string>): ReadonlyArray<string> =>
 const DETECT_COMMAND = "rev-parse --is-inside-work-tree --show-toplevel --git-common-dir";
 
 describe("VcsDriverRegistry", () => {
-  it.effect("routes directly by VCS driver kind for non-repository workflows", () => {
-    const layer = Layer.effect(VcsDriverRegistry.VcsDriverRegistry, VcsDriverRegistry.make).pipe(
-      Layer.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)),
-      Layer.provide(
-        Layer.mock(VcsProjectConfig.VcsProjectConfig)({
-          resolveKind: (input) => Effect.succeed(input.requestedKind ?? "auto"),
-        }),
-      ),
-      Layer.provide(
-        Layer.mock(VcsProcess.VcsProcess)({
-          run: () => Effect.succeed(processOutput("")),
-        }),
-      ),
-    );
-
-    return Effect.gen(function* () {
-      const registry = yield* VcsDriverRegistry.VcsDriverRegistry;
-      const driver = yield* registry.get("git");
-
-      assert.strictEqual(driver.capabilities.kind, "git");
-    }).pipe(Effect.provide(layer));
-  });
-
-  it.effect("auto-detects a colocated workspace as jj, ahead of git, without a subprocess", () => {
+  it.effect("does not route a colocated Jujutsu workspace to Git", () => {
     let processCalls = 0;
     const layer = Layer.effect(VcsDriverRegistry.VcsDriverRegistry, VcsDriverRegistry.make).pipe(
       Layer.provideMerge(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)),
@@ -78,11 +55,11 @@ describe("VcsDriverRegistry", () => {
       yield* fileSystem.makeDirectory(path.join(root, ".jj", "repo"), { recursive: true });
       yield* fileSystem.makeDirectory(path.join(root, ".git"), { recursive: true });
 
-      assert.strictEqual((yield* registry.get("jj")).capabilities.kind, "jj");
-
-      const detected = yield* registry.detect({ cwd: root });
-      assert.strictEqual(detected?.kind, "jj");
-      assert.strictEqual(detected?.repository.rootPath, root);
+      assert.isNull(yield* registry.detect({ cwd: root }));
+      assert.isNull(yield* registry.detect({ cwd: root, requestedKind: "git" }));
+      const error = yield* Effect.flip(registry.resolve({ cwd: root }));
+      assert.strictEqual(error._tag, "VcsUnsupportedOperationError");
+      assert.match(error.message, /Jujutsu/);
       assert.strictEqual(processCalls, 0);
     }).pipe(Effect.provide(layer));
   });
@@ -175,6 +152,29 @@ describe("VcsDriverRegistry", () => {
           assert.equal((yield* registry.detect({ cwd }))?.repository.rootPath, nestedRepoDir);
         }
       }).pipe(Effect.provide(makeDiskBackedLayer(parentDir, calls)));
+    }).pipe(Effect.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))),
+  );
+
+  it.effect("stops routing a cached Git checkout after it gains a Jujutsu marker", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const root = yield* fs.makeTempDirectoryScoped({ prefix: "t3-vcs-registry-" });
+      const nested = path.join(root, "nested");
+      yield* fs.makeDirectory(path.join(root, ".git"));
+      yield* fs.makeDirectory(nested);
+      const calls: string[] = [];
+
+      yield* Effect.gen(function* () {
+        const registry = yield* VcsDriverRegistry.VcsDriverRegistry;
+        assert.equal((yield* registry.detect({ cwd: nested }))?.kind, "git");
+
+        yield* fs.makeDirectory(path.join(root, ".jj"));
+        assert.isNull(yield* registry.detect({ cwd: nested }));
+
+        yield* fs.makeDirectory(path.join(nested, ".git"));
+        assert.equal((yield* registry.detect({ cwd: nested }))?.repository.rootPath, nested);
+      }).pipe(Effect.provide(makeDiskBackedLayer(root, calls)));
     }).pipe(Effect.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))),
   );
 

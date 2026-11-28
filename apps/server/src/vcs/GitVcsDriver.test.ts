@@ -69,7 +69,6 @@ const makeCaptureStore = Effect.fn("test.makeCaptureStore")(function* (
       get: () => Effect.succeed(driver),
       detect: () => Effect.succeed(handle),
       resolve: () => Effect.succeed(handle),
-      invalidate: () => Effect.void,
     }),
   );
 });
@@ -3234,13 +3233,14 @@ it.effect.skipIf(HostProcess.Platform.defaultValue() === "win32")(
       const fileSystem = yield* FileSystem.FileSystem;
       // A file without the execute bit fails to spawn with a permission error.
       const notExecutable = yield* fileSystem.makeTempFileScoped({ prefix: "t3-git-" });
+      const cwd = yield* fileSystem.makeTempDirectoryScoped({ prefix: "t3-git-repo-" });
       const driver = yield* GitVcsDriver.makeVcsDriverShape().pipe(
         Effect.provide(vcsProcessSpawning(notExecutable)),
       );
 
-      const error = yield* driver.isInsideWorkTree(process.cwd()).pipe(Effect.flip);
+      const error = yield* driver.isInsideWorkTree(cwd).pipe(Effect.flip);
       assert.strictEqual(error._tag, "VcsProcessSpawnError");
-      const detectionError = yield* driver.detectRepository(process.cwd()).pipe(Effect.flip);
+      const detectionError = yield* driver.detectRepository(cwd).pipe(Effect.flip);
       assert.strictEqual(detectionError._tag, "VcsProcessSpawnError");
     }).pipe(Effect.scoped, Effect.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))),
 );

@@ -5,7 +5,10 @@ import * as Effect from "effect/Effect";
 import type * as FileSystem from "effect/FileSystem";
 import type * as Path from "effect/Path";
 
-import { type VcsError, VcsRepositoryDetectionError } from "@t3tools/contracts";
+import { GitCommandError, type VcsError, VcsRepositoryDetectionError } from "@t3tools/contracts";
+
+export const legacyJjWorkspaceMessage =
+  "T3 Code no longer manages Jujutsu workspaces. Use jj directly, or open a separate Git checkout.";
 
 export type VcsMarker = "jj" | "git";
 
@@ -38,7 +41,7 @@ const exists = (fileSystem: FileSystem.FileSystem, candidate: string) =>
 
 // The nearest marker owns cwd, including Git worktrees nested inside a Jujutsu repository.
 // Missing directories must not resolve to an unrelated repository above them.
-export const findVcsMarkerRoot = Effect.fn("JjRepo.findVcsMarkerRoot")(function* (
+const findVcsMarkerRoot = Effect.fn("JjRepo.findVcsMarkerRoot")(function* (
   fileSystem: FileSystem.FileSystem,
   path: Path.Path,
   cwd: string,
@@ -65,11 +68,33 @@ export const findVcsMarkerRoot = Effect.fn("JjRepo.findVcsMarkerRoot")(function*
   }
 });
 
+export const isLegacyJjWorkspace = (
+  fileSystem: FileSystem.FileSystem,
+  path: Path.Path,
+  cwd: string,
+) => findVcsMarkerRoot(fileSystem, path, cwd).pipe(Effect.map((root) => root?.marker === "jj"));
+
+export const requireNonJjWorkspace = Effect.fn("JjRepo.requireNonJjWorkspace")(function* (
+  fileSystem: FileSystem.FileSystem,
+  path: Path.Path,
+  operation: string,
+  cwd: string,
+) {
+  if (yield* isLegacyJjWorkspace(fileSystem, path, cwd)) {
+    return yield* new GitCommandError({
+      operation,
+      command: "git",
+      cwd,
+      detail: legacyJjWorkspaceMessage,
+    });
+  }
+});
+
 /**
  * PURE. `<workspaceRoot>/.jj/repo` in a secondary workspace is a pointer to the main repo's
  * `.jj/repo`, usually relative, and relative to `<workspaceRoot>/.jj`, not to the workspace root.
  */
-export function mainWorkspaceRootFromRepoPointer(
+function mainWorkspaceRootFromRepoPointer(
   workspaceRoot: string,
   repoPointerContents: string,
 ): string {

@@ -62,7 +62,6 @@ import * as VcsStatusBroadcaster from "../vcs/VcsStatusBroadcaster.ts";
 import { VcsAutomaticFetchInterval } from "../vcs/VcsAutomaticFetchInterval.ts";
 import * as BackgroundPolicy from "../background/BackgroundPolicy.ts";
 import * as GitWorkflowService from "./GitWorkflowService.ts";
-import * as JjWorkflow from "../jj/JjWorkflow.ts";
 import type {
   SourceControlProvider,
   SourceControlRefSelector,
@@ -827,14 +826,6 @@ it.layer(layerGitManagerTest)("GitManager", (it) => {
       let remoteReads = 0;
       const workflowContext = yield* Layer.build(
         GitWorkflowService.layer.pipe(
-          Layer.provide(ServerSettings.ServerSettingsService.layerTest()),
-          Layer.provide(
-            Layer.mock(JjWorkflow.JjWorkflow)({
-              invalidateLocalStatus: () => Effect.void,
-              invalidateRemoteStatus: () => Effect.void,
-              invalidateStatus: () => Effect.void,
-            }),
-          ),
           Layer.provide(
             Layer.succeed(GitManager.GitManager, {
               ...manager,
@@ -1004,14 +995,6 @@ it.layer(layerGitManagerTest)("GitManager", (it) => {
           VcsStatusBroadcaster.layer.pipe(
             Layer.provide(
               GitWorkflowService.layer.pipe(
-                Layer.provide(ServerSettings.layerTest()),
-                Layer.provide(
-                  Layer.mock(JjWorkflow.JjWorkflow)({
-                    invalidateLocalStatus: () => Effect.void,
-                    invalidateRemoteStatus: () => Effect.void,
-                    invalidateStatus: () => Effect.void,
-                  }),
-                ),
                 Layer.provide(Layer.succeed(GitManager.GitManager, manager)),
                 Layer.provide(
                   VcsDriverRegistry.layer.pipe(
@@ -6927,12 +6910,6 @@ it.layer(layerGitManagerTest)("GitManager", (it) => {
         const events: string[] = [];
         const workflows = yield* Effect.forEach([0, 1], () =>
           GitWorkflowService.make.pipe(
-            Effect.provide(
-              Layer.mergeAll(
-                ServerSettings.ServerSettingsService.layerTest(),
-                Layer.mock(JjWorkflow.JjWorkflow)({}),
-              ),
-            ),
             // Cache the real filesystem result so startImmediately reaches lease acquisition.
             Effect.provideService(FileSystem.FileSystem, {
               ...fileSystem,

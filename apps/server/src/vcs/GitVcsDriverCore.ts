@@ -48,6 +48,7 @@ import { parseT3ProjectFile } from "@t3tools/shared/t3ProjectFile";
 import { resolveProjectFileBackedSetting } from "@t3tools/shared/projectSettings";
 import { gitCommandDuration, gitCommandsTotal, withMetrics } from "../observability/Metrics.ts";
 import * as GitVcsDriver from "./GitVcsDriver.ts";
+import { requireNonJjWorkspace } from "./JjRepo.ts";
 import { removeEmptyDirectory, type RemoveEmptyDirectoryError } from "./removeEmptyDirectory.ts";
 import { VcsAutomaticFetchInterval } from "./VcsAutomaticFetchInterval.ts";
 import { gitConfigEnv, serverGitConfigEnv, unsetInheritedRepositoryEnv } from "./VcsProcess.ts";
@@ -266,7 +267,7 @@ function rawChangeType(status: string): ReviewDiffChangeType {
 }
 
 // Parses `--numstat -z`, optionally preceded by `--raw` records that carry each file's change type.
-export function parseReviewNumstat(stdout: string): ReviewDiffFileStat[] {
+function parseReviewNumstat(stdout: string): ReviewDiffFileStat[] {
   const fields = stdout.split("\0");
   const changeTypes = new Map<string, ReviewDiffChangeType>();
   const files: ReviewDiffFileStat[] = [];
@@ -311,7 +312,7 @@ function parsePorcelainPath(record: string): string | null {
   return filePath.length > 0 ? filePath : null;
 }
 
-export function filterBranchesForListQuery(
+function filterBranchesForListQuery(
   refs: ReadonlyArray<VcsRef>,
   query?: string,
 ): ReadonlyArray<VcsRef> {
@@ -322,7 +323,7 @@ export function filterBranchesForListQuery(
   return searchItems(refs, query, (refName) => [refName.name]);
 }
 
-export function paginateBranches(input: {
+function paginateBranches(input: {
   refs: ReadonlyArray<VcsRef>;
   cursor?: number | undefined;
   limit?: number | undefined;
@@ -6598,6 +6599,7 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
   const createWorktree: GitVcsDriver.GitVcsDriver["Service"]["createWorktree"] = Effect.fn(
     "createWorktree",
   )(function* (input, options) {
+    yield* requireNonJjWorkspace(fileSystem, path, "GitVcsDriver.createWorktree", input.cwd);
     yield* refuseOptionLikeRefName("GitVcsDriver.createWorktree", input.cwd, input.refName);
     yield* refuseOptionLikeRefName("GitVcsDriver.createWorktree", input.cwd, input.newRefName);
     const targetBranch = input.newRefName ?? input.refName;

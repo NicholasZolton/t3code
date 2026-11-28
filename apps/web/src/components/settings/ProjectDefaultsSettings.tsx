@@ -114,7 +114,6 @@ export function ProjectDefaultsSettings({ category }: { category: ProjectSetting
   const PermissionIcon = runtimeModeConfig[settings.defaultRuntimeMode].icon;
   const mixedWorkspace = useScopedSettingsMixed(["defaultThreadEnvMode"]);
   const mixedAutoPull = useScopedSettingsMixed(["defaultAutoPull"]);
-  const mixedVcsHints = useScopedSettingsMixed(["enableVcsAgentHints"]);
   const mixedAgentCredits = useScopedSettingsMixed(["removeAgentCreditsOnMerge"]);
   const mixedMergeMethod = useScopedSettingsMixed(["pullRequestMergeMethod"]);
   const modelSource = useScopedSettingSource(["defaultModelSelection"]);
@@ -449,26 +448,6 @@ export function ProjectDefaultsSettings({ category }: { category: ProjectSetting
         </>
       ) : (
         <>
-          <SettingsSection title={gt("Agent context")}>
-            <SettingsRow
-              serverScoped
-              settingKeys={["enableVcsAgentHints"]}
-              mixed={mixedVcsHints}
-              id={searchableSetting("vcs-agent-hints").id}
-              title={gt("VCS agent hints")}
-              description={gt(
-                "Give agents a short hint about the workspace's version control. Changes apply on the next turn, including resumed threads.",
-              )}
-              control={
-                <Switch
-                  checked={settings.enableVcsAgentHints}
-                  disabled={unavailable}
-                  aria-label={gt("VCS agent hints")}
-                  onCheckedChange={(checked) => updateSettings({ enableVcsAgentHints: checked })}
-                />
-              }
-            />
-          </SettingsSection>
           <SettingsRow
             serverScoped
             settingKeys={["defaultAutoPull"]}

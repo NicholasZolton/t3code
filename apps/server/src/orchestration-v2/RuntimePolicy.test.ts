@@ -1,7 +1,6 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, it } from "@effect/vitest";
 import {
-  DEFAULT_SERVER_SETTINGS,
   type ManagedPolicySummary,
   type ModelSelection,
   type OrchestrationV2AppThread,
@@ -14,14 +13,11 @@ import {
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
-import * as Option from "effect/Option";
 import * as Stream from "effect/Stream";
 
 import type { ProviderInstance } from "@t3tools/provider-core/server/driver";
 import { acpPermissionDisposition } from "@t3tools/provider-acp/server/clientPolicy";
 import * as ServerSettings from "../serverSettings.ts";
-import * as VcsDriver from "../vcs/VcsDriver.ts";
-import * as VcsDriverRegistry from "../vcs/VcsDriverRegistry.ts";
 import * as ProviderInstanceRegistry from "../provider/ProviderInstanceRegistry.ts";
 import * as ProjectStore from "./ProjectStore.ts";
 import * as RuntimePolicy from "./RuntimePolicy.ts";
@@ -86,37 +82,6 @@ const providerInstanceFor = (instanceId: ProviderInstanceId) =>
     },
   }) as ProviderInstance;
 
-const projectAndProviderLayers = Layer.mergeAll(
-  Layer.succeed(ProviderInstanceRegistry.ProviderInstanceRegistry, {
-    getInstance: (instanceId) => Effect.succeed(providerInstanceFor(instanceId)),
-    listInstances: Effect.succeed([]),
-    listUnavailable: Effect.succeed([]),
-    streamChanges: Stream.empty,
-    subscribeChanges: Effect.never,
-  }),
-  Layer.mock(ProjectStore.ProjectStoreV2)({
-    get: () =>
-      Effect.succeedSome({
-        projectId,
-        title: "Project",
-        workspaceRoot: "/project-root",
-        defaultModelSelection: null,
-        defaultThreadEnvMode: null,
-        hasCustomTitle: false,
-        autoPull: false,
-        faviconPath: null,
-        projectIcon: null,
-        scripts: [],
-        trackedFolders: [],
-        pinnedAt: null,
-        archivedAt: null,
-        createdAt: "2026-06-21T00:00:00.000Z",
-        updatedAt: "2026-06-21T00:00:00.000Z",
-        deletedAt: null,
-      }),
-  }),
-);
-
 const noWorkspace = { folders: [], extraRoots: [] };
 const trackedWorkspace = {
   folders: [
@@ -136,8 +101,40 @@ const layerWithPolicy = (
   layerWorkspaceFolders: Layer.Layer<WorkspaceFolders.WorkspaceFolders> = layerWorkspaceFoldersTest,
 ) =>
   RuntimePolicy.layerFromProjectStore.pipe(
-    Layer.provide(Layer.mergeAll(projectAndProviderLayers, ServerSettings.layerTest({}, policy))),
+    Layer.provide(ServerSettings.layerTest({}, policy)),
     Layer.provide(layerWorkspaceFolders),
+    Layer.provide(
+      Layer.succeed(ProviderInstanceRegistry.ProviderInstanceRegistry, {
+        getInstance: (instanceId) => Effect.succeed(providerInstanceFor(instanceId)),
+        listInstances: Effect.succeed([]),
+        listUnavailable: Effect.succeed([]),
+        streamChanges: Stream.empty,
+        subscribeChanges: Effect.never,
+      }),
+    ),
+    Layer.provide(
+      Layer.mock(ProjectStore.ProjectStoreV2)({
+        get: () =>
+          Effect.succeedSome({
+            projectId,
+            title: "Project",
+            workspaceRoot: "/project-root",
+            defaultModelSelection: null,
+            defaultThreadEnvMode: null,
+            hasCustomTitle: false,
+            autoPull: false,
+            faviconPath: null,
+            projectIcon: null,
+            scripts: [],
+            trackedFolders: [],
+            pinnedAt: null,
+            archivedAt: null,
+            createdAt: "2026-06-21T00:00:00.000Z",
+            updatedAt: "2026-06-21T00:00:00.000Z",
+            deletedAt: null,
+          }),
+      }),
+    ),
   );
 
 const layerTest = layerWithPolicy();
@@ -258,80 +255,6 @@ it.layer(layerTaskFolderPolicy)("RuntimePolicyV2 in a task folder", (it) => {
   );
 });
 
-it.effect("resolves VCS hints in the thread workspace and honors live settings", () =>
-  Effect.gen(function* () {
-    let settings = DEFAULT_SERVER_SETTINGS;
-    const detected: string[] = [];
-    const observedAt = yield* DateTime.now;
-    const driver = yield* VcsDriver.VcsDriver.pipe(
-      Effect.provide(
-        Layer.mock(VcsDriver.VcsDriver)({
-          agentContextHint: "Use jj for this workspace.",
-          checkpoints: {
-            captureCheckpoint: () => Effect.die("unexpected checkpoint capture"),
-            resolveCleanHead: () => Effect.die("unexpected clean HEAD lookup"),
-            captureHeadCheckpoint: () => Effect.die("unexpected HEAD checkpoint capture"),
-            hasCheckpointRef: () => Effect.die("unexpected checkpoint lookup"),
-            copyCheckpointRef: () => Effect.die("unexpected checkpoint copy"),
-            restoreCheckpoint: () => Effect.die("unexpected checkpoint restore"),
-            diffCheckpoints: () => Effect.die("unexpected checkpoint diff"),
-            listAuthoredPaths: () => Effect.die("unexpected authored paths lookup"),
-            deleteCheckpointRefs: () => Effect.die("unexpected checkpoint deletion"),
-          },
-          capabilities: {
-            kind: "jj",
-            supportsWorktrees: true,
-            supportsBookmarks: true,
-            supportsAtomicSnapshot: true,
-            supportsPushDefaultRemote: true,
-            ignoreClassifier: "native",
-          },
-        }),
-      ),
-    );
-    const dependencies = Layer.mergeAll(
-      Layer.mock(ServerSettings.ServerSettingsService)({
-        getSettings: Effect.sync(() => settings),
-      }),
-      Layer.mock(VcsDriverRegistry.VcsDriverRegistry)({
-        detect: ({ cwd }) => {
-          detected.push(cwd);
-          return Effect.succeed({
-            kind: "jj",
-            repository: {
-              kind: "jj",
-              rootPath: cwd,
-              metadataPath: null,
-              freshness: { source: "live-local", observedAt, expiresAt: Option.none() },
-            },
-            driver,
-          });
-        },
-      }),
-    );
-    yield* Effect.gen(function* () {
-      const policy = yield* RuntimePolicy.RuntimePolicyV2;
-      const thread = makeThread({ now: yield* DateTime.now, worktreePath: "/jj-workspace" });
-      assert.equal(
-        (yield* policy.resolve({ thread, modelSelection })).vcsAgentHint,
-        "Use jj for this workspace.",
-      );
-      settings = {
-        ...settings,
-        projectSettingsOverrides: { [projectId]: { enableVcsAgentHints: false } },
-      };
-      assert.equal((yield* policy.resolve({ thread, modelSelection })).vcsAgentHint, undefined);
-      assert.deepEqual(detected, ["/jj-workspace"]);
-    }).pipe(
-      Effect.provide(
-        RuntimePolicy.layerFromProjectStore.pipe(
-          Layer.provide(Layer.mergeAll(projectAndProviderLayers, dependencies)),
-          Layer.provide(layerWorkspaceFoldersTest),
-        ),
-      ),
-    );
-  }),
-);
 it.layer(
   layerWithPolicy({
     organization: "Example Corp",
