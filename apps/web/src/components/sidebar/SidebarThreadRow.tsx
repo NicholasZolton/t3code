@@ -76,7 +76,6 @@ import type { MessageResolver } from "../../i18n/messages";
 import { useRightPanelStore } from "../../rightPanelStore";
 import { useOpenPrLink } from "../../lib/openPullRequestLink";
 import { useUiStateStore } from "../../uiStateStore";
-import { useThreadSelectionStore } from "../../threadSelectionStore";
 import { useNowMinute } from "../../hooks/useNowMinute";
 import { useNowSecond } from "../../hooks/useNowSecond";
 import { vcsEnvironment, vcsBranchRevalidation } from "../../state/vcs";
@@ -428,6 +427,7 @@ function SidebarThreadTooltip({
 }
 
 function SnoozeMenuButton(props: {
+  count: number;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSnooze: (preset: Pick<SnoozePreset, "snoozedUntil">) => void;
@@ -437,6 +437,8 @@ function SnoozeMenuButton(props: {
   const { open, onOpenChange, onSnooze, timestampFormat, environmentId } = props;
   const gt = useGT();
   const messages = useMessages();
+  const label =
+    props.count > 1 ? gt("Snooze ({count})", { count: props.count }) : gt("Snooze thread");
   const presets = open
     ? // oxlint-disable-next-line react/purity -- Presets are resolved only while the menu is open, so each opening reads a fresh time.
       resolveSnoozePresets(new Date(), timestampFormat, environmentId, messages)
@@ -449,7 +451,7 @@ function SnoozeMenuButton(props: {
             render={
               <button
                 type="button"
-                aria-label={gt("Snooze thread")}
+                aria-label={label}
                 onClick={(event) => event.stopPropagation()}
                 onDoubleClick={(event) => event.stopPropagation()}
                 className="inline-flex h-full cursor-pointer items-center gap-0.5 rounded-md bg-transparent px-1.5 text-xs text-muted-foreground hover:text-foreground"
@@ -457,13 +459,10 @@ function SnoozeMenuButton(props: {
             }
           />
         }
-        label={
-          <>
-            <T>Snooze thread</T>
-          </>
-        }
+        label={label}
       >
         <ClockIcon className="size-3" />
+        {props.count > 1 ? props.count : null}
       </SharedTooltipTrigger>
       <MenuPopup side="bottom" align="end">
         {presets.map((preset) => (
@@ -613,6 +612,8 @@ type SidebarThreadRowProps = {
   variantAction: SidebarSweepAction;
   settlementSupported: boolean;
   snoozeSupported: boolean;
+  snoozeSelectionKeys: readonly string[] | null;
+  isSelected: boolean;
   pinningSupported: boolean;
   isPinned: boolean;
   sortable?: SortableThreadRowBag | undefined;
@@ -656,7 +657,11 @@ type SidebarThreadRowProps = {
     event: PointerEvent,
   ) => void;
   onUnsettle: (threadRef: ScopedThreadRef) => void;
-  onSnooze: (threadRef: ScopedThreadRef, preset: Pick<SnoozePreset, "snoozedUntil">) => void;
+  onSnooze: (
+    threadRef: ScopedThreadRef,
+    preset: Pick<SnoozePreset, "snoozedUntil">,
+    selectionKeys: readonly string[] | null,
+  ) => void;
   onUnsnooze: (threadRef: ScopedThreadRef) => void;
   onUnpin: (threadRef: ScopedThreadRef) => void;
   onAcknowledgeWoke: (threadRef: ScopedThreadRef, visitedAt: string) => void;
@@ -756,7 +761,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
   const isRegeneratingTitle = thread.titleRegeneration != null;
   const localLastVisitedAt = useUiStateStore((state) => state.threadLastVisitedAtById[threadKey]);
   const lastVisitedAt = resolveThreadLastVisitedAt(thread.lastVisitedAt, localLastVisitedAt);
-  const isSelected = useThreadSelectionStore((state) => state.selectedThreadKeys.has(threadKey));
+  const { isSelected } = props;
   const openPrLink = useOpenPrLink();
   const runningTerminalIds = useThreadRunningTerminalIds({
     environmentId: thread.environmentId,
@@ -998,8 +1003,9 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
     event.stopPropagation();
     onUnpin(threadRef);
   };
+  const snoozeCount = props.snoozeSelectionKeys?.length ?? 1;
   const handleSnoozePreset = (preset: Pick<SnoozePreset, "snoozedUntil">) => {
-    onSnooze(threadRef, preset);
+    onSnooze(threadRef, preset, props.snoozeSelectionKeys);
   };
   const [snoozeMenuOpenRaw, setSnoozeMenuOpen] = useState(false);
   // The React Compiler caches render results on their inputs, so a clock read
@@ -1028,7 +1034,10 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
     setSnoozeGateClock({ thread, now: new Date(snoozeGateOpensAt).toISOString() });
   }
   const showSnoozeButton =
-    canTriageThread && props.snoozeSupported && canSnooze(thread, { now: snoozeGateNow });
+    canTriageThread &&
+    props.snoozeSupported &&
+    snoozeCount > 0 &&
+    canSnooze(thread, { now: snoozeGateNow });
   // Closing here, not just masking, keeps the menu from reopening when the button returns.
   if (snoozeMenuOpenRaw && !showSnoozeButton) setSnoozeMenuOpen(false);
   const snoozeMenuOpen = snoozeMenuOpenRaw && showSnoozeButton;
@@ -1717,6 +1726,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
                     ) : null}
                     {showSnoozeButton ? (
                       <SnoozeMenuButton
+                        count={snoozeCount}
                         open={snoozeMenuOpen}
                         onOpenChange={setSnoozeMenuOpen}
                         onSnooze={handleSnoozePreset}
